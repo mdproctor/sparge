@@ -258,11 +258,8 @@ def convert_post(html_path: Path) -> str:
         placeholder = BeautifulSoup(placeholder_html, 'lxml').body.next
         p.insert_after(placeholder)
 
-    # ── Write placeholders back to the archive HTML so both views show them ──────
-    updated_html = str(soup)
-    if not updated_html.startswith('<!DOCTYPE'):
-        updated_html = '<!DOCTYPE html>\n' + updated_html
-    html_path.write_text(updated_html, encoding='utf-8')
+    # NOTE: We do NOT write back to html_path. The source file is read-only.
+    # Placeholder injection only affects the in-memory soup used for conversion.
 
     # ── Replace <pre><code class="language-X"> with fenced code block placeholders ──
     # html2text produces 4-space indented blocks which lose language info.

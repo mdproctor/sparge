@@ -206,93 +206,125 @@ class TestPreviewPost:
 # TestIngestPost
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _ingest(url, session, mock_blog_server=None):
+    """Ingest a URL into a temp dir. Returns (result, source_dir, cleaned_dir, assets_root)."""
+    import tempfile
+    tmp = Path(tempfile.mkdtemp())
+    source  = tmp / 'source'
+    cleaned = tmp / 'cleaned'
+    assets  = tmp / 'assets'
+    result  = ingest_post(url, session, source, cleaned, assets)
+    return result, source, cleaned, assets
+
+
 class TestIngestPost:
     @pytest.fixture(scope="class")
     def ingest_result(self, tmp_path_factory, mock_blog_server, session):
         """Run ingest_post once; share result across all tests in this class."""
-        posts_dir = tmp_path_factory.mktemp("posts")
-        serve_root = tmp_path_factory.mktemp("serve")
+        source_dir  = tmp_path_factory.mktemp("source")
+        cleaned_dir = tmp_path_factory.mktemp("cleaned")
+        assets_root = tmp_path_factory.mktemp("assets")
         url = _first_article_url(mock_blog_server)
-        result = ingest_post(url, session, posts_dir, serve_root)
-        return result, posts_dir, serve_root
+        result = ingest_post(url, session, source_dir, cleaned_dir, assets_root)
+        return result, source_dir, cleaned_dir, assets_root
 
     @pytest.fixture(scope="class")
     def article(self):
         return ARTICLES[0]
 
     def test_writes_html_file(self, ingest_result):
-        """{slug}.html must exist in posts_dir after ingest."""
-        result, posts_dir, _ = ingest_result
+        """{slug}.html must exist in both source_dir and cleaned_dir after ingest."""
+        result, source_dir, cleaned_dir, _ = ingest_result
         slug = result["slug"]
-        assert (posts_dir / f"{slug}.html").exists()
+        assert (source_dir / f"{slug}.html").exists(), \
+            f"source_dir/{slug}.html not found"
+        assert (cleaned_dir / f"{slug}.html").exists(), \
+            f"cleaned_dir/{slug}.html not found"
 
     def test_writes_json_sidecar(self, ingest_result):
-        """{slug}.json must exist in posts_dir after ingest."""
-        result, posts_dir, _ = ingest_result
+        """{slug}.json must exist in source_dir after ingest."""
+        result, source_dir, _, _ = ingest_result
         slug = result["slug"]
-        assert (posts_dir / f"{slug}.json").exists()
+        assert (source_dir / f"{slug}.json").exists()
 
     def test_sidecar_has_required_fields(self, ingest_result):
         """JSON sidecar must contain all required metadata fields."""
-        result, posts_dir, _ = ingest_result
+        result, source_dir, _, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
         for field in ("slug", "title", "date", "author", "original_url"):
             assert field in sidecar, f"Missing field '{field}' in sidecar"
 
     def test_sidecar_has_title(self, ingest_result, article):
         """json['title'] must match the article title."""
-        result, posts_dir, _ = ingest_result
+        result, source_dir, _, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
         assert sidecar["title"] == article["title"]
 
     def test_sidecar_has_date(self, ingest_result, article):
         """json['date'] must be YYYY-MM-DD and match the article date."""
-        result, posts_dir, _ = ingest_result
+        result, source_dir, _, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
         assert re.match(r"\d{4}-\d{2}-\d{2}$", sidecar["date"])
         assert sidecar["date"] == article["date"]
 
     def test_sidecar_has_original_url(self, ingest_result, mock_blog_server):
         """json['original_url'] must be the post URL."""
-        result, posts_dir, _ = ingest_result
+        result, source_dir, _, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
         expected_url = _first_article_url(mock_blog_server)
         assert sidecar["original_url"] == expected_url
 
     def test_image_localised(self, ingest_result):
-        """serve_root must contain at least one downloaded image file."""
-        _, _, serve_root = ingest_result
-        images = list(serve_root.rglob("*.jpg"))
-        assert len(images) >= 1, (
-            f"No .jpg files found under serve_root {serve_root}; "
-            f"contents: {list(serve_root.rglob('*'))}"
+        """assets_root must contain at least one downloaded file under posts/ or global/."""
+        _, _, _, assets_root = ingest_result
+        all_files = list(assets_root.rglob("*"))
+        downloaded = [f for f in all_files if f.is_file() and not f.name.startswith('.')]
+        assert len(downloaded) >= 1, (
+            f"No downloaded asset files found under assets_root {assets_root}; "
+            f"contents: {all_files}"
         )
 
     def test_no_script_in_html(self, ingest_result):
-        """Written HTML must contain no <script> tags."""
-        result, posts_dir, _ = ingest_result
+        """cleaned_dir HTML must contain no <script> tags."""
+        result, _, cleaned_dir, _ = ingest_result
         slug = result["slug"]
-        html = (posts_dir / f"{slug}.html").read_text()
+        html = (cleaned_dir / f"{slug}.html").read_text()
         assert "<script" not in html.lower()
 
     def test_no_js_src(self, ingest_result):
-        """Written HTML must contain no javascript: href values."""
-        result, posts_dir, _ = ingest_result
+        """cleaned_dir HTML must contain no javascript: href values."""
+        result, _, cleaned_dir, _ = ingest_result
         slug = result["slug"]
-        html = (posts_dir / f"{slug}.html").read_text()
+        html = (cleaned_dir / f"{slug}.html").read_text()
         assert "javascript:" not in html.lower()
+
+    def test_source_has_original_urls(self, ingest_result):
+        """source_dir HTML must still contain original http:// image URLs (not rewritten)."""
+        result, source_dir, _, _ = ingest_result
+        slug = result["slug"]
+        html = (source_dir / f"{slug}.html").read_text()
+        assert "http://" in html or "https://" in html, \
+            "source HTML has no original http(s):// URLs — expected unrewritten content"
+
+    def test_cleaned_has_local_paths(self, ingest_result):
+        """cleaned_dir HTML must contain /assets/ paths (rewritten local references)."""
+        result, _, cleaned_dir, _ = ingest_result
+        slug = result["slug"]
+        html = (cleaned_dir / f"{slug}.html").read_text()
+        assert "/assets/" in html, \
+            "cleaned HTML has no /assets/ paths — expected rewritten local paths"
 
     def test_returns_slug(self, ingest_result):
         """result['slug'] must be a non-empty string."""
-        result, _, _ = ingest_result
+        result, _, _, _ = ingest_result
         assert isinstance(result["slug"], str)
         assert len(result["slug"]) > 0
 
     def test_returns_no_error(self, ingest_result):
         """result['error'] must be None on success."""
-        result, _, _ = ingest_result
+        result, _, _, _ = ingest_result
         assert result["error"] is None

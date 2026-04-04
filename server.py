@@ -72,7 +72,7 @@ def _project_dir(project_id: str) -> Path:
 
 def _activate_project(project_id: str) -> bool:
     """Load project config + state, update all module-level path vars."""
-    global _active_project_id, POSTS_DIR, MD_DIR, SERVE_ROOT
+    global _active_project_id, POSTS_DIR, MD_DIR, SERVE_ROOT, SOURCE_DIR, CLEANED_DIR, ASSETS_ROOT
     proj_dir    = _project_dir(project_id)
     config_path = proj_dir / 'config.json'
     state_path  = proj_dir / 'state.json'
@@ -80,9 +80,12 @@ def _activate_project(project_id: str) -> bool:
         return False
     set_config_path(config_path)   # mutates cfg in-place
     set_state_file(state_path)
-    POSTS_DIR  = cfg['_posts_dir']
-    MD_DIR     = cfg['_md_dir']
-    SERVE_ROOT = cfg['_root']
+    SERVE_ROOT   = cfg['_root']
+    SOURCE_DIR   = cfg['_source_dir']
+    CLEANED_DIR  = cfg['_cleaned_dir']
+    ASSETS_ROOT  = cfg['_assets_dir']
+    POSTS_DIR    = cfg['_posts_dir']   # = CLEANED_DIR for new schema, original dir for legacy
+    MD_DIR       = cfg['_md_dir']
     _active_project_id = project_id
     State.init_from_source()
     print(f'Active project: {project_id} ({len(State.get_all())} posts)')
@@ -112,10 +115,13 @@ _startup_projects = _load_projects()
 if _startup_projects:
     _activate_project(_startup_projects[0]['id'])
 
-# Fallback path vars for when no project is active
-SERVE_ROOT = cfg.get('_root', ROOT.parent)
-POSTS_DIR  = cfg.get('_posts_dir', ROOT.parent / 'legacy' / 'posts')
-MD_DIR     = cfg.get('_md_dir',    ROOT.parent / 'mark-proctor')
+# Fallback path vars (overwritten by _activate_project on startup)
+SERVE_ROOT  = cfg.get('_root',        ROOT.parent)
+SOURCE_DIR  = cfg.get('_source_dir',  ROOT.parent / 'source')
+CLEANED_DIR = cfg.get('_cleaned_dir', ROOT.parent / 'cleaned')
+ASSETS_ROOT = cfg.get('_assets_dir',  ROOT.parent / 'assets')
+POSTS_DIR   = cfg.get('_posts_dir',   ROOT.parent / 'legacy' / 'posts')
+MD_DIR      = cfg.get('_md_dir',      ROOT.parent / 'mark-proctor')
 
 # All tools live in our own scripts/
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -172,7 +178,7 @@ def _ingest_worker(urls: list, author_filter: str | None):
                 break
             _job['current'] = url
         try:
-            result = ingest_post(url, session, POSTS_DIR, SERVE_ROOT)
+            result = ingest_post(url, session, SOURCE_DIR, CLEANED_DIR, ASSETS_ROOT)
             with _job_lock:
                 _job['done'] += 1
                 _job['log'].append({'url': url, 'slug': result.get('slug', ''),
@@ -278,6 +284,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._api_reject_staged(rest[:-len('/reject-staged')])
             else:
                 self._json(404, {'error': 'unknown endpoint'})
+        elif path == '/api/consolidate':
+            self._api_consolidate()
         elif path.startswith('/api/ingest/'):
             action = path[len('/api/ingest/'):]
             self._api_ingest(action, body)
@@ -504,6 +512,19 @@ class Handler(BaseHTTPRequestHandler):
                 ])
             print(f'Saved (manual edit): {slug}.md')
             self._json(200, State.get(slug))
+        except Exception as e:
+            self._json(500, {'error': str(e)})
+
+    # ── Consolidation endpoint ────────────────────────────────────────────────────
+
+    def _api_consolidate(self):
+        """Run hash-based asset consolidation for the active project."""
+        try:
+            from consolidate import consolidate
+            report = consolidate(ASSETS_ROOT, CLEANED_DIR)
+            print(f'Consolidate: {report["promoted"]} promoted, '
+                  f'{report["updated_html"]} HTML files updated')
+            self._json(200, report)
         except Exception as e:
             self._json(500, {'error': str(e)})
 

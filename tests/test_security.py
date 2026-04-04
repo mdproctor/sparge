@@ -76,12 +76,13 @@ def _preview(url: str) -> dict:
 
 
 def _ingest(url: str) -> tuple[dict, Path, Path]:
-    """Ingest a URL into a temp dir. Returns (result, serve_root, posts_dir)."""
+    """Ingest a URL into a temp dir. Returns (result, source_dir, cleaned_dir)."""
     tmp = Path(tempfile.mkdtemp())
-    posts = tmp / 'posts'
-    posts.mkdir()
-    result = ingest_post(url, SESSION, posts, tmp)
-    return result, tmp, posts
+    source  = tmp / 'source'
+    cleaned = tmp / 'cleaned'
+    assets  = tmp / 'assets'
+    result = ingest_post(url, SESSION, source, cleaned, assets)
+    return result, source, cleaned
 
 
 # ── XSS in content ────────────────────────────────────────────────────────────
@@ -107,10 +108,10 @@ class TestXSSInContent:
                           '<p>Content.</p><script src="evil.js"></script>')
         srv, url = _serve_single_page(html)
         try:
-            result, tmp, posts = _ingest(url + '/post/')
+            result, source_dir, cleaned_dir = _ingest(url + '/post/')
             slug = result.get('slug', '')
             if slug:
-                written = (posts / f'{slug}.html').read_text()
+                written = (cleaned_dir / f'{slug}.html').read_text()
                 assert '<script' not in written.lower(), \
                     'Script tag survived in written HTML'
         finally:
@@ -176,10 +177,10 @@ class TestXSSInMetadata:
         html = _blog_html(xss_title, '<p>Normal content here.</p>')
         srv, url = _serve_single_page(html)
         try:
-            result, tmp, posts = _ingest(url + '/post/')
+            result, source_dir, cleaned_dir = _ingest(url + '/post/')
             slug = result.get('slug', '')
             if slug:
-                sidecar = posts / f'{slug}.json'
+                sidecar = source_dir / f'{slug}.json'
                 if sidecar.exists():
                     data = json.loads(sidecar.read_text())
                     # Title in JSON is stored as text — json.loads will return it as a string
@@ -197,10 +198,10 @@ class TestXSSInMetadata:
                           author='Alice <img src=x onerror=alert(1)>')
         srv, url = _serve_single_page(html)
         try:
-            result, tmp, posts = _ingest(url + '/post/')
+            result, source_dir, cleaned_dir = _ingest(url + '/post/')
             slug = result.get('slug', '')
             if slug:
-                sidecar = posts / f'{slug}.json'
+                sidecar = source_dir / f'{slug}.json'
                 if sidecar.exists():
                     data = json.loads(sidecar.read_text())
                     author = data.get('author', '')

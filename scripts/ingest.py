@@ -10,7 +10,7 @@ Public API
   detect_platform(base_url, session) -> dict
   discover_urls(base_url, platform, session, author_filter=None) -> list[str]
   preview_post(url, session) -> dict
-  ingest_post(url, session, posts_dir, serve_root) -> dict
+  ingest_post(url, session, source_dir, cleaned_dir, assets_root) -> dict
 """
 
 import hashlib
@@ -22,6 +22,8 @@ from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
+
+from asset_store import AssetStore
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -817,14 +819,127 @@ def preview_post(url: str, session) -> dict:
     return _fetch_and_extract(url, session)
 
 
-def ingest_post(url: str, session, posts_dir: Path, serve_root: Path) -> dict:
+def _rewrite_css_urls_with_store(
+    css_text: str, css_url: str, slug: str, session, store: AssetStore
+) -> str:
+    """
+    Rewrite url(...) references inside a downloaded CSS file so they point
+    to locally downloaded copies, using AssetStore for path management.
+    Returns the rewritten CSS text.
+    """
+    def replace_url(match):
+        raw = match.group(1).strip('"\'')
+        if raw.startswith('data:') or raw.startswith('#') or not raw:
+            return match.group(0)
+        abs_url = urljoin(css_url, raw)
+        local_path = store.allocate(abs_url, slug)
+        if not local_path.exists():
+            _download_asset(abs_url, local_path, session)
+            if local_path.exists():
+                store.record(abs_url, local_path)
+        web = store.web_path(abs_url)
+        return f'url("{web}")' if web else match.group(0)
+
+    return re.sub(r'url\(\s*([^)]+)\s*\)', replace_url, css_text)
+
+
+def _localise_with_store(
+    html_str: str, slug: str, session, assets_root: Path
+) -> tuple[str, int, int]:
+    """
+    Re-parse extracted HTML, download all external image/CSS assets via
+    AssetStore, rewrite src/href to local web paths, strip remaining scripts.
+
+    Returns (rewritten_html, localised_count, failed_count).
+    """
+    store = AssetStore(assets_root)
+
+    try:
+        soup = BeautifulSoup(html_str, 'lxml')
+        body = soup.find('body')
+        article = body.find() if body else soup.find()  # type: ignore[union-attr]
+        if article is None or not isinstance(article, Tag):
+            article = soup
+    except Exception:
+        return html_str, 0, 0
+
+    localised = 0
+    failed = 0
+
+    # ── Localise images ───────────────────────────────────────────────────────
+    for img in article.find_all('img'):
+        if not isinstance(img, Tag):
+            continue
+        src = img.get('src', '') or ''
+        if not src or src.startswith('data:'):
+            continue
+        if _is_tracking_pixel(img):
+            img.decompose()
+            continue
+        if not src.startswith(('http://', 'https://')):
+            continue
+        local_path = store.allocate(src, slug)
+        if not local_path.exists():
+            ok = _download_asset(src, local_path, session)
+            if ok:
+                store.record(src, local_path)
+        web = store.web_path(src)
+        if web:
+            img['src'] = web
+            localised += 1
+        else:
+            failed += 1
+
+    # ── Localise stylesheets ──────────────────────────────────────────────────
+    for link in article.find_all('link', rel=True):
+        if not isinstance(link, Tag):
+            continue
+        rels = link.get('rel', [])
+        if isinstance(rels, str):
+            rels = [rels]
+        if 'stylesheet' not in rels:
+            continue
+        href = link.get('href', '') or ''
+        if not href or not href.startswith(('http://', 'https://')):
+            continue
+        local_path = store.allocate(href, slug)
+        if not local_path.exists():
+            resp = _session_get(href, session)
+            if resp is not None and resp.status_code == 200:
+                css_text = _rewrite_css_urls_with_store(
+                    resp.text, href, slug, session, store
+                )
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                local_path.write_text(css_text, encoding='utf-8')
+                store.record(href, local_path)
+                localised += 1
+            else:
+                failed += 1
+                continue
+        else:
+            localised += 1
+        web = store.web_path(href)
+        if web:
+            link['href'] = web
+
+    # ── Remove remaining script tags ──────────────────────────────────────────
+    for script in article.find_all('script'):
+        script.decompose()
+
+    return str(article), localised, failed
+
+
+def ingest_post(
+    url: str, session, source_dir: Path, cleaned_dir: Path, assets_root: Path
+) -> dict:
     """
     Fetch, extract, localise assets, and WRITE post to disk.
 
     Writes
     ------
-      posts_dir/{slug}.html  — cleaned article HTML with local asset paths
-      posts_dir/{slug}.json  — metadata sidecar
+      source_dir/{slug}.html  — extracted HTML with ORIGINAL URLs (no rewriting)
+      source_dir/{slug}.json  — metadata sidecar
+      cleaned_dir/{slug}.html — rewritten HTML with local asset paths
 
     Returns
     -------
@@ -841,83 +956,18 @@ def ingest_post(url: str, session, posts_dir: Path, serve_root: Path) -> dict:
     if data.get('error'):
         return result
 
-    # Re-parse the cleaned article HTML for asset localisation
-    try:
-        article_soup = BeautifulSoup(data['html'], 'lxml')
-        # lxml wraps in html/body — find the top-level element
-        body = article_soup.find('body')
-        article = body.find() if body else article_soup.find()  # type: ignore[union-attr]
-        if article is None or not isinstance(article, Tag):
-            article = article_soup
-    except Exception as e:
-        result['error'] = f'Re-parse error: {e}'
-        return result
-
-    date_str = data.get('date', '')
-
-    # ── Localise images ───────────────────────────────────────────────────────
-    for img in article.find_all('img'):  # type: ignore[union-attr]
-        if not isinstance(img, Tag):
-            continue
-        src = img.get('src', '') or ''
-        if not src or src.startswith('data:'):
-            continue
-        if _is_tracking_pixel(img):
-            img.decompose()
-            continue
-        if not src.startswith('http'):
-            # Already relative/local — skip
-            continue
-        local_path, rel_url = _asset_local_path(src, serve_root, 'images', date_str)
-        ok = _download_asset(src, local_path, session)
-        if ok:
-            img['src'] = rel_url
-            result['asset_localised'] += 1
-        else:
-            result['asset_failed'] += 1
-
-    # ── Localise stylesheets ──────────────────────────────────────────────────
-    for link in article.find_all('link', rel=True):  # type: ignore[union-attr]
-        if not isinstance(link, Tag):
-            continue
-        rels = link.get('rel', [])
-        if isinstance(rels, str):
-            rels = [rels]
-        if 'stylesheet' not in rels:
-            continue
-        href = link.get('href', '') or ''
-        if not href or not href.startswith('http'):
-            continue
-        local_path, rel_url = _asset_local_path(href, serve_root, 'css', date_str)
-        if not local_path.exists():
-            resp = _session_get(href, session)
-            if resp is not None and resp.status_code == 200:
-                css_text = _rewrite_css_urls(resp.text, href, serve_root, session)
-                local_path.parent.mkdir(parents=True, exist_ok=True)
-                local_path.write_text(css_text, encoding='utf-8')
-                result['asset_localised'] += 1
-            else:
-                result['asset_failed'] += 1
-                continue
-        else:
-            result['asset_localised'] += 1
-        link['href'] = rel_url
-
-    # ── Remove remaining script tags ──────────────────────────────────────────
-    for script in article.find_all('script'):  # type: ignore[union-attr]
-        script.decompose()
-
-    # ── Write to disk ─────────────────────────────────────────────────────────
     slug = data['slug']
-    posts_dir.mkdir(parents=True, exist_ok=True)
+    html_str = data['html']
 
-    html_path = posts_dir / f'{slug}.html'
-    json_path = posts_dir / f'{slug}.json'
+    # ── Write source (original, unrewritten) ──────────────────────────────────
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_html_path = source_dir / f'{slug}.html'
+    source_json_path = source_dir / f'{slug}.json'
 
     try:
-        html_path.write_text(str(article), encoding='utf-8')
+        source_html_path.write_text(html_str, encoding='utf-8')
     except Exception as e:
-        result['error'] = f'Write error (html): {e}'
+        result['error'] = f'Write error (source html): {e}'
         return result
 
     sidecar = {
@@ -929,17 +979,32 @@ def ingest_post(url: str, session, posts_dir: Path, serve_root: Path) -> dict:
         'tags':         data.get('tags', []),
         'original_url': url,
         'ingested_at':  datetime.now().isoformat(timespec='seconds'),
-        'asset_localised': result['asset_localised'],
-        'asset_failed':    result['asset_failed'],
     }
 
     try:
-        json_path.write_text(
+        source_json_path.write_text(
             json.dumps(sidecar, indent=2, ensure_ascii=False),
             encoding='utf-8',
         )
     except Exception as e:
         result['error'] = f'Write error (json): {e}'
+        return result
+
+    # ── Localise assets and produce cleaned HTML ──────────────────────────────
+    rewritten_html, localised, failed = _localise_with_store(
+        html_str, slug, session, assets_root
+    )
+    result['asset_localised'] = localised
+    result['asset_failed'] = failed
+
+    # ── Write cleaned (rewritten) HTML ────────────────────────────────────────
+    cleaned_dir.mkdir(parents=True, exist_ok=True)
+    cleaned_html_path = cleaned_dir / f'{slug}.html'
+
+    try:
+        cleaned_html_path.write_text(rewritten_html, encoding='utf-8')
+    except Exception as e:
+        result['error'] = f'Write error (cleaned html): {e}'
         return result
 
     result['wrote'] = True

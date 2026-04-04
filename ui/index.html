@@ -278,6 +278,7 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
       <button onclick="generateAll()" id="btn-gen-all" style="font-size:11px;padding:3px 8px" title="Generate MD for posts in current scope that don't have it yet">⚙ Gen scope</button>
       <button onclick="scanAll()" id="btn-scan-all" style="font-size:11px;padding:3px 8px" title="Scan HTML for all posts in current scope">🔍 Scan scope</button>
       <button onclick="validateAll()" id="btn-val-all" style="font-size:11px;padding:3px 8px" title="Validate MD for all posts in current scope that have MD">✓ Validate scope</button>
+      <button onclick="runConsolidate()" id="btn-consolidate" style="font-size:11px;padding:3px 8px;background:#1f1a00;border-color:#9e6a03;color:#e3b341" title="Hash-scan all assets, move shared ones to global/, rewrite cleaned HTML references">⟳ Consolidate</button>
       <span id="gen-progress"></span>
     </div>
     <!-- Bulk staged actions — only meaningful when filtered to Staged -->
@@ -308,9 +309,12 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
         <button onclick="toggleLayout()" id="btn-layout" title="Toggle split / single panel">☰ Single</button>
       </div>
       <div id="panel-heads">
-        <div class="ph">Original Archive HTML
+        <div class="ph" id="ph-html-label">Cleaned HTML
           <span class="ph-badge" id="ph-html-badge" style="display:none"></span>
           <span class="ph-badge" id="ph-assets-badge" style="display:none"></span>
+          <button id="btn-source-view" onclick="toggleSourceView()"
+            style="margin-left:auto;background:none;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer"
+            title="Toggle between cleaned HTML and original source">⊙ Source</button>
         </div>
         <div class="ph">Converted Markdown
           <span class="ph-badge" id="ph-md-badge" style="display:none"></span>
@@ -931,6 +935,7 @@ async function selectPost(slug) {
   saveScrollPosition();
   clearHighlight();
   if (editMode) cancelEdit();
+  _viewingSource = false;
   currentSlug=slug;
   const p=allPosts.find(x=>x.slug===slug); if(!p) return;
   document.querySelectorAll('.pi').forEach(el=>el.classList.remove('selected'));
@@ -942,7 +947,7 @@ async function selectPost(slug) {
   syncReviewedButton(p);
   const saved=scrollMemory[slug];
   pendingHtmlScroll=saved?saved.html:0;
-  $('orig-frame').src=`/${cfg.source?.posts_dir||''}/${slug}.html?v=${Date.now()}`;
+  _loadHtmlPanel(slug);
   renderPanelBadges(p);
   await loadMd(p);
   const mdBody=$('md-panel-body');
@@ -1289,6 +1294,23 @@ async function scanAll() {
   setTimeout(()=>{prog.textContent='';},5000);
 }
 
+async function runConsolidate() {
+  const btn=$('btn-consolidate'), prog=$('gen-progress');
+  btn.disabled=true; prog.textContent='⟳ Consolidating assets…';
+  try {
+    const r=await fetch(`${API}/api/consolidate`,{method:'POST'});
+    if (r.ok) {
+      const d=await r.json();
+      prog.textContent=`✓ ${d.promoted} promoted to global/, ${d.updated_html} HTML files updated`;
+    } else {
+      const e=await r.json().catch(()=>({error:'failed'}));
+      prog.textContent=`✗ ${e.error}`;
+    }
+  } catch(e) { prog.textContent=`✗ Error: ${e.message}`; }
+  btn.disabled=false;
+  setTimeout(()=>{prog.textContent='';},6000);
+}
+
 // ── Layout ────────────────────────────────────────────────────────
 function setTab(tab) {
   $('view-review').style.display  = tab==='review'   ? 'flex' : 'none';
@@ -1368,6 +1390,54 @@ document.addEventListener('keydown',e=>{
 });
 
 // ── Ingest moved to projects.html ─────────────────────────────────
+
+// ── Source / Cleaned panel toggle ────────────────────────────────
+let _viewingSource = false;
+
+function _htmlPanelPath(slug, source) {
+  // New-schema projects: cleaned/ vs source/ (if source_dir differs from cleaned_dir)
+  // Legacy-schema: always posts_dir (no distinction)
+  if (source && cfg.data?.source_dir) {
+    return `/${cfg.data.source_dir}/${slug}.html?v=${Date.now()}`;
+  }
+  if (cfg.data?.cleaned_dir) {
+    return `/${cfg.data.cleaned_dir}/${slug}.html?v=${Date.now()}`;
+  }
+  // Legacy fallback
+  return `/${cfg.source?.posts_dir||''}/${slug}.html?v=${Date.now()}`;
+}
+
+function _loadHtmlPanel(slug) {
+  $('orig-frame').src = _htmlPanelPath(slug, _viewingSource);
+  _updateSourceBanner();
+}
+
+function _updateSourceBanner() {
+  const label  = $('ph-html-label');
+  const btn    = $('btn-source-view');
+  const hasNew = !!(cfg.data?.source_dir);
+  if (!hasNew) {
+    // Legacy project — no source/cleaned distinction
+    if (label) label.childNodes[0].textContent = 'HTML Archive\n';
+    if (btn)   btn.style.display = 'none';
+    return;
+  }
+  if (btn) btn.style.display = '';
+  if (_viewingSource) {
+    if (label) label.childNodes[0].textContent = 'Original Source\n';
+    if (btn)   { btn.textContent = '⊙ Cleaned'; btn.classList.add('active'); }
+    // Show banner in iframe after load (handled in iframe load event)
+  } else {
+    if (label) label.childNodes[0].textContent = 'Cleaned HTML\n';
+    if (btn)   { btn.textContent = '⊙ Source'; btn.classList.remove('active'); }
+  }
+}
+
+function toggleSourceView() {
+  if (!currentSlug) return;
+  _viewingSource = !_viewingSource;
+  _loadHtmlPanel(currentSlug);
+}
 
 // ── Init ──────────────────────────────────────────────────────────
 setupScrollSync();
