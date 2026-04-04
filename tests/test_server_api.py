@@ -427,3 +427,164 @@ class TestProjectWipe:
     def test_wipe_nonexistent_project_returns_404(self, server):
         r = SESSION_HTTP.post(f'{API}/projects/does-not-exist-xyz/wipe')
         assert r.status_code == 404
+
+
+class TestIngestPipelineViaApi:
+    """
+    Full ingest pipeline through the HTTP server using the mock blog.
+    Tests wipe + reimport, newest-date accuracy, and append-mode discovery.
+    Skipped if the server is not running or mock blog unavailable.
+    """
+
+    def _create_new_schema_project(self, tmp_path, server) -> tuple[str, Path]:
+        """Create a temp project with new data schema; return (id, data_root)."""
+        name = f'Pipeline Test {uuid.uuid4().hex[:6]}'
+        data_root = tmp_path / 'data'
+        pid = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:40]
+        proj_dir = MIGRATOR_ROOT / 'projects' / pid
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        config = {
+            'project_name': name,
+            'serve_root': str(data_root),
+            'data': {
+                'source_dir':  'source',
+                'cleaned_dir': 'cleaned',
+                'assets_dir':  'assets',
+                'md_dir':      'md',
+            },
+            'filter': {'author': ''},
+            'server': {'port': 9000},
+        }
+        (proj_dir / 'config.json').write_text(json.dumps(config))
+        (proj_dir / 'state.json').write_text('{}')
+        projects = SESSION_HTTP.get(f'{API}/projects').json()
+        projects.append({'id': pid, 'name': name, 'created_at': '2026-01-01T00:00:00'})
+        (MIGRATOR_ROOT / 'projects.json').write_text(json.dumps(projects, indent=2))
+        return pid, data_root
+
+    def _cleanup(self, pid):
+        # Re-activate the original project before removing the test one
+        # so the server's active project pointer is valid after cleanup.
+        SESSION_HTTP.post(f'{API}/projects/kie-mark-proctor/activate')
+        SESSION_HTTP.delete(f'{API}/projects/{pid}')
+        proj_dir = MIGRATOR_ROOT / 'projects' / pid
+        if proj_dir.exists():
+            shutil.rmtree(proj_dir)
+
+    def _run_ingest(self, pid, urls) -> dict:
+        """Activate project, run ingest, poll to completion. Returns final status."""
+        SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
+        r = SESSION_HTTP.post(f'{API}/ingest/run',
+                               headers={'Content-Type': 'application/json'},
+                               json={'urls': urls})
+        assert r.status_code == 200, f'Ingest start failed: {r.text}'
+        # Poll
+        for _ in range(120):  # up to 60 seconds
+            time.sleep(0.5)
+            status = SESSION_HTTP.get(f'{API}/ingest/status').json()
+            if not status['running']:
+                return status
+        raise TimeoutError('Ingest did not complete in 60s')
+
+    def test_newest_date_after_ingest(self, server, mock_blog_server, tmp_path):
+        """After ingesting all posts, newest-date returns the most recent date."""
+        pid, _ = self._create_new_schema_project(tmp_path, server)
+        try:
+            # Discover from mock blog
+            disc = SESSION_HTTP.post(f'{API}/ingest/discover',
+                                      headers={'Content-Type': 'application/json'},
+                                      json={'url': mock_blog_server})
+            if disc.status_code == 503:
+                pytest.skip('ingest not available')
+            assert disc.status_code == 200
+            urls = disc.json().get('urls', [])
+            if not urls:
+                pytest.skip('No URLs discovered from mock blog')
+
+            self._run_ingest(pid, urls)
+
+            # Re-activate to load state
+            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
+            r = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date')
+            assert r.status_code == 200
+            d = r.json()
+            assert d['date'] is not None, 'Newest date should be set after ingest'
+            assert d['count'] > 0
+            # Mock blog dates: 2020-01-15 → 2023-11-20
+            assert d['date'] >= '2020-01-01', f'Date too old: {d["date"]}'
+            assert d['date'] <= '2024-01-01', f'Date too new: {d["date"]}'
+        finally:
+            self._cleanup(pid)
+
+    def test_wipe_and_reimport_same_count(self, server, mock_blog_server, tmp_path):
+        """Wipe then reimport produces the same post count as the first import."""
+        pid, _ = self._create_new_schema_project(tmp_path, server)
+        try:
+            disc = SESSION_HTTP.post(f'{API}/ingest/discover',
+                                      headers={'Content-Type': 'application/json'},
+                                      json={'url': mock_blog_server})
+            if disc.status_code == 503:
+                pytest.skip('ingest not available')
+            urls = disc.json().get('urls', [])
+            if not urls:
+                pytest.skip('No URLs discovered from mock blog')
+
+            # First import
+            self._run_ingest(pid, urls)
+            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
+            count1 = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date').json()['count']
+
+            # Wipe
+            wipe_r = SESSION_HTTP.post(f'{API}/projects/{pid}/wipe')
+            assert wipe_r.status_code == 200
+            assert wipe_r.json()['wiped'] is True
+
+            # Newest-date should be None after wipe
+            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
+            after_wipe = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date').json()
+            assert after_wipe['count'] == 0
+            assert after_wipe['date'] is None
+
+            # Re-import
+            self._run_ingest(pid, urls)
+            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
+            count2 = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date').json()['count']
+
+            assert count2 == count1, \
+                f'Re-import count {count2} ≠ first import count {count1}'
+        finally:
+            self._cleanup(pid)
+
+    def test_ingest_status_tracks_progress(self, server, mock_blog_server, tmp_path):
+        """Ingest status reflects running state and completion."""
+        pid, _ = self._create_new_schema_project(tmp_path, server)
+        try:
+            disc = SESSION_HTTP.post(f'{API}/ingest/discover',
+                                      headers={'Content-Type': 'application/json'},
+                                      json={'url': mock_blog_server})
+            if disc.status_code == 503:
+                pytest.skip('ingest not available')
+            urls = disc.json().get('urls', [])[:5]  # just 5 for speed
+            if not urls:
+                pytest.skip('No URLs discovered')
+
+            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
+            start = SESSION_HTTP.post(f'{API}/ingest/run',
+                                       headers={'Content-Type': 'application/json'},
+                                       json={'urls': urls})
+            assert start.status_code == 200
+            assert start.json()['total'] == 5
+
+            # Poll until done and verify status structure
+            for _ in range(60):
+                time.sleep(0.5)
+                status = SESSION_HTTP.get(f'{API}/ingest/status').json()
+                assert 'running' in status
+                assert 'done' in status
+                assert 'total' in status
+                assert 'errors' in status
+                if not status['running']:
+                    assert status['done'] == 5
+                    break
+        finally:
+            self._cleanup(pid)

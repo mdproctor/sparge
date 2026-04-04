@@ -914,8 +914,11 @@ function showErr(id, msg) {
 }
 
 // Close modal on backdrop click or Escape
-document.getElementById('import-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('import-modal')) closeImportModal();
+// Note: import-modal is rendered after this script block, so defer binding
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('import-modal')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('import-modal')) closeImportModal();
+  });
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeImportModal();

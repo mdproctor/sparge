@@ -1058,14 +1058,23 @@ def ingest_post(
     result['asset_localised'] = localised
     result['asset_failed'] = failed
 
-    # ── Write cleaned (rewritten) HTML ────────────────────────────────────────
+    # ── Write cleaned (rewritten) HTML + sidecar copy ────────────────────────
+    # state.init_from_source() scans cleaned_dir for HTML files and reads
+    # the co-located .json sidecar for metadata (date, title, etc.).
+    # We must write the sidecar alongside the cleaned HTML so that date-based
+    # features (newest-date, append mode) work correctly.
     cleaned_dir.mkdir(parents=True, exist_ok=True)
     cleaned_html_path = cleaned_dir / f'{slug}.html'
+    cleaned_json_path = cleaned_dir / f'{slug}.json'
 
     try:
         cleaned_html_path.write_text(rewritten_html, encoding='utf-8')
+        cleaned_json_path.write_text(
+            json.dumps(sidecar, indent=2, ensure_ascii=False),
+            encoding='utf-8',
+        )
     except Exception as e:
-        result['error'] = f'Write error (cleaned html): {e}'
+        result['error'] = f'Write error (cleaned): {e}'
         return result
 
     result['wrote'] = True
