@@ -1,0 +1,17 @@
+{
+  "project_name": "KIE Blog — Mark Proctor",
+  "serve_root": "/Users/mdproctor/mdproctor.github.io",
+  "source": {
+    "posts_dir": "legacy/posts/mark-proctor",
+    "assets_dir": "legacy/assets"
+  },
+  "output": {
+    "md_dir": "mark-proctor"
+  },
+  "filter": {
+    "author": "Mark Proctor"
+  },
+  "server": {
+    "port": 9000
+  }
+}

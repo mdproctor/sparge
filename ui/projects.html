@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sparge — Projects</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:#0d1117; color:#c9d1d9; min-height:100vh;
+       display:flex; flex-direction:column; font-size:13px; }
+
+/* ── Top bar ── */
+#topbar { flex-shrink:0; background:#161b22; border-bottom:1px solid #30363d;
+          padding:0 24px; display:flex; align-items:center; height:44px; gap:12px; }
+#logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+#logo-mark { flex-shrink:0; }
+#logo-text { display:flex; flex-direction:column; gap:1px; }
+#logo-name { font-weight:700; font-size:16px; color:#e6edf3; letter-spacing:-.3px; }
+#logo-name span { color:#e3b341; }
+#logo-tagline { font-size:11px; color:#484f58; line-height:1.3; }
+
+/* ── Main ── */
+#main { flex:1; display:flex; justify-content:center; padding:40px 24px 60px; }
+#content { width:100%; max-width:800px; }
+
+/* ── Section heading ── */
+.section-hd { font-size:10px; text-transform:uppercase; letter-spacing:.07em;
+              color:#8b949e; margin-bottom:12px; }
+
+/* ── Project card ── */
+.proj-card {
+  background:#161b22; border:1px solid #30363d; border-radius:8px;
+  padding:18px 20px; margin-bottom:10px; display:flex; align-items:center;
+  gap:16px; transition:border-color .15s;
+}
+.proj-card:hover { border-color:#8b949e; }
+.proj-card.active-proj { border-color:#1f6feb; background:#0d1f3a22; }
+.proj-card.active-proj .proj-name::after {
+  content:'active'; font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; color:#1f6feb; background:#1f6feb22;
+  border:1px solid #1f6feb55; border-radius:10px; padding:1px 7px;
+  margin-left:10px; vertical-align:middle;
+}
+.proj-info { flex:1; min-width:0; }
+.proj-name { font-size:15px; font-weight:600; color:#e6edf3; margin-bottom:6px;
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.proj-stats { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:5px; }
+.stat-item { font-size:11px; color:#8b949e; }
+.stat-item strong { color:#c9d1d9; }
+.stat-item strong.g { color:#3fb950; }
+.stat-item strong.b { color:#58a6ff; }
+.stat-item strong.o { color:#e3b341; }
+.proj-date { font-size:11px; color:#484f58; }
+.proj-actions { display:flex; gap:6px; flex-shrink:0; }
+
+/* ── Buttons ── */
+button { background:#21262d; color:#c9d1d9; border:1px solid #30363d;
+         border-radius:6px; padding:6px 14px; cursor:pointer; font-size:12px;
+         display:inline-flex; align-items:center; gap:5px;
+         white-space:nowrap; transition:all .15s; font-family:inherit; }
+button:hover { background:#30363d; border-color:#8b949e; }
+button:disabled { opacity:.35; cursor:default; }
+button.primary { background:#1f6feb; border-color:#1f6feb; color:#fff; font-weight:600; }
+button.primary:hover { background:#388bfd; border-color:#388bfd; }
+button.danger { background:#21262d; border-color:#30363d; color:#f85149; }
+button.danger:hover { background:#2d0f0f; border-color:#f85149; }
+button.success { background:#1a3a1f; border-color:#238636; color:#3fb950; }
+button.success:hover { background:#238636; color:#fff; }
+
+/* ── New project button row ── */
+#new-proj-row { margin-top:8px; margin-bottom:24px; }
+
+/* ── Form panel ── */
+#new-form-wrap {
+  background:#161b22; border:1px solid #30363d; border-radius:8px;
+  padding:24px; margin-bottom:24px; display:none;
+}
+#new-form-wrap.visible { display:block; }
+
+/* ── Mode tabs ── */
+.mode-tabs { display:flex; gap:0; margin-bottom:20px;
+             border:1px solid #30363d; border-radius:6px; overflow:hidden; }
+.mode-tab { flex:1; padding:8px 16px; text-align:center; font-size:12px;
+            cursor:pointer; background:#0d1117; color:#8b949e;
+            transition:all .15s; border:none; border-radius:0; }
+.mode-tab:hover { color:#c9d1d9; background:#161b22; }
+.mode-tab.active { background:#1f6feb; color:#fff; font-weight:600; }
+.mode-tab + .mode-tab { border-left:1px solid #30363d; }
+
+/* ── Form fields ── */
+.form-body { display:none; }
+.form-body.visible { display:block; }
+.field { margin-bottom:14px; }
+.field label { display:block; font-size:11px; color:#8b949e; margin-bottom:5px; }
+.field input { width:100%; background:#0d1117; border:1px solid #30363d;
+               border-radius:6px; padding:8px 11px; color:#c9d1d9;
+               font-size:13px; font-family:inherit; outline:none; transition:border-color .15s; }
+.field input:focus { border-color:#1f6feb; }
+.field .note { font-size:10px; color:#484f58; margin-top:4px; }
+.fields-row { display:flex; gap:12px; }
+.fields-row .field { flex:1; }
+
+/* ── Discovery / preview sub-panels ── */
+.sub-panel {
+  background:#0d1117; border:1px solid #30363d; border-radius:6px;
+  padding:14px 16px; margin-top:14px; display:none;
+}
+.sub-panel.visible { display:block; }
+.sub-hd { font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+          color:#484f58; margin-bottom:10px; }
+.discovery-info { font-size:13px; color:#c9d1d9; margin-bottom:12px; line-height:1.6; }
+.preview-meta { font-size:12px; color:#8b949e; line-height:1.8; margin-bottom:12px; }
+.preview-excerpt {
+  background:#161b22; border:1px solid #30363d; border-radius:4px;
+  padding:10px 12px; font-size:12px; color:#c9d1d9; line-height:1.6;
+  max-height:120px; overflow:hidden; position:relative;
+}
+.preview-excerpt::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:32px;
+  background:linear-gradient(transparent,#161b22);
+}
+
+/* ── Progress bar area ── */
+#ingest-progress-wrap {
+  background:#161b22; border:1px solid #30363d; border-radius:8px;
+  padding:20px 24px; margin-bottom:24px; display:none;
+}
+#ingest-progress-wrap.visible { display:block; }
+.pbar-track { background:#0d1117; border-radius:4px; height:8px;
+              overflow:hidden; margin-bottom:10px; }
+.pbar-fill { height:100%; border-radius:4px; width:0%;
+             background:linear-gradient(90deg,#238636,#1f6feb);
+             transition:width .3s; }
+.ingest-current { font-size:12px; color:#c9d1d9; margin-bottom:6px; }
+.ingest-errors { font-size:11px; color:#f85149; max-height:90px; overflow-y:auto;
+                 line-height:1.6; }
+.ingest-done-row { margin-top:14px; display:flex; gap:8px; align-items:center; }
+
+/* ── Empty state ── */
+#empty-state {
+  text-align:center; padding:60px 20px; color:#484f58;
+  display:none;
+}
+#empty-state.visible { display:block; }
+#empty-state .big { font-size:36px; margin-bottom:12px; }
+#empty-state p { font-size:13px; line-height:1.6; }
+
+/* ── Spinner ── */
+@keyframes spin { to { transform:rotate(360deg); } }
+.spinner { display:inline-block; width:12px; height:12px;
+           border:2px solid #30363d; border-top-color:#1f6feb;
+           border-radius:50%; animation:spin .7s linear infinite; }
+
+/* ── Errors ── */
+.form-error { font-size:12px; color:#f85149; margin-top:8px; display:none; }
+.form-error.visible { display:block; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a href="/ui/projects.html" id="logo">
+    <!-- Sparge logomark: droplets → filter → extract -->
+    <svg id="logo-mark" width="36" height="36" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- Input water droplets (what comes in: raw web content) -->
+      <path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/>
+      <path d="M24,0 C24,0 18,11 18,16 A6,6 0 0,0 30,16 C30,11 24,0 24,0Z" fill="#1f6feb" opacity=".85"/>
+      <path d="M38,1 C38,1 32,13 32,18 A6,6 0 0,0 44,18 C44,13 38,1 38,1Z" fill="#1f6feb" opacity=".7"/>
+      <!-- Filter / grain bed (the cleansing process) -->
+      <rect x="1" y="27" width="46" height="3.5" rx="1.75" fill="#e3b341"/>
+      <rect x="1" y="33" width="46" height="3.5" rx="1.75" fill="#e3b341" opacity=".65"/>
+      <rect x="1" y="39" width="46" height="3.5" rx="1.75" fill="#e3b341" opacity=".35"/>
+    </svg>
+    <div id="logo-text">
+      <div id="logo-name">Sp<span>a</span>rge</div>
+      <div id="logo-tagline">Rinse. Extract. Transform.</div>
+    </div>
+  </a>
+</div>
+
+<div id="main">
+  <div id="content">
+
+    <!-- Hero tagline -->
+    <div style="margin-bottom:32px;padding-bottom:28px;border-bottom:1px solid #21262d">
+      <p style="font-size:14px;color:#8b949e;line-height:1.7;max-width:560px">
+        Named after the brewing step that rinses grain to draw out pure wort —
+        <strong style="color:#c9d1d9">Sparge</strong> does the same for web content.
+        Point it at any blog, and it extracts what matters, strips the noise,
+        and transforms the result into clean, portable Markdown.
+      </p>
+    </div>
+
+    <!-- Projects list -->
+    <div class="section-hd">Your projects</div>
+    <div id="proj-list">
+      <div style="color:#484f58;font-size:12px;padding:16px 0">Loading projects…</div>
+    </div>
+    <div id="empty-state">
+      <div class="big">🗂</div>
+      <p>No projects yet.<br>Create one below to get started.</p>
+    </div>
+
+    <!-- New project button -->
+    <div id="new-proj-row">
+      <button onclick="toggleNewForm()" id="btn-toggle-form">+ New Project</button>
+    </div>
+
+    <!-- New project form -->
+    <div id="new-form-wrap">
+      <div style="font-size:14px;font-weight:600;color:#e6edf3;margin-bottom:16px">New Project</div>
+
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-ingest" onclick="switchMode('ingest')">⬇ Ingest from URL</button>
+        <button class="mode-tab" id="tab-local" onclick="switchMode('local')">📁 Use existing local archive</button>
+      </div>
+
+      <!-- ── Ingest mode ── -->
+      <div class="form-body visible" id="body-ingest">
+        <div class="field">
+          <label>Blog URL</label>
+          <input id="i-url" type="url" placeholder="https://blog.example.com"
+            onkeydown="if(event.key==='Enter')discoverBlog()"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+        </div>
+        <div class="field">
+          <label>Author filter <span style="color:#484f58">(optional)</span></label>
+          <input id="i-author" type="text" placeholder="e.g. Mark Proctor"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+          <div class="note">Leave blank to import posts from all authors</div>
+        </div>
+        <div class="field">
+          <label>Project name</label>
+          <input id="i-name" type="text" placeholder="Auto-filled after discovery"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+          <div class="note">Editable — auto-filled from blog name after discovery</div>
+        </div>
+
+        <button onclick="discoverBlog()" id="btn-discover" style="margin-top:4px">▶ Discover</button>
+        <div class="form-error" id="discover-error"></div>
+
+        <!-- Discovery results -->
+        <div class="sub-panel" id="discover-panel">
+          <div class="sub-hd">Discovery results</div>
+          <div class="discovery-info" id="discover-info"></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button onclick="previewPost()" id="btn-preview">👁 Preview one post</button>
+            <span style="font-size:11px;color:#484f58">— verify extraction before importing</span>
+          </div>
+
+          <!-- Preview -->
+          <div class="sub-panel" id="preview-panel" style="margin-top:12px">
+            <div class="sub-hd">Preview extraction</div>
+            <div class="preview-meta" id="preview-meta"></div>
+            <div class="preview-excerpt" id="preview-excerpt"></div>
+            <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+              <button onclick="previewPost()" id="btn-preview-again" style="font-size:11px;padding:4px 10px">↺ Different post</button>
+              <span style="font-size:11px;color:#484f58">Looks good?</span>
+              <button class="success" onclick="createAndIngest()" id="btn-create-ingest" style="font-size:12px;padding:5px 14px">✓ Create project &amp; import</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Local mode ── -->
+      <div class="form-body" id="body-local">
+        <div class="field">
+          <label>Project name</label>
+          <input id="l-name" type="text" placeholder="e.g. KIE Blog Archive"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+        </div>
+        <div class="field">
+          <label>Serve root <span style="color:#484f58">(absolute path)</span></label>
+          <input id="l-root" type="text" placeholder="/Users/you/blog-archive"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+          <div class="note">Static files are served from this directory</div>
+        </div>
+        <div class="fields-row">
+          <div class="field">
+            <label>Posts directory <span style="color:#484f58">(relative)</span></label>
+            <input id="l-posts" type="text" placeholder="posts"
+              onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+          </div>
+          <div class="field">
+            <label>Assets directory <span style="color:#484f58">(relative)</span></label>
+            <input id="l-assets" type="text" placeholder="assets"
+              onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+          </div>
+        </div>
+        <div class="field">
+          <label>MD output directory <span style="color:#484f58">(relative)</span></label>
+          <input id="l-md" type="text" placeholder="markdown"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+        </div>
+        <div class="field">
+          <label>Author filter <span style="color:#484f58">(optional)</span></label>
+          <input id="l-author" type="text" placeholder="e.g. Mark Proctor"
+            onfocus="this.style.borderColor='#1f6feb'" onblur="this.style.borderColor='#30363d'">
+        </div>
+        <div class="form-error" id="local-error"></div>
+        <div style="margin-top:4px">
+          <button class="success" onclick="createLocal()" id="btn-create-local">✓ Create project</button>
+        </div>
+      </div>
+
+    </div><!-- /new-form-wrap -->
+
+    <!-- Ingest progress -->
+    <div id="ingest-progress-wrap">
+      <div style="font-size:13px;font-weight:600;color:#e6edf3;margin-bottom:14px">Importing posts…</div>
+      <div class="pbar-track"><div class="pbar-fill" id="pbar-fill"></div></div>
+      <div class="ingest-current" id="ingest-current">Starting…</div>
+      <div class="ingest-errors" id="ingest-errors"></div>
+      <div class="ingest-done-row" id="ingest-done-row" style="display:none">
+        <button class="primary" onclick="openActiveProject()">→ Open project</button>
+        <button onclick="cancelIngest()" id="btn-cancel-ingest" style="font-size:11px">✕ Cancel</button>
+      </div>
+      <div id="ingest-running-row" style="margin-top:12px">
+        <button onclick="cancelIngest()" id="btn-cancel-running" style="font-size:11px;color:#e3b341;border-color:#9e6a03;background:#2d1f0f">✕ Cancel import</button>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+const API = '';
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const $ = id => document.getElementById(id);
+
+let projects = [];
+let discoveredUrls = [];
+let activeProjectId = null;
+let ingestPollTimer = null;
+
+// ── Load projects ─────────────────────────────────────────────────
+async function loadProjects() {
+  try {
+    const r = await fetch(`${API}/api/projects`);
+    if (!r.ok) throw new Error(r.status);
+    projects = await r.json();
+  } catch(e) {
+    projects = [];
+  }
+  renderProjects();
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
+  } catch(e) { return iso.slice(0,10); }
+}
+
+function renderProjects() {
+  const list = $('proj-list');
+  const empty = $('empty-state');
+  if (!projects.length) {
+    list.innerHTML = '';
+    empty.classList.add('visible');
+    return;
+  }
+  empty.classList.remove('visible');
+  list.innerHTML = projects.map(p => {
+    const s = p.stats || {};
+    const isActive = p.active;
+    return `<div class="proj-card${isActive ? ' active-proj' : ''}">
+      <div class="proj-info">
+        <div class="proj-name">${esc(p.name)}</div>
+        <div class="proj-stats">
+          <span class="stat-item"><strong>${s.total||0}</strong> posts</span>
+          <span class="stat-item"><strong class="g">${s.reviewed||0}</strong> reviewed</span>
+          <span class="stat-item"><strong class="o">${s.staged||0}</strong> staged</span>
+          <span class="stat-item"><strong class="b">${s.md_generated||0}</strong> MD generated</span>
+          ${(s.html_issues||0) > 0 ? `<span class="stat-item"><strong style="color:#f85149">${s.html_issues}</strong> HTML issues</span>` : ''}
+        </div>
+        <div class="proj-date">Created ${fmtDate(p.created_at)}</div>
+      </div>
+      <div class="proj-actions">
+        <button class="primary" onclick="openProject('${p.id}')">→ Open</button>
+        <button class="danger" onclick="deleteProject('${p.id}', ${JSON.stringify(esc(p.name))})">🗑 Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Open project ──────────────────────────────────────────────────
+async function openProject(id) {
+  try {
+    await fetch(`${API}/api/projects/${id}/activate`, {method:'POST'});
+  } catch(e) {}
+  window.location.href = '/ui/index.html';
+}
+
+// ── Delete project ────────────────────────────────────────────────
+async function deleteProject(id, name) {
+  if (!confirm(`Delete project "${name}"?\n\nThis removes it from Sparge. Files on disk are not deleted.`)) return;
+  try {
+    const r = await fetch(`${API}/api/projects/${id}`, {method:'DELETE'});
+    if (!r.ok) { alert('Delete failed: ' + r.status); return; }
+    await loadProjects();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── Form toggle ───────────────────────────────────────────────────
+let formVisible = false;
+function toggleNewForm() {
+  formVisible = !formVisible;
+  $('new-form-wrap').classList.toggle('visible', formVisible);
+  $('btn-toggle-form').textContent = formVisible ? '✕ Cancel' : '+ New Project';
+  if (!formVisible) resetForm();
+}
+
+function resetForm() {
+  // Ingest fields
+  $('i-url').value = '';
+  $('i-author').value = '';
+  $('i-name').value = '';
+  $('discover-panel').classList.remove('visible');
+  $('preview-panel').classList.remove('visible');
+  $('discover-error').classList.remove('visible');
+  discoveredUrls = [];
+  // Local fields
+  $('l-name').value = '';
+  $('l-root').value = '';
+  $('l-posts').value = '';
+  $('l-assets').value = '';
+  $('l-md').value = '';
+  $('l-author').value = '';
+  $('local-error').classList.remove('visible');
+}
+
+// ── Mode switch ───────────────────────────────────────────────────
+let currentMode = 'ingest';
+function switchMode(mode) {
+  currentMode = mode;
+  $('tab-ingest').classList.toggle('active', mode === 'ingest');
+  $('tab-local').classList.toggle('active', mode === 'local');
+  $('body-ingest').classList.toggle('visible', mode === 'ingest');
+  $('body-local').classList.toggle('visible', mode === 'local');
+}
+
+// ── Discover ──────────────────────────────────────────────────────
+async function discoverBlog() {
+  const url = $('i-url').value.trim();
+  if (!url) { $('i-url').focus(); return; }
+  const btn = $('btn-discover');
+  const err = $('discover-error');
+  btn.innerHTML = '<span class="spinner"></span> Discovering…';
+  btn.disabled = true;
+  err.classList.remove('visible');
+  $('discover-panel').classList.remove('visible');
+  $('preview-panel').classList.remove('visible');
+  discoveredUrls = [];
+  try {
+    const author = $('i-author').value.trim() || null;
+    const r = await fetch(`${API}/api/ingest/discover`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url, author_filter: author})
+    });
+    const d = await r.json();
+    if (!r.ok) { showErr('discover-error', d.error || ('Error ' + r.status)); return; }
+    discoveredUrls = d.urls || [];
+    // Auto-fill project name
+    if (d.name && !$('i-name').value) $('i-name').value = d.name;
+    $('discover-info').innerHTML =
+      `<strong style="color:#e6edf3">${esc(d.name || url)}</strong><br>` +
+      `Platform: <span style="color:#58a6ff">${esc(d.platform || 'unknown')}</span> &nbsp;·&nbsp; ` +
+      `<span style="color:#3fb950">${discoveredUrls.length} posts found</span>` +
+      (author ? ` &nbsp;·&nbsp; <span style="color:#8b949e">filtered to "${esc(author)}"</span>` : '');
+    $('discover-panel').classList.add('visible');
+  } catch(e) { showErr('discover-error', e.message); }
+  finally { btn.innerHTML = '▶ Discover'; btn.disabled = false; }
+}
+
+// ── Preview ───────────────────────────────────────────────────────
+async function previewPost() {
+  if (!discoveredUrls.length) return;
+  const btn = $('btn-preview');
+  const btn2 = $('btn-preview-again');
+  btn.innerHTML = '<span class="spinner"></span> Extracting…';
+  btn.disabled = true;
+  if (btn2) btn2.disabled = true;
+  $('preview-panel').classList.remove('visible');
+  // Pick a post from the middle for a representative sample
+  const idx = Math.floor(discoveredUrls.length / 2);
+  const url = discoveredUrls[idx];
+  try {
+    const r = await fetch(`${API}/api/ingest/preview`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url})
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) { showErr('discover-error', d.error || ('Preview failed: ' + r.status)); return; }
+    $('preview-meta').innerHTML =
+      `<strong>Title:</strong> ${esc(d.title || '—')}<br>` +
+      `<strong>Date:</strong> ${esc(d.date || '—')} &nbsp;·&nbsp; ` +
+      `<strong>Author:</strong> ${esc(d.author || '—')}<br>` +
+      `<strong>Assets:</strong> ${d.asset_count || 0} images`;
+    // Show first ~200 chars of extracted text
+    const tmpDiv = document.createElement('div');
+    tmpDiv.innerHTML = d.html || '';
+    const text = (tmpDiv.textContent || '').slice(0, 300).trim();
+    $('preview-excerpt').textContent = text || '(no text content)';
+    $('preview-panel').classList.add('visible');
+  } catch(e) { showErr('discover-error', e.message); }
+  finally { btn.innerHTML = '👁 Preview one post'; btn.disabled = false; if (btn2) btn2.disabled = false; }
+}
+
+// ── Create & Ingest ───────────────────────────────────────────────
+async function createAndIngest() {
+  const name = $('i-name').value.trim();
+  if (!name) { $('i-name').focus(); showErr('discover-error', 'Please enter a project name'); return; }
+  if (!discoveredUrls.length) { showErr('discover-error', 'No URLs discovered — run Discover first'); return; }
+  const btn = $('btn-create-ingest');
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+  btn.disabled = true;
+  try {
+    // Create project (minimal — no local paths needed for ingest-from-URL)
+    const r = await fetch(`${API}/api/projects`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name,
+        author_filter: $('i-author').value.trim() || null
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) { showErr('discover-error', d.error || ('Create failed: ' + r.status)); return; }
+    activeProjectId = d.id;
+    // Activate
+    await fetch(`${API}/api/projects/${d.id}/activate`, {method:'POST'});
+    // Start ingest
+    const ir = await fetch(`${API}/api/projects/${d.id}/ingest/run`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        urls: discoveredUrls,
+        author_filter: $('i-author').value.trim() || null
+      })
+    });
+    if (!ir.ok) { const id = await ir.json(); showErr('discover-error', id.error || 'Failed to start ingest'); return; }
+    // Hide form, show progress
+    $('new-form-wrap').classList.remove('visible');
+    formVisible = false;
+    $('btn-toggle-form').textContent = '+ New Project';
+    showIngestProgress();
+    ingestPollTimer = setInterval(pollIngest, 1500);
+  } catch(e) { showErr('discover-error', e.message); }
+  finally { btn.innerHTML = '✓ Create project &amp; import'; btn.disabled = false; }
+}
+
+// ── Create local ──────────────────────────────────────────────────
+async function createLocal() {
+  const name = $('l-name').value.trim();
+  const root = $('l-root').value.trim();
+  if (!name) { $('l-name').focus(); showErr('local-error', 'Project name is required'); return; }
+  if (!root) { $('l-root').focus(); showErr('local-error', 'Serve root path is required'); return; }
+  const btn = $('btn-create-local');
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/api/projects`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name,
+        serve_root: root,
+        posts_dir:  $('l-posts').value.trim() || undefined,
+        assets_dir: $('l-assets').value.trim() || undefined,
+        md_dir:     $('l-md').value.trim() || undefined,
+        author_filter: $('l-author').value.trim() || null
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) { showErr('local-error', d.error || ('Create failed: ' + r.status)); return; }
+    // Activate and navigate
+    await fetch(`${API}/api/projects/${d.id}/activate`, {method:'POST'});
+    window.location.href = '/ui/index.html';
+  } catch(e) { showErr('local-error', e.message); }
+  finally { btn.innerHTML = '✓ Create project'; btn.disabled = false; }
+}
+
+// ── Ingest progress ───────────────────────────────────────────────
+function showIngestProgress() {
+  $('ingest-progress-wrap').classList.add('visible');
+  $('pbar-fill').style.width = '0%';
+  $('ingest-current').textContent = 'Starting…';
+  $('ingest-errors').textContent = '';
+  $('ingest-done-row').style.display = 'none';
+  $('ingest-running-row').style.display = '';
+  // Scroll into view
+  $('ingest-progress-wrap').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+async function pollIngest() {
+  try {
+    const r = await fetch(`${API}/api/ingest/status`);
+    const d = await r.json();
+    const pct = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
+    $('pbar-fill').style.width = pct + '%';
+    if (d.running) {
+      const slug = d.current ? d.current.split('/').pop() : '…';
+      $('ingest-current').textContent = `${d.done} / ${d.total} — ${slug}`;
+    } else {
+      $('ingest-current').textContent =
+        `✓ Complete — ${d.done} post${d.done!==1?'s':''} imported` +
+        (d.errors.length ? `, ${d.errors.length} error${d.errors.length!==1?'s':''}` : '');
+    }
+    if (d.errors && d.errors.length) {
+      $('ingest-errors').innerHTML = d.errors.slice(-5).map(e =>
+        `<div>✗ ${esc((e.url||'').split('/').pop())}: ${esc(e.error)}</div>`).join('');
+    }
+    if (!d.running) {
+      clearInterval(ingestPollTimer); ingestPollTimer = null;
+      $('ingest-done-row').style.display = '';
+      $('ingest-running-row').style.display = 'none';
+      await loadProjects();
+    }
+  } catch(e) {}
+}
+
+async function cancelIngest() {
+  try { await fetch(`${API}/api/ingest/cancel`, {method:'POST'}); } catch(e) {}
+  if (ingestPollTimer) { clearInterval(ingestPollTimer); ingestPollTimer = null; }
+  $('ingest-current').textContent += ' (cancelled)';
+  $('ingest-done-row').style.display = '';
+  $('ingest-running-row').style.display = 'none';
+  await loadProjects();
+}
+
+function openActiveProject() {
+  window.location.href = '/ui/index.html';
+}
+
+// ── Error helper ──────────────────────────────────────────────────
+function showErr(id, msg) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+loadProjects();
+</script>
+</body>
+</html>

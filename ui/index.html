@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sparge</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.registerLanguage('drl', h => ({
+    keywords: { keyword: 'rule when then end import package declare salience agenda-group ruleflow-group lock-on-active no-loop accumulate collect from exists forall not and or modify update insert retract delete global eval query function' },
+    contains: [h.C_LINE_COMMENT_MODE, h.C_BLOCK_COMMENT_MODE, h.QUOTE_STRING_MODE, h.C_NUMBER_MODE]
+  }));
+  marked.use({ extensions: [{ name:'code', level:'block', renderer(t) {
+    const lang = t.lang || '', code = t.text || '';
+    const language = lang && hljs.getLanguage(lang) ? lang : null;
+    const hi = language ? hljs.highlight(code,{language,ignoreIllegals:true}).value : (code ? hljs.highlightAuto(code).value : code);
+    return `<pre><code class="hljs${language?` language-${language}`:''}">${hi}</code></pre>\n`;
+  }}]});
+</script>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:#0d1117; color:#c9d1d9;
+       display:flex; flex-direction:column; height:100vh; overflow:hidden; font-size:13px; }
+
+/* ── Top bar ── */
+#topbar { flex-shrink:0; background:#161b22; border-bottom:1px solid #30363d;
+          padding:0 16px; display:flex; align-items:stretch; height:44px; }
+#logo { display:flex; align-items:center; gap:6px; font-weight:700; font-size:14px;
+        color:#e6edf3; padding-right:16px; border-right:1px solid #30363d; margin-right:4px; }
+#logo em { color:#1f6feb; font-style:normal; }
+.ttab { padding:0 14px; cursor:pointer; border-bottom:2px solid transparent;
+        color:#8b949e; display:flex; align-items:center; font-size:13px; transition:all .15s; }
+.ttab:hover { color:#c9d1d9; }
+.ttab.active { color:#e6edf3; border-bottom-color:#1f6feb; font-weight:600; }
+
+/* Post crumb lives in the post action bar */
+#post-crumb { flex:1; min-width:0; font-size:13px; color:#8b949e;
+              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#post-crumb strong { color:#e6edf3; font-weight:600; }
+
+/* MD edit button active state */
+#btn-edit-md.editing { background:#1f6feb22; border-color:#1f6feb; color:#58a6ff; }
+
+/* ── Post action bar ── everything scoped to the current document */
+#post-action-bar {
+  flex-shrink: 0; background: #161b22; border-bottom: 1px solid #30363d;
+  padding: 5px 14px; display: flex; align-items: center; gap: 6px;
+}
+/* Pin all buttons — only the crumb absorbs space changes */
+#post-action-bar > *:not(#post-crumb) { flex-shrink: 0; }
+button { background:#21262d; color:#c9d1d9; border:1px solid #30363d;
+         border-radius:6px; padding:5px 12px; cursor:pointer; font-size:12px;
+         display:flex; align-items:center; gap:5px; white-space:nowrap; transition:all .15s; }
+button:hover { background:#30363d; border-color:#8b949e; }
+button:disabled { opacity:.35; cursor:default; }
+button.active { background:#1f6feb; border-color:#1f6feb; color:#fff; }
+button.success { background:#1a3a1f; border-color:#238636; color:#3fb950; }
+button.success:hover { background:#238636; color:#fff; }
+button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
+.sep { width:1px; height:22px; background:#30363d; flex-shrink:0; }
+.gl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#484f58; }
+
+/* ── Layout ── */
+#main { flex:1; display:flex; overflow:hidden; }
+
+/* ── Nav ── */
+#nav { width:252px; flex-shrink:0; background:#161b22; border-right:1px solid #30363d;
+       display:flex; flex-direction:column; overflow:hidden; }
+#nav-stats { padding:10px 12px; border-bottom:1px solid #30363d; flex-shrink:0; }
+#nav-stats h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+                color:#8b949e; margin-bottom:8px; }
+.srow { display:flex; justify-content:space-between; margin-bottom:3px; }
+.sl { font-size:11px; color:#8b949e; }
+.sv { font-size:11px; font-weight:600; }
+.sv.g{color:#3fb950}.sv.b{color:#58a6ff}.sv.o{color:#e3b341}.sv.m{color:#484f58}
+#pbar { height:3px; background:#21262d; border-radius:2px; margin-top:8px; overflow:hidden; }
+#pfill { height:100%; border-radius:2px; transition:width .4s;
+         background:linear-gradient(90deg,#238636 0%,#1f6feb 100%); }
+#nav-filters { padding:6px 8px; border-bottom:1px solid #30363d; flex-shrink:0; display:flex; gap:4px; }
+.fb { flex:1; background:none; border:1px solid transparent; border-radius:4px;
+      padding:3px 2px; font-size:10px; color:#8b949e; cursor:pointer; text-align:center; }
+.fb:hover { background:#21262d; color:#c9d1d9; }
+.fb.active { background:#21262d; border-color:#30363d; color:#c9d1d9; }
+#gen-all-row { padding:6px 8px; border-bottom:1px solid #30363d; flex-shrink:0; display:flex; gap:6px; align-items:center; }
+#gen-progress { font-size:10px; color:#8b949e; flex:1; }
+#post-list { flex:1; overflow-y:auto; }
+.pi { padding:7px 10px; border-bottom:1px solid #1a1f26; cursor:pointer; transition:background .1s; }
+.pi:hover { background:#1c2128; }
+.pi.selected { background:#1c2d3f; border-left:3px solid #1f6feb; padding-left:7px; }
+.pi-date { font-size:10px; color:#484f58; margin-bottom:2px; }
+.pi-title { font-size:12px; color:#c9d1d9; line-height:1.3; margin-bottom:4px; }
+.pi-badges { display:flex; gap:3px; flex-wrap:wrap; }
+.badge { font-size:9px; padding:1px 6px; border-radius:10px; font-weight:600; }
+.b-ok   {background:#12261e;color:#3fb950;border:1px solid #238636}
+.b-warn {background:#2d1f0f;color:#e3b341;border:1px solid #9e6a03}
+.b-err  {background:#2d0f0f;color:#f85149;border:1px solid #f85149}
+.b-none {background:#1c2128;color:#484f58;border:1px solid #30363d}
+.b-blue {background:#0d1f3a;color:#58a6ff;border:1px solid #1f6feb}
+.b-stale{background:#1f1a00;color:#e3b341;border:1px solid #9e6a03}
+
+/* ── Content ── */
+#content { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+#panel-heads { display:flex; flex-shrink:0; background:#161b22; border-bottom:1px solid #30363d; }
+.ph { flex:1; padding:5px 14px; font-size:10px; text-transform:uppercase;
+      letter-spacing:.06em; color:#8b949e; display:flex; align-items:center; gap:8px; }
+.ph+.ph { border-left:1px solid #30363d; }
+.ph-badge { font-size:9px; padding:1px 6px; border-radius:3px; font-weight:700; }
+
+/* Tab bar (single-page mode) */
+#tabbar { flex-shrink:0; background:#161b22; border-bottom:1px solid #30363d;
+          padding:0 16px; display:none; }
+#tabbar.visible { display:flex; }
+.tab { padding:8px 20px; font-size:13px; cursor:pointer;
+       border-bottom:2px solid transparent; color:#8b949e; transition:all .15s; }
+.tab:hover { color:#c9d1d9; }
+.tab.active { color:#f78166; border-bottom-color:#f78166; font-weight:600; }
+
+#panels { flex:1; display:flex; overflow:hidden; min-height:0; }
+#divider { width:4px; background:#30363d; cursor:col-resize; flex-shrink:0; }
+#divider:hover { background:#1f6feb; }
+.panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+.panel-body { flex:1; overflow:auto; }
+#orig-frame { width:100%; height:100%; border:none; background:#fff; }
+
+/* MD */
+#md-wrap { padding:24px 32px; max-width:800px; margin:0 auto; line-height:1.7; }
+#md-wrap h1,#md-wrap h2 { border-bottom:1px solid #30363d; padding-bottom:.3em; margin:1.5em 0 .6em; color:#e6edf3; }
+#md-wrap h3,#md-wrap h4 { margin:1.2em 0 .4em; color:#e6edf3; }
+#md-wrap p  { margin:.7em 0; color:#c9d1d9; }
+#md-wrap a  { color:#58a6ff; }
+#md-wrap code { background:#161b22; border:1px solid #30363d; border-radius:4px; padding:2px 6px; font-size:.875em; color:#f0883e; }
+#md-wrap pre { background:#f6f8fa; border:1px solid #d0d7de; border-radius:6px; padding:0; overflow-x:auto; margin:1em 0; }
+#md-wrap pre code { background:none; border:none; padding:16px; display:block; color:#24292e; font-size:.875em; }
+#md-wrap blockquote { border-left:4px solid #30363d; margin:1em 0; padding:.5em 1em; color:#8b949e; }
+#md-wrap ul,#md-wrap ol { margin:.7em 0 .7em 1.5em; }
+#md-wrap li { margin:.3em 0; }
+#md-wrap img { max-width:100%; border-radius:6px; margin:1em 0; border:1px solid #30363d; }
+#md-wrap table { border-collapse:collapse; width:100%; margin:1em 0; }
+#md-wrap th,#md-wrap td { border:1px solid #30363d; padding:6px 13px; }
+#md-wrap th { background:#161b22; }
+.fm-card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px 20px; margin-bottom:20px; }
+.fm-card h1 { font-size:20px; color:#e6edf3; border:none; margin-bottom:6px; }
+.fm-card .fm-meta { font-size:12px; color:#8b949e; }
+.fm-card .fm-tags { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+.fm-tag { background:#1f6feb22; border:1px solid #1f6feb55; color:#58a6ff; border-radius:12px; padding:2px 10px; font-size:11px; }
+#md-empty { display:flex; flex-direction:column; align-items:center; justify-content:center;
+            height:100%; gap:12px; color:#8b949e; text-align:center; padding:40px; }
+
+/* ── Issue panel ── */
+#issue-panel { flex-shrink:0; border-top:1px solid #30363d; background:#0d1117;
+               display:flex; flex-direction:column; max-height:200px; }
+#issue-panel.hidden { display:none; }
+#issue-panel-hdr { display:flex; align-items:center; gap:10px; padding:5px 14px;
+                   border-bottom:1px solid #21262d; flex-shrink:0; }
+#issue-panel-hdr span { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#8b949e; flex:1; }
+#issue-cols { display:flex; flex:1; overflow:hidden; min-height:0; }
+.issue-col { flex:1; overflow-y:auto; padding:4px 0; }
+.issue-col+.issue-col { border-left:1px solid #21262d; }
+.issue-col-hd { padding:3px 12px; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#484f58; }
+.irow { padding:3px 12px; font-size:11px; font-family:monospace; border-left:3px solid transparent; }
+.irow.err  { color:#f85149; border-left-color:#f85149; background:#f851490a; }
+.irow.warn { color:#e3b341; border-left-color:#e3b341; background:#e3b3410a; }
+.irow.clickable { cursor:pointer; }
+.irow.clickable:hover { filter:brightness(1.25); background-color:#ffffff0d; }
+.irow.no-selector { opacity:.55; }
+.irow.highlighted.err  { background:#f8514922; outline:1px solid #f8514966; }
+.irow.highlighted.warn { background:#e3b34122; outline:1px solid #e3b34166; }
+.no-iss { padding:6px 12px; font-size:11px; color:#484f58; font-style:italic; }
+.irow-tooltip { position:fixed; background:#21262d; border:1px solid #f85149; color:#f85149;
+                font-size:11px; padding:3px 8px; border-radius:4px; pointer-events:none;
+                z-index:9999; white-space:nowrap; }
+
+/* ── Diff modal ── */
+#diff-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
+              z-index:1000; align-items:center; justify-content:center; }
+#diff-modal.open { display:flex; }
+#diff-box { background:#161b22; border:1px solid #30363d; border-radius:10px;
+            width:90vw; height:82vh; display:flex; flex-direction:column;
+            box-shadow:0 8px 32px rgba(0,0,0,.6); }
+#diff-hdr { flex-shrink:0; padding:12px 20px; border-bottom:1px solid #30363d;
+            display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+#diff-hdr h3 { font-size:15px; color:#e6edf3; margin-bottom:3px; }
+#diff-stats .add{color:#3fb950} #diff-stats .del{color:#f85149}
+#diff-stats { font-size:12px; color:#8b949e; }
+#diff-close { background:none; border:none; color:#8b949e; cursor:pointer;
+              font-size:18px; line-height:1; padding:2px 6px; flex-shrink:0; }
+#diff-close:hover { color:#e6edf3; }
+#diff-body { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+#diff-col-labels { display:flex; flex-shrink:0; border-bottom:1px solid #30363d; }
+.dcl { flex:1; padding:4px 12px; font-size:10px; text-transform:uppercase;
+       letter-spacing:.06em; color:#8b949e; }
+.dcl+.dcl { border-left:1px solid #30363d; }
+#diff-cols { display:flex; flex:1; overflow:hidden; min-height:0; }
+#diff-left-wrap,#diff-right-wrap { flex:1; overflow:auto; min-width:0;
+  font-family:'SFMono-Regular',Consolas,monospace; font-size:12px; line-height:1.6; }
+#diff-right-wrap { border-left:1px solid #30363d; }
+.dr { padding:1px 12px; white-space:pre-wrap; word-break:break-word; min-height:1.6em; }
+.dr.add   { background:#0d2b0d; color:#3fb950; }
+.dr.del   { background:#2d0d0d; color:#f85149; }
+.dr.ctx   { color:#484f58; }
+.dr.empty { background:#0a0a0a; }
+.dr.skip  { color:#484f58; background:#0d1117; font-style:italic;
+            border-top:1px solid #21262d; border-bottom:1px solid #21262d; }
+#diff-ftr { flex-shrink:0; padding:12px 20px; border-top:1px solid #30363d;
+            display:flex; justify-content:flex-end; align-items:center; gap:10px; }
+#diff-ftr span { flex:1; font-size:12px; color:#8b949e; }
+#btn-keep    { background:#21262d; color:#c9d1d9; }
+#btn-keep:hover { background:#30363d; }
+#btn-replace { background:#1a3a1f; color:#3fb950; border-color:#238636; }
+#btn-replace:hover { background:#238636; color:#fff; }
+
+/* ── Config overlay ── */
+#cfg-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7);
+               z-index:100; justify-content:flex-end; }
+#cfg-overlay.open { display:flex; }
+#cfg-panel { background:#161b22; border-left:1px solid #30363d; width:380px;
+             height:100%; overflow-y:auto; padding:24px;
+             box-shadow:-8px 0 32px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+#cfg-panel h2 { font-size:15px; color:#e6edf3; margin-bottom:18px; }
+.cfg-sec { margin-bottom:18px; }
+.cfg-sec h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#8b949e; margin-bottom:10px; }
+.cfg-f { margin-bottom:10px; }
+.cfg-f label { display:block; font-size:11px; color:#8b949e; margin-bottom:4px; }
+.cfg-f input { width:100%; background:#0d1117; border:1px solid #30363d; border-radius:6px;
+               padding:7px 10px; color:#c9d1d9; font-size:12px; font-family:monospace; }
+.cfg-f input:focus { outline:none; border-color:#1f6feb; }
+.cfg-note { font-size:10px; color:#484f58; margin-top:3px; }
+#cfg-ftr { margin-top:auto; padding-top:16px; border-top:1px solid #30363d; display:flex; gap:8px; }
+</style>
+</head>
+<body>
+
+<!-- Top bar — global navigation only -->
+<div id="topbar">
+  <a href="/ui/projects.html" id="logo" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px" title="All projects">
+    <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/>
+      <path d="M24,0 C24,0 18,11 18,16 A6,6 0 0,0 30,16 C30,11 24,0 24,0Z" fill="#1f6feb" opacity=".85"/>
+      <path d="M38,1 C38,1 32,13 32,18 A6,6 0 0,0 44,18 C44,13 38,1 38,1Z" fill="#1f6feb" opacity=".7"/>
+      <rect x="1" y="27" width="46" height="3.5" rx="1.75" fill="#e3b341"/>
+      <rect x="1" y="33" width="46" height="3.5" rx="1.75" fill="#e3b341" opacity=".65"/>
+      <rect x="1" y="39" width="46" height="3.5" rx="1.75" fill="#e3b341" opacity=".35"/>
+    </svg>
+    <span style="font-weight:700;font-size:14px;color:#e6edf3">Sp<em style="color:#e3b341;font-style:normal">a</em>rge</span>
+  </a>
+  <div id="project-name" style="font-size:12px;color:#8b949e;padding:0 12px;border-right:1px solid #30363d;white-space:nowrap;overflow:hidden;max-width:200px;text-overflow:ellipsis"></div>
+  <div class="ttab active" id="tab-review" onclick="setTab('review')">📄 Review</div>
+  <div class="ttab" id="tab-overview" onclick="setTab('overview')">🗂 Overview</div>
+  <div style="flex:1"></div>
+  <button onclick="openCfg()" style="background:none;border:none;color:#8b949e;font-size:15px;padding:4px 12px;align-self:center">⚙ Config</button>
+</div>
+
+<div id="main">
+  <!-- Nav -->
+  <div id="nav">
+    <div id="nav-stats">
+      <h3 id="proj-name">Loading…</h3>
+      <div class="srow"><span class="sl">Total</span><span class="sv" id="s-total">—</span></div>
+      <div class="srow"><span class="sl">HTML issues</span><span class="sv o" id="s-html">—</span></div>
+      <div class="srow"><span class="sl">MD generated</span><span class="sv b" id="s-mdgen">—</span></div>
+      <div class="srow"><span class="sl">MD stale</span><span class="sv o" id="s-stale">—</span></div>
+      <div class="srow"><span class="sl">MD issues</span><span class="sv o" id="s-mdiss">—</span></div>
+      <div class="srow"><span class="sl">Reviewed</span><span class="sv g" id="s-rev">—</span></div>
+      <div id="pbar"><div id="pfill" style="width:0%"></div></div>
+    </div>
+    <div id="nav-filters">
+      <button class="fb active" onclick="setFilter(this,'all')">All</button>
+      <button class="fb" onclick="setFilter(this,'html-issues')">HTML⚠</button>
+      <button class="fb" onclick="setFilter(this,'md-issues')">MD⚠</button>
+      <button class="fb" onclick="setFilter(this,'stale')">Stale</button>
+      <button class="fb" onclick="setFilter(this,'staged')">📋 Staged</button>
+      <button class="fb" onclick="setFilter(this,'no-md')">No MD</button>
+    </div>
+    <div id="gen-all-row">
+      <button onclick="generateAll()" id="btn-gen-all" style="font-size:11px;padding:3px 8px" title="Generate MD for posts in current scope that don't have it yet">⚙ Gen scope</button>
+      <button onclick="scanAll()" id="btn-scan-all" style="font-size:11px;padding:3px 8px" title="Scan HTML for all posts in current scope">🔍 Scan scope</button>
+      <button onclick="validateAll()" id="btn-val-all" style="font-size:11px;padding:3px 8px" title="Validate MD for all posts in current scope that have MD">✓ Validate scope</button>
+      <span id="gen-progress"></span>
+    </div>
+    <!-- Bulk staged actions — only meaningful when filtered to Staged -->
+    <div id="staged-bulk-row" style="display:none;padding:6px 8px;border-bottom:1px solid #30363d;gap:6px;align-items:center">
+      <button onclick="bulkAcceptStaged()" style="font-size:11px;padding:3px 8px;background:#1a3a1f;border-color:#238636;color:#3fb950" title="Accept all staged versions in current scope">✓ Accept all staged</button>
+      <button onclick="bulkRejectStaged()" style="font-size:11px;padding:3px 8px;background:#2d0f0f;border-color:#f85149;color:#f85149" title="Reject all staged versions in current scope">✕ Reject all staged</button>
+    </div>
+    <div id="post-list"></div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+    <!-- Review view -->
+    <div id="view-review" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <!-- Per-post action bar — title + all actions scoped to the current document -->
+      <div id="post-action-bar">
+        <div id="post-crumb">Select a post</div>
+        <div class="sep"></div>
+        <button onclick="scanPost()" id="btn-scan" title="Scan this post for all issues — content, assets, and chrome">🔍 Scan</button>
+        <button class="success" onclick="generateMd()" id="btn-gen" title="Generate or regenerate Markdown">↺ Generate MD</button>
+        <button onclick="reviewStagedDiff()" id="btn-staged" style="display:none;background:#1f1a00;border-color:#9e6a03;color:#e3b341" title="A staged version exists — review the diff">📋 Review Staged</button>
+        <button onclick="validateMd()" id="btn-val" title="Run validation checks">✓ Validate MD</button>
+        <button onclick="toggleReviewed()" id="btn-reviewed" title="Mark this post as reviewed">✓ Reviewed</button>
+        <button onclick="toggleFlag()" id="btn-flag" title="Flag for manual review">🚩 Flag</button>
+        <div class="sep"></div>
+        <button onclick="toggleIssues()" id="btn-issues" title="Show/hide issue panel">⚡ Issues</button>
+        <button onclick="toggleSync()" id="btn-sync" class="active" title="Sync scroll between panels">⟺ Sync</button>
+        <button onclick="toggleLayout()" id="btn-layout" title="Toggle split / single panel">☰ Single</button>
+      </div>
+      <div id="panel-heads">
+        <div class="ph">Original Archive HTML
+          <span class="ph-badge" id="ph-html-badge" style="display:none"></span>
+          <span class="ph-badge" id="ph-assets-badge" style="display:none"></span>
+        </div>
+        <div class="ph">Converted Markdown
+          <span class="ph-badge" id="ph-md-badge" style="display:none"></span>
+          <button id="btn-edit-md" onclick="toggleEditMode()"
+            style="margin-left:auto;background:none;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer"
+            title="Edit Markdown directly">✎ Edit</button>
+        </div>
+      </div>
+      <div id="tabbar">
+        <div class="tab active" id="ptab-orig" onclick="switchPanelTab('orig')">📄 Original</div>
+        <div class="tab" id="ptab-md" onclick="switchPanelTab('md')">✏️ Markdown</div>
+      </div>
+      <div id="panels">
+        <div class="panel" id="html-panel">
+          <div class="panel-body" style="overflow:hidden;display:flex;flex-direction:column">
+            <iframe id="orig-frame" src="about:blank"></iframe>
+          </div>
+        </div>
+        <div id="divider"></div>
+        <div class="panel" id="md-panel">
+          <div class="panel-body" id="md-panel-body">
+            <!-- Edit mode toolbar — shown only when editing -->
+            <div id="md-edit-bar" style="display:none;padding:6px 12px;background:#161b22;border-bottom:1px solid #30363d;display:none;align-items:center;gap:8px;flex-shrink:0">
+              <span style="font-size:11px;color:#8b949e;flex:1">Editing — changes save directly to disk</span>
+              <button onclick="saveEdit()" style="background:#1a3a1f;border-color:#238636;color:#3fb950;padding:4px 12px;font-size:12px">💾 Save</button>
+              <button onclick="cancelEdit()" style="padding:4px 12px;font-size:12px">✕ Cancel</button>
+            </div>
+            <textarea id="md-editor" style="display:none;width:100%;height:100%;background:#0d1117;color:#c9d1d9;border:none;outline:none;padding:16px;font-family:'SFMono-Regular',Consolas,monospace;font-size:13px;line-height:1.6;resize:none;box-sizing:border-box"></textarea>
+            <div id="md-wrap"></div>
+            <div id="md-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#8b949e;text-align:center;padding:40px">
+              <div style="font-size:36px">📝</div>
+              <strong style="color:#c9d1d9">No Markdown yet</strong>
+              <p style="font-size:12px;line-height:1.5">Click <strong>↺ Generate</strong> to convert this post.</p>
+              <button class="success" onclick="generateMd()" style="margin-top:4px">↺ Generate MD</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Issue panel -->
+      <div id="issue-panel" class="hidden">
+        <div id="issue-panel-hdr">
+          <span>Issues for this post</span>
+          <button onclick="toggleIssues()" style="background:none;border:none;color:#8b949e;padding:2px 6px">✕</button>
+        </div>
+        <div id="issue-cols">
+          <div class="issue-col">
+            <div class="issue-col-hd">HTML issues</div>
+            <div id="html-issue-list"></div>
+          </div>
+          <div class="issue-col">
+            <div class="issue-col-hd">Markdown issues</div>
+            <div id="md-issue-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overview view -->
+    <div id="view-overview" style="display:none;flex:1;overflow-y:auto;padding:24px">
+      <h2 style="font-size:18px;color:#e6edf3;margin-bottom:20px">Post overview</h2>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid #30363d">
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;white-space:nowrap">Date</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e">Title</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;white-space:nowrap" title="HTML archive scan results">HTML</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;white-space:nowrap" title="Image and asset localisation">Assets</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;white-space:nowrap" title="Markdown generation status">Markdown</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;white-space:nowrap" title="Markdown validation results">MD Issues</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;white-space:nowrap" title="Manual review status">Review</th>
+          </tr>
+        </thead>
+        <tbody id="overview-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Diff modal -->
+<div id="diff-modal">
+  <div id="diff-box">
+    <div id="diff-hdr">
+      <div>
+        <h3>⚠ Regenerated content differs from saved version</h3>
+        <div id="diff-stats"></div>
+      </div>
+      <button id="diff-close" onclick="closeDiffModal()">✕</button>
+    </div>
+    <div id="diff-body">
+      <div id="diff-col-labels">
+        <div class="dcl">Saved version</div>
+        <div class="dcl">Regenerated</div>
+      </div>
+      <div id="diff-cols">
+        <div id="diff-left-wrap"></div>
+        <div id="diff-right-wrap"></div>
+      </div>
+    </div>
+    <div id="diff-ftr">
+      <span id="diff-ftr-note"></span>
+      <div id="diff-btns-generate" style="display:flex;gap:8px">
+        <button id="btn-keep" onclick="closeDiffModal()">Keep Existing</button>
+        <button id="btn-stage" onclick="stageForReview()" style="background:#1f1a00;border-color:#9e6a03;color:#e3b341">📋 Stage for Review</button>
+        <button id="btn-replace" onclick="replaceWithNew()">Replace with New</button>
+      </div>
+      <div id="diff-btns-staged" style="display:none;gap:8px">
+        <button id="btn-reject-staged" onclick="rejectStaged()" style="background:#2d0f0f;border-color:#f85149;color:#f85149">✕ Reject Staged</button>
+        <button id="btn-accept-staged" onclick="acceptStaged()" style="background:#1a3a1f;border-color:#238636;color:#3fb950">✓ Accept Staged</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Config overlay -->
+<div id="cfg-overlay" onclick="if(event.target===this)closeCfg()">
+  <div id="cfg-panel">
+    <h2>⚙ Configuration</h2>
+    <div class="cfg-sec">
+      <h3>Project</h3>
+      <div class="cfg-f"><label>Project name</label><input id="cfg-name"></div>
+      <div class="cfg-f">
+        <label>Serve root (absolute path)</label>
+        <input id="cfg-root">
+        <div class="cfg-note">Static files served from here</div>
+      </div>
+    </div>
+    <div class="cfg-sec">
+      <h3>Source (relative to serve root)</h3>
+      <div class="cfg-f"><label>Posts directory</label><input id="cfg-posts"></div>
+      <div class="cfg-f"><label>Assets directory</label><input id="cfg-assets"></div>
+    </div>
+    <div class="cfg-sec">
+      <h3>Output (relative to serve root)</h3>
+      <div class="cfg-f"><label>Markdown output directory</label><input id="cfg-md"></div>
+    </div>
+    <div class="cfg-sec">
+      <h3>Filter</h3>
+      <div class="cfg-f"><label>Author (blank = all authors)</label><input id="cfg-author"></div>
+    </div>
+    <div id="cfg-ftr">
+      <button class="success" onclick="saveCfg()">Save &amp; Restart</button>
+      <button onclick="closeCfg()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let allPosts = [], currentSlug = null, currentFilter = 'all', cfg = {};
+let layout = 'split', activeTab = 'orig', issuesOpen = false;
+let currentHighlightSelector = null, currentHighlightRow = null;
+
+// ── Scroll sync ─────────────────────────────────────────────────────
+// diffModalMode: 'generate' | 'staged'
+let diffModalMode = 'generate';
+let syncEnabled = true, syncing = false, scrollAnchors = [];
+const scrollMemory = {};   // slug → {md, html}
+let pendingHtmlScroll = 0;
+
+function normHead(t) {
+  return t.toLowerCase().replace(/[^\w\s]/g,'').trim().split(/\s+/).slice(0,6).join(' ');
+}
+function buildScrollAnchors() {
+  scrollAnchors = [];
+  const mdBody = $('md-panel-body');
+  const iframe = $('orig-frame');
+  let iDoc, iWin;
+  try { iDoc = iframe.contentDocument; iWin = iframe.contentWindow; } catch(e) { return; }
+  if (!iDoc || !iDoc.body) return;
+  const mbr = mdBody.getBoundingClientRect();
+  const mdHds = [...document.querySelectorAll('#md-wrap h2,#md-wrap h3')]
+    .filter(el => !el.closest('.fm-card'))
+    .map(el => ({ text: normHead(el.textContent), pos: el.getBoundingClientRect().top - mbr.top + mdBody.scrollTop }));
+  const art = iDoc.querySelector('article') || iDoc.body;
+  const htmlHds = [...art.querySelectorAll('h2,h3')]
+    .map(el => ({ text: normHead(el.textContent), pos: el.getBoundingClientRect().top + iWin.scrollY }));
+  const anchors = [{md:0, html:0}];
+  for (const mh of mdHds) {
+    const match = htmlHds.find(h => h.text===mh.text) ||
+                  htmlHds.find(h => h.text.startsWith(mh.text.slice(0,18)) || mh.text.startsWith(h.text.slice(0,18)));
+    if (match) anchors.push({md: mh.pos, html: match.pos});
+  }
+  const mdMax = mdBody.scrollHeight - mdBody.clientHeight;
+  const htMax = iDoc.documentElement.scrollHeight - iWin.innerHeight;
+  if (mdMax > 0 && htMax > 0) anchors.push({md: mdMax, html: htMax});
+  anchors.sort((a,b) => a.md - b.md);
+  scrollAnchors = anchors;
+}
+function interp(pos, fk, tk) {
+  const a = scrollAnchors;
+  if (a.length < 2) return pos;
+  let i = a.length - 2;
+  while (i > 0 && a[i][fk] > pos) i--;
+  const lo = a[i], hi = a[i+1];
+  if (hi[fk] === lo[fk]) return lo[tk];
+  return lo[tk] + Math.max(0, Math.min(1, (pos - lo[fk]) / (hi[fk] - lo[fk]))) * (hi[tk] - lo[tk]);
+}
+function saveScrollPosition() {
+  if (!currentSlug) return;
+  const mdBody = $('md-panel-body');
+  let html = 0;
+  try { html = $('orig-frame').contentWindow.scrollY || 0; } catch(e) {}
+  scrollMemory[currentSlug] = { md: mdBody.scrollTop, html };
+}
+function setupScrollSync() {
+  const mdBody = $('md-panel-body');
+  const iframe = $('orig-frame');
+  mdBody.addEventListener('scroll', () => {
+    if (!syncEnabled || syncing || layout !== 'split') return;
+    syncing = true;
+    try { iframe.contentWindow.scrollTo(0, interp(mdBody.scrollTop, 'md', 'html')); } catch(e) {}
+    requestAnimationFrame(() => requestAnimationFrame(() => { syncing = false; }));
+  }, {passive:true});
+  iframe.addEventListener('load', () => {
+    setTimeout(() => {
+      try {
+        syncing = true;
+        iframe.contentWindow.scrollTo(0, pendingHtmlScroll);
+        pendingHtmlScroll = 0;
+        requestAnimationFrame(() => requestAnimationFrame(() => { syncing = false; }));
+      } catch(e) { syncing = false; }
+      buildScrollAnchors();
+      try {
+        iframe.contentWindow.addEventListener('scroll', () => {
+          if (!syncEnabled || syncing || layout !== 'split') return;
+          syncing = true;
+          $('md-panel-body').scrollTop = interp(iframe.contentWindow.scrollY, 'html', 'md');
+          requestAnimationFrame(() => requestAnimationFrame(() => { syncing = false; }));
+        }, {passive:true});
+      } catch(e) {}
+      // Re-apply highlight if panel is open and a row was highlighted
+      if (issuesOpen && currentHighlightSelector) {
+        applyIframeHighlight(currentHighlightSelector);
+      }
+    }, 400);
+  });
+}
+function toggleSync() {
+  syncEnabled = !syncEnabled;
+  $('btn-sync').classList.toggle('active', syncEnabled);
+  if (syncEnabled) {
+    // Immediately snap MD panel to match current iframe scroll position
+    try {
+      const iScrollY = $('orig-frame').contentWindow.scrollY;
+      $('md-panel-body').scrollTop = interp(iScrollY, 'html', 'md');
+    } catch(e) {}
+  }
+}
+
+// ── Diff algorithm ───────────────────────────────────────────────
+let pendingNewMd = null, pendingNewSlug = null, diffSyncSetUp = false;
+
+function computeDiff(a, b) {
+  const al = a.split('\n'), bl = b.split('\n');
+  const m = al.length, n = bl.length;
+  const dp = new Array(m+1);
+  for (let i=0;i<=m;i++) dp[i] = new Int32Array(n+1);
+  for (let i=m-1;i>=0;i--)
+    for (let j=n-1;j>=0;j--)
+      dp[i][j] = al[i]===bl[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j],dp[i][j+1]);
+  const diff=[]; let i=0,j=0;
+  while (i<m||j<n) {
+    if (i<m&&j<n&&al[i]===bl[j]) { diff.push({t:'=',v:al[i]}); i++;j++; }
+    else if (j<n&&(i>=m||dp[i+1][j]>=dp[i][j+1])) { diff.push({t:'+',v:bl[j]}); j++; }
+    else { diff.push({t:'-',v:al[i]}); i++; }
+  }
+  return diff;
+}
+function buildSideBySide(diff, ctx=3) {
+  const e = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const row = (cls,t) => `<div class="dr ${cls}">${e(t)}</div>`;
+  const empty = () => `<div class="dr empty"></div>`;
+  const show = new Uint8Array(diff.length);
+  diff.forEach((d,i) => { if(d.t!=='=') for(let k=Math.max(0,i-ctx);k<=Math.min(diff.length-1,i+ctx);k++) show[k]=1; });
+  const L=[],R=[]; let i=0;
+  while (i<diff.length) {
+    if (!show[i]) {
+      let j=i; while(j<diff.length&&!show[j])j++;
+      const n=j-i, sk=`<div class="dr skip">⋯ ${n} unchanged line${n!==1?'s':''} ⋯</div>`;
+      L.push(sk); R.push(sk); i=j;
+    } else if (diff[i].t==='=') {
+      const r=row('ctx',diff[i].v); L.push(r); R.push(r); i++;
+    } else {
+      const dels=[],adds=[];
+      while(i<diff.length&&diff[i].t!=='='&&show[i]) {
+        if(diff[i].t==='-') dels.push(diff[i].v); else adds.push(diff[i].v); i++;
+      }
+      const n=Math.max(dels.length,adds.length);
+      for(let k=0;k<n;k++) {
+        L.push(k<dels.length ? row('del',dels[k]) : empty());
+        R.push(k<adds.length ? row('add',adds[k]) : empty());
+      }
+    }
+  }
+  return {left:L.join(''), right:R.join('')};
+}
+function setupDiffColSync() {
+  if (diffSyncSetUp) return; diffSyncSetUp = true;
+  const L=$('diff-left-wrap'), R=$('diff-right-wrap');
+  let ds=false;
+  L.addEventListener('scroll',()=>{if(ds)return;ds=true;R.scrollTop=L.scrollTop;requestAnimationFrame(()=>{ds=false;});},{passive:true});
+  R.addEventListener('scroll',()=>{if(ds)return;ds=true;L.scrollTop=R.scrollTop;requestAnimationFrame(()=>{ds=false;});},{passive:true});
+}
+function showDiffModal(existingMd, newMd, slug, mode='generate') {
+  pendingNewMd=newMd; pendingNewSlug=slug; diffModalMode=mode;
+  const diff=computeDiff(existingMd,newMd);
+  const added=diff.filter(d=>d.t==='+').length, deled=diff.filter(d=>d.t==='-').length;
+  const lbl=mode==='staged'?'Staged vs current':slug;
+  $('diff-stats').innerHTML=`<span class="add">+${added} line${added!==1?'s':''}</span> &nbsp; <span class="del">-${deled} line${deled!==1?'s':''}</span> &nbsp; <span style="color:#484f58">${lbl}</span>`;
+  // Column labels
+  const [lblL,lblR]=document.querySelectorAll('#diff-col-labels .dcl');
+  if (mode==='staged') {
+    lblL.textContent='Current (saved)'; lblR.textContent='Staged version';
+    $('diff-ftr-note').textContent='"Accept" replaces saved MD with the staged version.';
+    $('diff-btns-generate').style.display='none'; $('diff-btns-staged').style.display='flex';
+  } else {
+    lblL.textContent='Saved version'; lblR.textContent='Regenerated';
+    $('diff-ftr-note').textContent='"Stage" saves the new version for later — does not overwrite current.';
+    $('diff-btns-generate').style.display='flex'; $('diff-btns-staged').style.display='none';
+  }
+  const {left,right}=buildSideBySide(diff);
+  $('diff-left-wrap').innerHTML=left; $('diff-right-wrap').innerHTML=right;
+  $('diff-left-wrap').scrollTop=0; $('diff-right-wrap').scrollTop=0;
+  setupDiffColSync();
+  $('diff-modal').classList.add('open');
+}
+
+function closeDiffModal() {
+  $('diff-modal').classList.remove('open');
+  pendingNewMd=null; pendingNewSlug=null;
+}
+
+async function stageForReview() {
+  if (!pendingNewMd||!pendingNewSlug) return;
+  const slug=pendingNewSlug, md=pendingNewMd;
+  closeDiffModal();
+  await fetch(`${API}/api/posts/${encodeURIComponent(slug)}/stage`,{method:'POST',body:md});
+  await reloadPost(slug);
+  const p=allPosts.find(x=>x.slug===slug);
+  if (p) renderPanelBadges(p);
+}
+
+async function reviewStagedDiff() {
+  if (!currentSlug) return;
+  const slug=currentSlug, btn=$('btn-staged');
+  btn.textContent='⏳…'; btn.disabled=true;
+  try {
+    const [cr,sr]=await Promise.all([
+      fetch(`/${cfg.output?.md_dir||'mark-proctor'}/${slug}.md?v=${Date.now()}`),
+      fetch(`${API}/api/posts/${encodeURIComponent(slug)}/staged`)
+    ]);
+    if (!cr.ok||!sr.ok) { alert('Could not load staged diff.'); return; }
+    showDiffModal(await cr.text(), await sr.text(), slug, 'staged');
+  } finally { btn.textContent='📋 Review Staged'; btn.disabled=false; }
+}
+
+async function acceptStaged() {
+  if (!pendingNewSlug) return;
+  const slug=pendingNewSlug; closeDiffModal();
+  await fetch(`${API}/api/posts/${encodeURIComponent(slug)}/accept-staged`,{method:'POST'});
+  await reloadPost(slug);
+  const p=allPosts.find(x=>x.slug===slug);
+  if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
+}
+
+async function rejectStaged() {
+  if (!pendingNewSlug) return;
+  const slug=pendingNewSlug; closeDiffModal();
+  await fetch(`${API}/api/posts/${encodeURIComponent(slug)}/reject-staged`,{method:'POST'});
+  await reloadPost(slug);
+  const p=allPosts.find(x=>x.slug===slug);
+  if (p) renderPanelBadges(p);
+}
+
+async function replaceWithNew() {
+  if (!pendingNewMd||!pendingNewSlug) return;
+  const slug=pendingNewSlug, md=pendingNewMd; closeDiffModal();
+  const idx=filtered().findIndex(p=>p.slug===slug);
+  if (idx>=0) {
+    currentSlug=slug;
+    document.querySelectorAll('.pi').forEach((el,i)=>el.classList.toggle('selected',filtered()[i]?.slug===slug));
+    const navEl=$(`pi-${slug}`); if(navEl){navEl.classList.add('selected');navEl.scrollIntoView({block:'nearest'});}
+  }
+  await fetch(`${API}/api/posts/${encodeURIComponent(slug)}/generate-md`,{method:'POST'});
+  await reloadPost(slug);
+  const p=allPosts.find(x=>x.slug===slug);
+  if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
+}
+
+// ── MD edit mode ──────────────────────────────────────────────────
+let editMode = false;
+
+function toggleEditMode() {
+  if (!currentSlug) return;
+  editMode ? cancelEdit() : enterEditMode();
+}
+
+async function enterEditMode() {
+  if (!currentSlug) return;
+  // Fetch raw MD
+  const p = allPosts.find(x=>x.slug===currentSlug);
+  if (!p?.md?.generated_at) return;
+  const r = await fetch(`/${cfg.output?.md_dir||'mark-proctor'}/${currentSlug}.md?v=${Date.now()}`);
+  if (!r.ok) return;
+  const raw = await r.text();
+
+  editMode = true;
+  $('md-editor').value = raw;
+  $('md-editor').style.display = 'block';
+  $('md-edit-bar').style.display = 'flex';
+  $('md-wrap').style.display = 'none';
+  $('md-empty').style.display = 'none';
+  $('btn-edit-md').textContent = '✎ Editing';
+  $('btn-edit-md').classList.add('editing');
+  $('md-editor').focus();
+}
+
+function cancelEdit() {
+  editMode = false;
+  $('md-editor').style.display = 'none';
+  $('md-edit-bar').style.display = 'none';
+  $('md-wrap').style.display = '';
+  $('btn-edit-md').textContent = '✎ Edit';
+  $('btn-edit-md').classList.remove('editing');
+}
+
+async function saveEdit() {
+  if (!currentSlug || !editMode) return;
+  const content = $('md-editor').value;
+  const btn = document.querySelector('#md-edit-bar button');
+  btn.textContent = '⏳ Saving…'; btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/save-md`,
+      { method: 'POST', body: content });
+    if (r.ok) {
+      cancelEdit();
+      await reloadPost(currentSlug);
+      const p = allPosts.find(x=>x.slug===currentSlug);
+      if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
+    } else {
+      btn.textContent = '✗ Failed'; btn.disabled = false;
+      setTimeout(()=>{ btn.textContent='💾 Save'; },2000);
+    }
+  } catch(e) {
+    btn.textContent = '✗ Error'; btn.disabled = false;
+    setTimeout(()=>{ btn.textContent='💾 Save'; },2000);
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// ── Data ──────────────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    const [cr,pr] = await Promise.all([fetch(`${API}/api/config`), fetch(`${API}/api/posts`)]);
+    cfg=await cr.json(); allPosts=await pr.json();
+  } catch(e) { return; }
+  const name = cfg.project_name || '';
+  $('proj-name').textContent = name;
+  $('proj-name').title = name;
+  $('proj-name').style.display = name ? '' : 'none';
+  renderStats(); renderNav(); renderOverview();
+}
+async function reloadPost(slug) {
+  const r = await fetch(`${API}/api/posts/${encodeURIComponent(slug)}`);
+  if (!r.ok) return;
+  const updated = await r.json();
+  const idx = allPosts.findIndex(p=>p.slug===slug);
+  if (idx>=0) allPosts[idx]=updated;
+  renderStats(); renderNav(); renderOverview();
+  if (currentSlug===slug) renderIssuePanel(updated);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────
+function renderStats() {
+  const n=allPosts.length;
+  $('s-total').textContent=n;
+  $('s-html').textContent=allPosts.filter(p=>(p.html?.issues||[]).length>0).length||'—';
+  $('s-mdgen').textContent=allPosts.filter(p=>p.md?.generated_at).length;
+  $('s-stale').textContent=allPosts.filter(p=>p.md?.stale).length||'—';
+  $('s-mdiss').textContent=allPosts.filter(p=>(p.md?.issues||[]).length>0).length||'—';
+  const rev=allPosts.filter(p=>p.reviewed).length;
+  $('s-rev').textContent=rev;
+  $('pfill').style.width=n?(rev/n*100)+'%':'0%';
+}
+
+// ── Nav ───────────────────────────────────────────────────────────
+function filtered() {
+  return allPosts.filter(p => {
+    const hi=(p.html?.issues||[]).length, mi=(p.md?.issues||[]).length;
+    const gen=!!p.md?.generated_at, stale=p.md?.stale, staged=p.md?.staged;
+    if (currentFilter==='html-issues') return hi>0;
+    if (currentFilter==='md-issues')   return mi>0;
+    if (currentFilter==='stale')       return stale && !staged;
+    if (currentFilter==='staged')      return staged;
+    if (currentFilter==='no-md')       return !gen;
+    return true;
+  });
+}
+function setFilter(btn,f) {
+  currentFilter=f;
+  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // Show bulk-staged controls only when viewing the Staged filter
+  const stagedRow=$('staged-bulk-row');
+  if (stagedRow) stagedRow.style.display = f==='staged' ? 'flex' : 'none';
+  renderNav();
+}
+function renderNav() {
+  const posts=filtered();
+  $('post-list').innerHTML=posts.map(p => {
+    const hi=(p.html?.issues||[]).length, mi=(p.md?.issues||[]).length;
+    const gen=!!p.md?.generated_at, stale=p.md?.stale, rev=p.reviewed;
+    const hb=hi?`<span class="badge b-warn">⚠${hi} HTML</span>`:(p.html?.checked_at?'<span class="badge b-ok">✓ HTML</span>':'<span class="badge b-none">○ HTML</span>');
+    const staged=p.md?.staged;
+    let mb;
+    if (!gen)          mb='<span class="badge b-none">— MD</span>';
+    else if (staged)   mb='<span class="badge b-stale">📋 Staged</span>';
+    else if (stale)    mb='<span class="badge b-stale">↺ Stale</span>';
+    else if (mi)       mb=`<span class="badge b-warn">⚠${mi} MD</span>`;
+    else if (rev)      mb='<span class="badge b-ok">✓ Reviewed</span>';
+    else               mb='<span class="badge b-blue">✓ MD</span>';
+    const sel=p.slug===currentSlug?' selected':'';
+    return `<div class="pi${sel}" id="pi-${p.slug}" onclick="selectPost('${p.slug}')">
+      <div class="pi-date">${esc(p.date)}</div>
+      <div class="pi-title">${esc((p.title||p.slug).replace(/- KIE Community$/,'').trim().slice(0,48))}</div>
+      <div class="pi-badges">${hb}${mb}${p.flagged?'<span class="badge b-err">🚩</span>':''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Overview ──────────────────────────────────────────────────────
+function renderOverview() {
+  // Each dimension gets its own column — states are independent and all visible simultaneously.
+  // A post can be e.g. "Staged AND has errors" — collapsing them hides information.
+
+  const chip = (bg, color, border, text) =>
+    `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${bg};color:${color};border:1px solid ${border};white-space:nowrap">${text}</span>`;
+
+  const GREY   = (t) => chip('#1c2128','#484f58','#30363d', t);
+  const GREEN  = (t) => chip('#12261e','#3fb950','#238636', t);
+  const BLUE   = (t) => chip('#0d1f3a','#58a6ff','#1f6feb', t);
+  const ORANGE = (t) => chip('#2d1f0f','#e3b341','#9e6a03', t);
+  const RED    = (t) => chip('#2d0f0f','#f85149','#f85149', t);
+
+  $('overview-body').innerHTML = allPosts.map(p => {
+    const html     = p.html   || {};
+    const assets   = p.assets || {};
+    const md       = p.md     || {};
+    const htmlErrs  = (html.issues  ||[]).filter(i=>i.level==='ERROR').length;
+    const htmlWarns = (html.issues  ||[]).filter(i=>i.level==='WARN').length;
+    const mdErrs    = (md.issues    ||[]).filter(i=>i.level==='ERROR').length;
+    const mdWarns   = (md.issues    ||[]).filter(i=>i.level==='WARN').length;
+
+    // ── HTML column ──────────────────────────────────────────────
+    let htmlCell;
+    if (!html.checked_at)     htmlCell = GREY('○ Unscanned');
+    else if (htmlErrs+htmlWarns === 0) htmlCell = GREEN('✓ Clean');
+    else {
+      const parts = [];
+      if (htmlErrs)  parts.push(`${htmlErrs}E`);
+      if (htmlWarns) parts.push(`${htmlWarns}W`);
+      htmlCell = (htmlErrs ? RED : ORANGE)(parts.join(' ') + ' issues');
+    }
+
+    // ── Assets column ────────────────────────────────────────────
+    let assetsCell;
+    if (!assets.checked_at)           assetsCell = GREY('○ Unchecked');
+    else if (assets.broken === 0)     assetsCell = GREEN('✓ Complete');
+    else                              assetsCell = ORANGE(`⚠ ${assets.broken} missing`);
+
+    // ── Markdown column (existence & currency) ───────────────────
+    let mdCell;
+    if (!md.generated_at)   mdCell = GREY('— None');
+    else if (md.staged)     mdCell = ORANGE('📋 Staged');
+    else if (md.stale)      mdCell = ORANGE('↺ Stale');
+    else                    mdCell = BLUE('✓ Current');
+
+    // ── MD Issues column (validation, independent of currency) ───
+    let mdIssCell;
+    if (!md.generated_at)                        mdIssCell = GREY('—');
+    else if (!md.validated_at)                   mdIssCell = GREY('○ Unvalidated');
+    else if (mdErrs+mdWarns === 0)               mdIssCell = GREEN('✓ Clean');
+    else {
+      const parts = [];
+      if (mdErrs)  parts.push(`${mdErrs}E`);
+      if (mdWarns) parts.push(`${mdWarns}W`);
+      mdIssCell = (mdErrs ? RED : ORANGE)(parts.join(' '));
+    }
+
+    // ── Review column ────────────────────────────────────────────
+    let revCell;
+    if (p.flagged)   revCell = RED(`🚩 Flagged`);
+    else if (p.reviewed) revCell = GREEN('✓ Reviewed');
+    else             revCell = GREY('—');
+
+    const td = (content, title='') =>
+      `<td style="padding:6px 12px;font-size:12px;white-space:nowrap" ${title?`title="${title}"`:''}>${content}</td>`;
+
+    return `<tr onclick="selectPost('${p.slug}');setTab('review')"
+               style="border-bottom:1px solid #1a1f26;cursor:pointer"
+               onmouseover="this.style.background='#161b22'" onmouseout="this.style.background=''">
+      ${td(`<span style="color:#8b949e">${esc(p.date)}</span>`)}
+      ${td(`<span style="color:#c9d1d9">${esc((p.title||p.slug).replace(/- KIE Community$/,'').trim().slice(0,55))}</span>`)}
+      ${td(htmlCell, html.checked_at ? `Checked ${html.checked_at?.slice(0,10)||''}` : 'Not yet scanned')}
+      ${td(assetsCell, assets.checked_at ? `${assets.localised||0}/${assets.total||0} localised` : 'Not yet checked')}
+      ${td(mdCell, md.generated_at ? `Generated ${md.generated_at?.slice(0,10)||''}${md.staged?' · staged '+md.staged_at?.slice(0,10):''}` : 'Not generated')}
+      ${td(mdIssCell, md.validated_at ? `Validated ${md.validated_at?.slice(0,10)||''}` : '')}
+      ${td(revCell, p.user_note || '')}
+    </tr>`;
+  }).join('');
+}
+
+// ── Post selection ────────────────────────────────────────────────
+async function selectPost(slug) {
+  saveScrollPosition();
+  clearHighlight();
+  if (editMode) cancelEdit();
+  currentSlug=slug;
+  const p=allPosts.find(x=>x.slug===slug); if(!p) return;
+  document.querySelectorAll('.pi').forEach(el=>el.classList.remove('selected'));
+  const navEl=$(`pi-${slug}`);
+  if (navEl) { navEl.classList.add('selected'); navEl.scrollIntoView({block:'nearest'}); }
+  $('post-crumb').innerHTML=`<strong>${esc((p.title||slug).replace(/- KIE Community$/,'').trim())}</strong><span style="margin-left:6px">${esc(p.date)}${p.author?' · '+esc(p.author):''}</span>`;
+  $('btn-flag').textContent = p.flagged ? '🚩 Flagged' : '🚩 Flag';
+  $('btn-flag').className   = p.flagged ? 'warn' : '';
+  syncReviewedButton(p);
+  const saved=scrollMemory[slug];
+  pendingHtmlScroll=saved?saved.html:0;
+  $('orig-frame').src=`/${cfg.source?.posts_dir||''}/${slug}.html?v=${Date.now()}`;
+  renderPanelBadges(p);
+  await loadMd(p);
+  const mdBody=$('md-panel-body');
+  mdBody.scrollTop=saved?saved.md:0;
+  renderIssuePanel(p);
+  location.hash=slug;
+}
+function renderPanelBadges(p) {
+  const hi=(p.html?.issues||[]).length, mi=(p.md?.issues||[]).length;
+  const hb=$('ph-html-badge'), mb=$('ph-md-badge'), ab=$('ph-assets-badge');
+  if (hi) { hb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; hb.textContent=`⚠ ${hi}`; }
+  else hb.style.display='none';
+  if (p.md?.staged) { mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; mb.textContent='📋 Staged — awaiting review'; }
+  else if (p.md?.stale) { mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; mb.textContent='↺ Stale — HTML changed'; }
+  else if (mi) { mb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; mb.textContent=`⚠ ${mi}`; }
+  else mb.style.display='none';
+  // Assets badge on the HTML panel header
+  const assets=p.assets||{};
+  if (assets.checked_at) {
+    if (assets.broken===0) { ab.style.cssText='display:inline;background:#12261e;color:#3fb950;border-radius:3px;padding:1px 6px;font-size:10px'; ab.textContent=`🖼 ${assets.localised}/${assets.total} ✓`; }
+    else { ab.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; ab.textContent=`🖼 ⚠ ${assets.broken} broken`; }
+  } else ab.style.display='none';
+  // Show/hide the Review Staged button
+  const stagedBtn=$('btn-staged');
+  if (stagedBtn) { stagedBtn.style.display=p.md?.staged?'':'none'; }
+}
+
+async function loadMd(p) {
+  const wrap=$('md-wrap'), empty=$('md-empty');
+  const editBtn=$('btn-edit-md');
+  if (!p.md?.generated_at) {
+    wrap.innerHTML=''; wrap.style.display='none'; empty.style.display='flex';
+    if (editBtn) editBtn.style.display='none';
+    return;
+  }
+  if (editBtn) editBtn.style.display='';
+  empty.style.display='none'; wrap.style.display='';
+  wrap.innerHTML='<p style="color:#8b949e;padding:8px 0">Loading…</p>';
+  const mdPath=`/${cfg.output?.md_dir||'mark-proctor'}/${p.slug}.md`;
+  try {
+    const r=await fetch(mdPath+'?v='+Date.now()); if(!r.ok) throw new Error('not found');
+    const raw=await r.text();
+    const {fm,body}=parseFM(raw);
+    const cats=Array.isArray(fm.categories)?fm.categories:[];
+    wrap.innerHTML=`<div class="fm-card"><h1>${esc(fm.title||p.title||p.slug)}</h1><div class="fm-meta">${esc(fm.date||p.date||'')}${fm.author?' · '+esc(fm.author):''}</div>${cats.length?`<div class="fm-tags">${cats.map(c=>`<span class="fm-tag">${esc(c)}</span>`).join('')}</div>`:''}</div>`+marked.parse(body);
+  } catch(e) { wrap.innerHTML=`<p style="color:#f85149;padding:8px 0">Could not load MD</p>`; }
+}
+function parseFM(raw) {
+  const fm={}, m=raw.match(/^---\n([\s\S]+?)\n---\n\n?([\s\S]*)$/);
+  if (!m) return {fm,body:raw};
+  let lastKey=null;
+  m[1].split('\n').forEach(line=>{
+    const kv=line.match(/^(\w[\w_-]*):\s*(.*)$/);
+    if (kv) { const val=kv[2].trim().replace(/^["']|["']$/g,''); fm[kv[1]]=val==='[]'||val===''?[]:val; lastKey=(kv[2].trim()===''||kv[2].trim()==='[]')?kv[1]:null; }
+    else { const item=line.match(/^  - (.+)$/); if(item&&lastKey){if(!Array.isArray(fm[lastKey]))fm[lastKey]=[];fm[lastKey].push(item[1]);} }
+  });
+  return {fm,body:m[2]};
+}
+function renderIssuePanel(p) {
+  const hi=p.html?.issues||[], mi=p.md?.issues||[];
+  const makeRows = (issues) => issues.map(iss => {
+    const cls = iss.level==='ERROR' ? 'err' : 'warn';
+    const sel = iss.selector || null;
+    const extra = sel ? ' clickable' : ' no-selector';
+    const dataAttr = sel ? ` data-selector="${esc(sel)}"` : '';
+    return `<div class="irow ${cls}${extra}"${dataAttr}>[${iss.level}] ${esc(iss.check)}: ${esc(iss.detail)}</div>`;
+  }).join('');
+  $('html-issue-list').innerHTML = hi.length ? makeRows(hi) : '<div class="no-iss">No HTML issues recorded</div>';
+  $('md-issue-list').innerHTML   = mi.length ? makeRows(mi) : '<div class="no-iss">No MD issues recorded</div>';
+  // Attach click handlers to clickable rows
+  document.querySelectorAll('#html-issue-list .irow.clickable, #md-issue-list .irow.clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      const sel = row.dataset.selector;
+      if (currentHighlightRow === row) { clearHighlight(); return; }
+      highlightIssue(sel, row);
+    });
+  });
+}
+
+// ── Issue highlighting ────────────────────────────────────────────
+function applyIframeHighlight(selector) {
+  const iframe = $('orig-frame');
+  let iDoc;
+  try { iDoc = iframe.contentDocument; } catch(e) { return false; }
+  if (!iDoc) return false;
+  // Inject/replace a <style> tag in the iframe head
+  let styleTag = iDoc.getElementById('__sparge-highlight-style__');
+  if (!styleTag) {
+    styleTag = iDoc.createElement('style');
+    styleTag.id = '__sparge-highlight-style__';
+    (iDoc.head || iDoc.documentElement).appendChild(styleTag);
+  }
+  styleTag.textContent = `${selector} { outline: 3px solid #f85149 !important; outline-offset: 2px; scroll-margin-top: 80px; }`;
+  // Scroll to the element
+  const el = iDoc.querySelector(selector);
+  if (el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); return true; }
+  return false;
+}
+function clearIframeHighlight() {
+  try {
+    const iDoc = $('orig-frame').contentDocument;
+    if (!iDoc) return;
+    const styleTag = iDoc.getElementById('__sparge-highlight-style__');
+    if (styleTag) styleTag.textContent = '';
+  } catch(e) {}
+}
+function highlightIssue(selector, rowEl) {
+  clearHighlight();
+  if (!selector) { showRowTooltip(rowEl, 'No selector available'); return; }
+  const found = applyIframeHighlight(selector);
+  if (!found) { showRowTooltip(rowEl, 'Element not found'); return; }
+  currentHighlightSelector = selector;
+  currentHighlightRow = rowEl;
+  rowEl.classList.add('highlighted');
+}
+function clearHighlight() {
+  if (currentHighlightRow) {
+    currentHighlightRow.classList.remove('highlighted');
+    currentHighlightRow = null;
+  }
+  currentHighlightSelector = null;
+  clearIframeHighlight();
+}
+function showRowTooltip(rowEl, msg) {
+  const existing = document.querySelector('.irow-tooltip');
+  if (existing) existing.remove();
+  const tip = document.createElement('div');
+  tip.className = 'irow-tooltip';
+  tip.textContent = msg;
+  const r = rowEl.getBoundingClientRect();
+  tip.style.left = r.left + 'px';
+  tip.style.top  = (r.top - 26) + 'px';
+  document.body.appendChild(tip);
+  setTimeout(() => tip.remove(), 1800);
+}
+
+// ── Actions ───────────────────────────────────────────────────────
+async function generateMd() {
+  if (!currentSlug) return;
+  const p=allPosts.find(x=>x.slug===currentSlug); if(!p) return;
+  const btn=$('btn-gen');
+  btn.textContent='⏳…'; btn.disabled=true;
+
+  // If MD already exists: dry-run first, show diff if content changed
+  if (p.md?.generated_at) {
+    try {
+      const mdPath=`/${cfg.output?.md_dir||'mark-proctor'}/${currentSlug}.md`;
+      const [existingR, newR] = await Promise.all([
+        fetch(mdPath+'?v='+Date.now()),
+        fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/generate-md?dry=1`,{method:'POST'})
+      ]);
+      if (existingR.ok && newR.ok) {
+        const existingMd=await existingR.text(), newMd=await newR.text();
+        btn.textContent='↺ Generate'; btn.disabled=false;
+        if (existingMd.trim()!==newMd.trim()) { showDiffModal(existingMd,newMd,currentSlug); return; }
+        // Same content — show checkmark and skip writing
+        btn.textContent='✓ No change';
+        setTimeout(()=>{btn.textContent='↺ Generate';},1500);
+        return;
+      }
+    } catch(e) { /* fall through to full generate */ }
+  }
+  await doGenerate();
+}
+
+async function doGenerate() {
+  const btn=$('btn-gen'); btn.textContent='⏳…'; btn.disabled=true;
+  try {
+    const r=await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/generate-md`,{method:'POST'});
+    if (r.ok) {
+      btn.textContent='✓ Done';
+      await reloadPost(currentSlug);
+      const p=allPosts.find(x=>x.slug===currentSlug);
+      if(p){await loadMd(p);renderPanelBadges(p);renderIssuePanel(p);}
+      setTimeout(()=>{btn.textContent='↺ Generate';btn.disabled=false;},1500);
+    } else { btn.textContent='✗ Failed'; setTimeout(()=>{btn.textContent='↺ Generate';btn.disabled=false;},2000); }
+  } catch(e) { btn.textContent='✗ Error'; setTimeout(()=>{btn.textContent='↺ Generate';btn.disabled=false;},2000); }
+}
+
+async function validateMd() {
+  if (!currentSlug) return;
+  const btn=$('btn-val'); btn.textContent='⏳…'; btn.disabled=true;
+  try {
+    const r=await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/validate-md`,{method:'POST'});
+    if (r.ok) {
+      await reloadPost(currentSlug);
+      const p=allPosts.find(x=>x.slug===currentSlug);
+      if(p){renderPanelBadges(p);renderIssuePanel(p);}
+      btn.textContent='✓ Done';
+      if(!issuesOpen) toggleIssues();
+    } else { btn.textContent='✗ Failed'; }
+    setTimeout(()=>{btn.textContent='✓ Validate';btn.disabled=false;},1500);
+  } catch(e) { btn.textContent='✗ Error'; btn.disabled=false; }
+}
+
+async function scanPost() {
+  if (!currentSlug) return;
+  const btn=$('btn-scan'); btn.textContent='⏳…'; btn.disabled=true;
+  try {
+    await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/scan`,{method:'POST'});
+    await reloadPost(currentSlug);
+    const p=allPosts.find(x=>x.slug===currentSlug);
+    if (p) { renderPanelBadges(p); renderIssuePanel(p); }
+    btn.textContent='✓ Scanned';
+    if (!issuesOpen) toggleIssues();
+    setTimeout(()=>{btn.textContent='🔍 Scan';btn.disabled=false;},1500);
+  } catch(e) { btn.textContent='✗ Error'; btn.disabled=false; }
+}
+
+async function toggleReviewed() {
+  if (!currentSlug) return;
+  const p=allPosts.find(x=>x.slug===currentSlug); if(!p) return;
+  await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}`,
+    {method:'PATCH',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({reviewed: !p.reviewed})});
+  await reloadPost(currentSlug);
+  const updated=allPosts.find(x=>x.slug===currentSlug);
+  if (updated) syncReviewedButton(updated);
+}
+
+function syncReviewedButton(p) {
+  const btn=$('btn-reviewed');
+  if (!btn) return;
+  btn.textContent = p.reviewed ? '✓ Reviewed' : '○ Mark Reviewed';
+  btn.className   = p.reviewed ? 'active' : '';
+}
+
+async function toggleFlag() {
+  if (!currentSlug) return;
+  const p=allPosts.find(x=>x.slug===currentSlug); if(!p) return;
+  const newFlag=!p.flagged;
+  let note=p.user_note||'';
+  if (newFlag) note=prompt('Note about this post (optional):',note)??note;
+  await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}`,
+    {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({flagged:newFlag,user_note:note})});
+  await reloadPost(currentSlug);
+}
+
+async function generateAll() {
+  // Generates posts in the current filter scope that don't yet have MD
+  const btn=$('btn-gen-all'), prog=$('gen-progress');
+  btn.disabled=true; $('btn-scan-all').disabled=true;
+  const posts=filtered().filter(p=>!p.md?.generated_at);
+  if (!posts.length) {
+    prog.textContent='✓ Nothing to generate in current scope';
+    btn.disabled=false; $('btn-scan-all').disabled=false;
+    setTimeout(()=>{prog.textContent='';},3000); return;
+  }
+  let done=0, failed=0;
+  for (const p of posts) {
+    prog.textContent=`${done}/${posts.length} — ${p.slug.slice(0,22)}…`;
+    try {
+      const r=await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/generate-md`,{method:'POST'});
+      if(r.ok) done++; else failed++;
+    } catch(e) { failed++; }
+  }
+  prog.textContent=`✓ ${done} generated${failed?`, ${failed} failed`:''}`;
+  btn.disabled=false; $('btn-scan-all').disabled=false; $('btn-val-all').disabled=false;
+  await loadAll();
+  setTimeout(()=>{prog.textContent='';},5000);
+}
+
+async function validateAll() {
+  // Validates MD for all posts in scope that have MD
+  const btn=$('btn-val-all'), prog=$('gen-progress');
+  btn.disabled=true; $('btn-gen-all').disabled=true; $('btn-scan-all').disabled=true;
+  const posts=filtered().filter(p=>p.md?.generated_at);
+  if (!posts.length) {
+    prog.textContent='✓ No MD to validate in current scope';
+    btn.disabled=false; $('btn-gen-all').disabled=false; $('btn-scan-all').disabled=false;
+    setTimeout(()=>{prog.textContent='';},3000); return;
+  }
+  let done=0, failed=0;
+  for (const p of posts) {
+    prog.textContent=`${done}/${posts.length} — ${p.slug.slice(0,22)}…`;
+    try {
+      const r=await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/validate-md`,{method:'POST'});
+      if(r.ok) done++; else failed++;
+    } catch(e) { failed++; }
+  }
+  prog.textContent=`✓ ${done} validated${failed?`, ${failed} failed`:''}`;
+  btn.disabled=false; $('btn-gen-all').disabled=false; $('btn-scan-all').disabled=false;
+  await loadAll();
+  setTimeout(()=>{prog.textContent='';},5000);
+}
+
+async function bulkAcceptStaged() {
+  const prog=$('gen-progress');
+  const posts=filtered().filter(p=>p.md?.staged);
+  if (!posts.length) { prog.textContent='No staged posts in scope'; setTimeout(()=>{prog.textContent='';},2000); return; }
+  if (!confirm(`Accept staged version for ${posts.length} post${posts.length!==1?'s':''}?\nThis replaces each saved MD with its staged version.`)) return;
+  let done=0, failed=0;
+  for (const p of posts) {
+    prog.textContent=`${done}/${posts.length} — accepting ${p.slug.slice(0,20)}…`;
+    try {
+      const r=await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/accept-staged`,{method:'POST'});
+      if(r.ok) done++; else failed++;
+    } catch(e) { failed++; }
+  }
+  prog.textContent=`✓ ${done} accepted${failed?`, ${failed} failed`:''}`;
+  await loadAll();
+  setTimeout(()=>{prog.textContent='';},5000);
+}
+
+async function bulkRejectStaged() {
+  const prog=$('gen-progress');
+  const posts=filtered().filter(p=>p.md?.staged);
+  if (!posts.length) { prog.textContent='No staged posts in scope'; setTimeout(()=>{prog.textContent='';},2000); return; }
+  if (!confirm(`Reject staged version for ${posts.length} post${posts.length!==1?'s':''}?\nThis deletes each .md.staged file — current MD is kept.`)) return;
+  let done=0, failed=0;
+  for (const p of posts) {
+    prog.textContent=`${done}/${posts.length} — rejecting ${p.slug.slice(0,20)}…`;
+    try {
+      const r=await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/reject-staged`,{method:'POST'});
+      if(r.ok) done++; else failed++;
+    } catch(e) { failed++; }
+  }
+  prog.textContent=`✓ ${done} rejected${failed?`, ${failed} failed`:''}`;
+  await loadAll();
+  setTimeout(()=>{prog.textContent='';},5000);
+}
+
+async function scanAll() {
+  // Scans all posts in the current filter scope
+  const btn=$('btn-scan-all'), prog=$('gen-progress');
+  btn.disabled=true; $('btn-gen-all').disabled=true;
+  const posts=filtered();
+  if (!posts.length) {
+    prog.textContent='✓ No posts in current scope';
+    btn.disabled=false; $('btn-gen-all').disabled=false;
+    setTimeout(()=>{prog.textContent='';},3000); return;
+  }
+  let done=0, failed=0;
+  for (const p of posts) {
+    prog.textContent=`${done}/${posts.length} — ${p.slug.slice(0,22)}…`;
+    try {
+      const r=await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/scan`,{method:'POST'});
+      if(r.ok) done++; else failed++;
+    } catch(e) { failed++; }
+  }
+  prog.textContent=`✓ ${done} scanned${failed?`, ${failed} failed`:''}`;
+  btn.disabled=false; $('btn-gen-all').disabled=false;
+  await loadAll();
+  setTimeout(()=>{prog.textContent='';},5000);
+}
+
+// ── Layout ────────────────────────────────────────────────────────
+function setTab(tab) {
+  $('view-review').style.display  = tab==='review'   ? 'flex' : 'none';
+  $('view-overview').style.display= tab==='overview' ? 'flex' : 'none';
+  $('tab-review').classList.toggle('active',  tab==='review');
+  $('tab-overview').classList.toggle('active', tab==='overview');
+  $('post-action-bar').style.display = tab==='review' ? '' : 'none';
+}
+function toggleIssues() {
+  issuesOpen=!issuesOpen;
+  $('issue-panel').classList.toggle('hidden',!issuesOpen);
+  $('btn-issues').classList.toggle('active',issuesOpen);
+  if (!issuesOpen) clearHighlight();
+}
+function toggleLayout() {
+  layout=layout==='split'?'single':'split';
+  const btn=$('btn-layout'), tb=$('tabbar'), div=$('divider'), hp=$('html-panel'), mp=$('md-panel');
+  if (layout==='split') {
+    btn.textContent='☰ Single'; btn.classList.remove('active');
+    tb.classList.remove('visible'); div.style.display=''; hp.style.display=''; mp.style.display='';
+    hp.style.flex='1'; mp.style.flex='1';
+  } else {
+    btn.textContent='⇔ Split'; btn.classList.add('active');
+    tb.classList.add('visible'); div.style.display='none';
+    switchPanelTab(activeTab, false);
+  }
+}
+function switchPanelTab(tab, updateActive=true) {
+  if (updateActive) activeTab=tab;
+  $('ptab-orig').className='tab'+(tab==='orig'?' active':'');
+  $('ptab-md').className='tab'+(tab==='md'?' active':'');
+  $('html-panel').style.display=tab==='orig'?'':'none';
+  $('md-panel').style.display=tab==='md'?'':'none';
+}
+
+// ── Config ────────────────────────────────────────────────────────
+function openCfg() {
+  $('cfg-name').value=cfg.project_name||''; $('cfg-root').value=cfg.serve_root||'';
+  $('cfg-posts').value=cfg.source?.posts_dir||''; $('cfg-assets').value=cfg.source?.assets_dir||'';
+  $('cfg-md').value=cfg.output?.md_dir||''; $('cfg-author').value=cfg.filter?.author||'';
+  $('cfg-overlay').classList.add('open');
+}
+function closeCfg() { $('cfg-overlay').classList.remove('open'); }
+async function saveCfg() {
+  await fetch(`${API}/api/config`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({project_name:$('cfg-name').value,serve_root:$('cfg-root').value,
+      source:{posts_dir:$('cfg-posts').value,assets_dir:$('cfg-assets').value},
+      output:{md_dir:$('cfg-md').value},filter:{author:$('cfg-author').value}})});
+  closeCfg(); alert('Config saved. Restart the server to apply path changes.');
+}
+
+// ── Drag divider ──────────────────────────────────────────────────
+let dragging=false;
+$('divider').addEventListener('mousedown',()=>{dragging=true;});
+document.addEventListener('mousemove',e=>{
+  if(!dragging) return;
+  const r=$('panels').getBoundingClientRect();
+  const pct=Math.max(20,Math.min(80,(e.clientX-r.left)/r.width*100));
+  $('html-panel').style.flex='none'; $('html-panel').style.width=pct+'%'; $('md-panel').style.flex='1';
+});
+document.addEventListener('mouseup',()=>{dragging=false;});
+
+// ── Keyboard ──────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  // Block nav when diff modal is open
+  if ($('diff-modal').classList.contains('open')) { if(e.key==='Escape') closeDiffModal(); return; }
+  if (e.key==='Escape') { closeCfg(); return; }
+  if (e.key==='Tab')    { e.preventDefault(); toggleLayout(); return; }
+  if (e.key==='1')      { switchPanelTab('orig'); return; }
+  if (e.key==='2')      { switchPanelTab('md'); return; }
+  const posts=filtered(), idx=posts.findIndex(p=>p.slug===currentSlug);
+  const goNext=(e.metaKey&&e.key==='ArrowRight')||e.key==='j'||e.key==='J';
+  const goPrev=(e.metaKey&&e.key==='ArrowLeft') ||e.key==='k'||e.key==='K';
+  if (goNext&&idx<posts.length-1) { e.preventDefault(); selectPost(posts[idx+1].slug); }
+  if (goPrev&&idx>0)              { e.preventDefault(); selectPost(posts[idx-1].slug); }
+});
+
+// ── Ingest moved to projects.html ─────────────────────────────────
+
+// ── Init ──────────────────────────────────────────────────────────
+setupScrollSync();
+loadAll().then(()=>{
+  // Restore from hash
+  const hash=location.hash.replace('#','');
+  if (hash && allPosts.find(p=>p.slug===hash)) selectPost(hash);
+  else if (allPosts.length) selectPost(allPosts[0].slug);
+});
+
+// Close diff on backdrop
+$('diff-modal').addEventListener('click',e=>{if(e.target===$('diff-modal')) closeDiffModal();});
+</script>
+</body>
+</html>

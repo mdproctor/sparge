@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Staged MD diffs (transient, not source)
+*.md.staged
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/

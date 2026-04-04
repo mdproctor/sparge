@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sparge — Mock UI</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0d1117; color: #c9d1d9;
+  display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  font-size: 13px;
+}
+
+/* ── Top bar ───────────────────────────────────────────────────── */
+#topbar {
+  flex-shrink: 0; background: #161b22; border-bottom: 1px solid #30363d;
+  padding: 0 16px; display: flex; align-items: stretch; gap: 0; height: 44px;
+}
+#logo {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 14px; color: #e6edf3;
+  padding-right: 20px; border-right: 1px solid #30363d; margin-right: 4px;
+}
+#logo span { color: #1f6feb; }
+.top-tab {
+  padding: 0 16px; cursor: pointer; border-bottom: 2px solid transparent;
+  color: #8b949e; display: flex; align-items: center; font-size: 13px;
+  transition: all .15s; white-space: nowrap;
+}
+.top-tab:hover { color: #c9d1d9; }
+.top-tab.active { color: #e6edf3; border-bottom-color: #1f6feb; font-weight: 600; }
+#topbar-actions {
+  flex: 1; display: flex; align-items: center; gap: 6px;
+  padding-left: 16px; border-left: 1px solid #30363d; margin-left: 4px;
+}
+#post-crumb { font-size: 12px; color: #8b949e; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 12px; }
+#post-crumb strong { color: #c9d1d9; }
+button {
+  background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  transition: all .15s;
+}
+button:hover { background: #30363d; border-color: #8b949e; }
+button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+button.primary:hover { background: #388bfd; }
+button.success { background: #1a3a1f; border-color: #238636; color: #3fb950; }
+button.success:hover { background: #238636; color: #fff; }
+button.warn { background: #2d1f0f; border-color: #9e6a03; color: #e3b341; }
+.btn-sep { width: 1px; height: 20px; background: #30363d; }
+#btn-config {
+  margin-left: auto; background: none; border: none; color: #8b949e;
+  font-size: 13px; padding: 5px 10px;
+}
+#btn-config:hover { color: #c9d1d9; background: #21262d; border-radius: 6px; }
+
+/* ── Main layout ───────────────────────────────────────────────── */
+#main { flex: 1; display: flex; overflow: hidden; }
+
+/* ── Left nav ──────────────────────────────────────────────────── */
+#nav {
+  width: 250px; flex-shrink: 0; background: #161b22;
+  border-right: 1px solid #30363d; display: flex; flex-direction: column;
+}
+#nav-stats {
+  padding: 10px 12px; border-bottom: 1px solid #30363d; flex-shrink: 0;
+}
+#nav-stats h3 { font-size: 11px; color: #8b949e; text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 8px; }
+.stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.stat-label { font-size: 11px; color: #8b949e; }
+.stat-val { font-size: 11px; font-weight: 600; }
+.stat-val.green { color: #3fb950; }
+.stat-val.blue  { color: #58a6ff; }
+.stat-val.orange{ color: #e3b341; }
+.stat-val.muted { color: #484f58; }
+
+/* Progress bar */
+#progress-bar {
+  height: 3px; background: #21262d; border-radius: 2px; margin-top: 8px; overflow: hidden;
+}
+#progress-fill {
+  height: 100%; background: linear-gradient(90deg, #238636 60%, #1f6feb 100%);
+  border-radius: 2px; transition: width .3s;
+}
+
+#nav-filters {
+  padding: 6px 8px; border-bottom: 1px solid #30363d; flex-shrink: 0;
+  display: flex; gap: 4px;
+}
+.filter-btn {
+  flex: 1; background: none; border: 1px solid transparent;
+  border-radius: 4px; padding: 3px 4px; font-size: 10px; color: #8b949e;
+  cursor: pointer; text-align: center;
+}
+.filter-btn:hover { background: #21262d; color: #c9d1d9; }
+.filter-btn.active { background: #21262d; border-color: #30363d; color: #c9d1d9; }
+
+#post-list { flex: 1; overflow-y: auto; }
+
+.post-item {
+  padding: 8px 12px; border-bottom: 1px solid #1a1f26; cursor: pointer;
+  transition: background .1s; position: relative;
+}
+.post-item:hover { background: #1c2128; }
+.post-item.selected { background: #1c2d3f; border-left: 3px solid #1f6feb; padding-left: 9px; }
+.post-date { font-size: 10px; color: #484f58; margin-bottom: 2px; }
+.post-title { font-size: 12px; color: #c9d1d9; line-height: 1.3; margin-bottom: 5px; }
+.post-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.badge {
+  font-size: 9px; padding: 1px 6px; border-radius: 10px; font-weight: 600;
+  display: flex; align-items: center; gap: 3px;
+}
+.badge.arch-ok   { background: #12261e; color: #3fb950; border: 1px solid #238636; }
+.badge.arch-warn { background: #2d1f0f; color: #e3b341; border: 1px solid #9e6a03; }
+.badge.arch-err  { background: #2d0f0f; color: #f85149; border: 1px solid #f85149; }
+.badge.arch-none { background: #1c2128; color: #484f58; border: 1px solid #30363d; }
+.badge.md-ok     { background: #0d1f3a; color: #58a6ff; border: 1px solid #1f6feb; }
+.badge.md-warn   { background: #2d1f0f; color: #e3b341; border: 1px solid #9e6a03; }
+.badge.md-none   { background: #1c2128; color: #484f58; border: 1px solid #30363d; }
+
+/* ── Content area ──────────────────────────────────────────────── */
+#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Panel headers */
+#panel-headers {
+  display: flex; flex-shrink: 0; border-bottom: 1px solid #30363d;
+  background: #161b22;
+}
+.panel-header {
+  flex: 1; padding: 5px 16px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; color: #8b949e; display: flex; align-items: center; gap: 8px;
+}
+.panel-header + .panel-header { border-left: 1px solid #30363d; }
+.panel-header-badge {
+  font-size: 9px; padding: 1px 6px; border-radius: 4px; font-weight: 700;
+}
+
+#panels { flex: 1; display: flex; overflow: hidden; }
+#divider { width: 4px; background: #30363d; cursor: col-resize; flex-shrink: 0; }
+#divider:hover { background: #1f6feb; }
+
+.panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.panel-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+/* ── Issue strips ──────────────────────────────────────────────── */
+.issue-strip {
+  padding: 8px 16px; border-bottom: 1px solid #30363d;
+  display: none; flex-direction: column; gap: 3px; flex-shrink: 0;
+}
+.issue-strip.visible { display: flex; }
+.issue-line {
+  font-size: 11px; font-family: monospace; padding: 3px 8px;
+  border-radius: 3px; border-left: 3px solid;
+}
+.issue-line.err  { background: #f851491a; color: #f85149; border-color: #f85149; }
+.issue-line.warn { background: #e3b3411a; color: #e3b341; border-color: #e3b341; }
+
+/* ── Simulated post content ────────────────────────────────────── */
+.sim-post h1 { font-size: 22px; color: #1a1a1a; margin-bottom: 8px; font-family: Georgia, serif; }
+.sim-post .meta { font-size: 12px; color: #666; margin-bottom: 20px; }
+.sim-post p { font-size: 14px; line-height: 1.7; color: #333; margin-bottom: 14px; }
+.sim-post h2 { font-size: 18px; color: #1a1a1a; margin: 22px 0 10px; font-family: Georgia, serif; }
+.sim-post pre { background: #f4f4f4; border: 1px solid #ddd; padding: 12px; border-radius: 4px;
+  font-size: 12px; margin: 14px 0; overflow-x: auto; }
+.sim-post iframe-placeholder {
+  display: block; background: #f0f0f0; border: 2px dashed #ccc;
+  width: 100%; height: 180px; display: flex; align-items: center;
+  justify-content: center; color: #999; font-size: 13px; margin: 14px 0;
+  border-radius: 4px; text-align: center; padding: 20px;
+}
+.missing-img {
+  background: #fff3cd; border: 2px dashed #ffc107; padding: 12px 16px;
+  border-radius: 4px; font-size: 12px; color: #856404; margin: 10px 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.missing-img.highlight { background: #ff000015; border-color: #f85149; color: #f85149;
+  animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.6; } }
+
+/* Simulated Markdown */
+.sim-md { font-family: -apple-system, sans-serif; line-height: 1.7; }
+.sim-md h1 { font-size: 22px; color: #e6edf3; border-bottom: 1px solid #30363d;
+  padding-bottom: .3em; margin-bottom: 16px; }
+.sim-md h2 { font-size: 18px; color: #e6edf3; margin: 20px 0 10px;
+  border-bottom: 1px solid #21262d; padding-bottom: .2em; }
+.sim-md p { color: #c9d1d9; margin-bottom: 12px; }
+.sim-md pre { background: #f6f8fa; border-radius: 6px; padding: 14px;
+  font-size: 12px; margin: 12px 0; overflow-x: auto; color: #24292e; }
+.sim-md code { background: #161b22; color: #f0883e; padding: 2px 6px;
+  border-radius: 3px; font-size: .875em; }
+.sim-md blockquote { border-left: 4px solid #30363d; margin: 12px 0;
+  padding: 8px 16px; color: #8b949e; }
+.fm-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  padding: 16px 20px; margin-bottom: 20px; }
+.fm-card h1 { font-size: 20px; color: #e6edf3; border: none; margin-bottom: 6px; }
+.fm-card .meta { font-size: 12px; color: #8b949e; }
+.fm-card .tags { margin-top: 8px; display: flex; gap: 6px; }
+.fm-tag { background: #1f6feb22; border: 1px solid #1f6feb55; color: #58a6ff;
+  border-radius: 12px; padding: 2px 10px; font-size: 11px; }
+
+/* ── Empty / Generate state ────────────────────────────────────── */
+#md-generate-prompt {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 14px; color: #8b949e;
+}
+#md-generate-prompt .icon { font-size: 40px; }
+#md-generate-prompt p { font-size: 13px; text-align: center; max-width: 260px; line-height: 1.5; }
+
+/* ── Config overlay ────────────────────────────────────────────── */
+#config-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+  z-index: 100; align-items: flex-start; justify-content: flex-end;
+}
+#config-overlay.open { display: flex; }
+#config-panel {
+  background: #161b22; border-left: 1px solid #30363d; width: 380px;
+  height: 100%; overflow-y: auto; padding: 24px;
+  box-shadow: -8px 0 32px rgba(0,0,0,.5);
+}
+#config-panel h2 { font-size: 16px; color: #e6edf3; margin-bottom: 20px; }
+.cfg-section { margin-bottom: 20px; }
+.cfg-section h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: #8b949e; margin-bottom: 10px; }
+.cfg-field { margin-bottom: 10px; }
+.cfg-field label { display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px; }
+.cfg-field input {
+  width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  padding: 7px 10px; color: #c9d1d9; font-size: 12px; font-family: monospace;
+}
+.cfg-field input:focus { outline: none; border-color: #1f6feb; }
+.cfg-note { font-size: 10px; color: #484f58; margin-top: 4px; font-style: italic; }
+#config-panel footer {
+  margin-top: 24px; padding-top: 16px; border-top: 1px solid #30363d;
+  display: flex; gap: 8px;
+}
+
+/* ── Pipeline view ─────────────────────────────────────────────── */
+#pipeline-view {
+  display: none; padding: 24px; overflow-y: auto; flex: 1;
+}
+#pipeline-view h2 { font-size: 18px; color: #e6edf3; margin-bottom: 20px; }
+.pipeline-stages { display: flex; gap: 0; margin-bottom: 28px; }
+.pipeline-stage {
+  flex: 1; text-align: center; position: relative;
+}
+.pipeline-stage::after {
+  content: '→'; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+  color: #30363d; font-size: 20px; z-index: 1;
+}
+.pipeline-stage:last-child::after { display: none; }
+.stage-box {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  padding: 14px 10px; margin: 0 8px;
+}
+.stage-name { font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: #8b949e; margin-bottom: 6px; }
+.stage-count { font-size: 28px; font-weight: 700; }
+.stage-label { font-size: 10px; color: #8b949e; margin-top: 2px; }
+.pipeline-table { width: 100%; border-collapse: collapse; }
+.pipeline-table th { text-align: left; padding: 8px 12px; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; color: #8b949e;
+  border-bottom: 1px solid #30363d; }
+.pipeline-table td { padding: 8px 12px; border-bottom: 1px solid #1a1f26;
+  font-size: 12px; }
+.pipeline-table tr:hover td { background: #161b22; cursor: pointer; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-green  { background: #3fb950; }
+.dot-orange { background: #e3b341; }
+.dot-blue   { background: #58a6ff; }
+.dot-grey   { background: #484f58; }
+
+/* ── Tooltip ───────────────────────────────────────────────────── */
+.tooltip { position: relative; }
+.tooltip:hover::after {
+  content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%); background: #e6edf3; color: #0d1117;
+  font-size: 11px; padding: 4px 8px; border-radius: 4px; white-space: nowrap;
+  pointer-events: none; z-index: 10;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ─────────────────────────────────────────────────── -->
+<div id="topbar">
+  <div id="logo">🔧 <span>Sp</span>arge</div>
+
+  <div class="top-tab active" onclick="setView('split')" id="tab-split">📄 Review</div>
+  <div class="top-tab" onclick="setView('pipeline')" id="tab-pipeline">🗂 Pipeline</div>
+
+  <div id="topbar-actions">
+    <!-- Archive actions -->
+    <div id="arch-actions" style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:.05em">Archive</span>
+      <button class="tooltip" data-tip="Scan this post for missing images, broken embeds, WordPress chrome">🔍 Scan</button>
+      <button class="warn tooltip" data-tip="Attempt all 5 image recovery approaches for this post" id="btn-recover">📸 Recover Images</button>
+      <button class="tooltip" data-tip="Use Playwright to recover YouTube/Vimeo iframes">▶ Fix Embeds</button>
+      <button class="tooltip" data-tip="Add syntax highlighting to code blocks">✨ Highlight</button>
+    </div>
+    <div class="btn-sep"></div>
+    <!-- MD actions -->
+    <div id="md-actions" style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:.05em">Markdown</span>
+      <button class="success tooltip" data-tip="Generate or regenerate Markdown for this post" id="btn-gen">↺ Generate MD</button>
+      <button class="tooltip" data-tip="Run all 31 validation checks against original HTML">✓ Validate</button>
+      <button class="tooltip" data-tip="Flag this post for manual review">🚩 Flag</button>
+    </div>
+
+    <div id="post-crumb" style="padding-left:16px;border-left:1px solid #30363d;margin-left:4px">
+      <strong id="crumb-title">What is a Rule Engine?</strong>
+      <span style="margin-left:6px;font-size:11px">2006-05-31 · Mark Proctor</span>
+    </div>
+
+    <button id="btn-config" onclick="toggleConfig()">⚙ Config</button>
+  </div>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Left nav -->
+  <div id="nav">
+    <div id="nav-stats">
+      <h3>Project progress</h3>
+      <div class="stat-row">
+        <span class="stat-label">Total posts</span>
+        <span class="stat-val">577</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Archive clean</span>
+        <span class="stat-val green">341</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Archive issues</span>
+        <span class="stat-val orange">48</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">MD reviewed</span>
+        <span class="stat-val blue">12</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Not started</span>
+        <span class="stat-val muted">188</span>
+      </div>
+      <div id="progress-bar"><div id="progress-fill" style="width:42%"></div></div>
+    </div>
+
+    <div id="nav-filters">
+      <button class="filter-btn active" onclick="filter(this,'all')">All</button>
+      <button class="filter-btn" onclick="filter(this,'issues')">Issues</button>
+      <button class="filter-btn" onclick="filter(this,'clean')">Clean</button>
+      <button class="filter-btn" onclick="filter(this,'none')">Not started</button>
+    </div>
+
+    <div id="post-list">
+      <!-- Posts injected by JS -->
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Split view -->
+    <div id="split-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div id="panel-headers">
+        <div class="panel-header" id="arch-header">
+          Original Archive HTML
+          <span class="panel-header-badge" id="arch-badge" style="display:none"></span>
+        </div>
+        <div class="panel-header" id="md-header">
+          Converted Markdown
+          <span class="panel-header-badge" id="md-badge" style="display:none"></span>
+        </div>
+      </div>
+
+      <div id="panels">
+        <!-- HTML panel -->
+        <div class="panel">
+          <div class="issue-strip" id="arch-issues"></div>
+          <div class="panel-body" style="background:#fff">
+            <div id="html-content"></div>
+          </div>
+        </div>
+
+        <div id="divider"></div>
+
+        <!-- MD panel -->
+        <div class="panel">
+          <div class="issue-strip" id="md-issues"></div>
+          <div class="panel-body" id="md-panel-body">
+            <div id="md-content"></div>
+            <div id="md-generate-prompt" style="display:none">
+              <div class="icon">📝</div>
+              <strong style="color:#c9d1d9">No Markdown yet</strong>
+              <p>Click <strong>Generate MD</strong> in the toolbar to convert this post.</p>
+              <button class="success" onclick="simulateGenerate()" style="margin-top:4px">↺ Generate MD</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline view -->
+    <div id="pipeline-view">
+      <h2>Migration Pipeline</h2>
+      <div class="pipeline-stages">
+        <div class="pipeline-stage">
+          <div class="stage-box">
+            <div class="stage-name">Not Started</div>
+            <div class="stage-count muted" style="color:#484f58">188</div>
+            <div class="stage-label">posts</div>
+          </div>
+        </div>
+        <div class="pipeline-stage">
+          <div class="stage-box">
+            <div class="stage-name">Archive Issues</div>
+            <div class="stage-count" style="color:#e3b341">48</div>
+            <div class="stage-label">need attention</div>
+          </div>
+        </div>
+        <div class="pipeline-stage">
+          <div class="stage-box">
+            <div class="stage-name">Archive Clean</div>
+            <div class="stage-count" style="color:#3fb950">341</div>
+            <div class="stage-label">ready for MD</div>
+          </div>
+        </div>
+        <div class="pipeline-stage">
+          <div class="stage-box">
+            <div class="stage-name">MD Generated</div>
+            <div class="stage-count" style="color:#58a6ff">12</div>
+            <div class="stage-label">under review</div>
+          </div>
+        </div>
+        <div class="pipeline-stage">
+          <div class="stage-box">
+            <div class="stage-name">Published</div>
+            <div class="stage-count" style="color:#3fb950">0</div>
+            <div class="stage-label">done</div>
+          </div>
+        </div>
+      </div>
+
+      <table class="pipeline-table">
+        <tr>
+          <th>Date</th><th>Title</th>
+          <th>Archive</th><th>MD</th><th>Issues</th>
+        </tr>
+        <tr onclick="selectPost(0);setView('split')">
+          <td>2006-05-31</td><td>What is a Rule Engine?</td>
+          <td><span class="status-dot dot-green"></span> Clean</td>
+          <td><span class="status-dot dot-blue"></span> Reviewed</td>
+          <td>—</td>
+        </tr>
+        <tr onclick="selectPost(1);setView('split')">
+          <td>2006-06-02</td><td>Rule Execution Flow</td>
+          <td><span class="status-dot dot-orange"></span> 1 image missing</td>
+          <td><span class="status-dot dot-orange"></span> 2 warnings</td>
+          <td>Image + content phrase</td>
+        </tr>
+        <tr onclick="selectPost(2);setView('split')">
+          <td>2006-06-20</td><td>Real World Rule Engines</td>
+          <td><span class="status-dot dot-green"></span> Clean</td>
+          <td><span class="status-dot dot-grey"></span> Not generated</td>
+          <td>—</td>
+        </tr>
+        <tr onclick="selectPost(3);setView('split')">
+          <td>2006-07-10</td><td>Why Java Code is Bad for Rules</td>
+          <td><span class="status-dot dot-orange"></span> YouTube embed missing</td>
+          <td><span class="status-dot dot-grey"></span> Not generated</td>
+          <td>Embed recovery needed</td>
+        </tr>
+        <tr onclick="selectPost(4);setView('split')">
+          <td>2006-10-10</td><td>JBoss Rules Server</td>
+          <td><span class="status-dot dot-green"></span> Clean</td>
+          <td><span class="status-dot dot-blue"></span> Generated</td>
+          <td>—</td>
+        </tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Config overlay ───────────────────────────────────────────── -->
+<div id="config-overlay" onclick="if(event.target===this)toggleConfig()">
+  <div id="config-panel">
+    <h2>⚙ Configuration</h2>
+    <div class="cfg-section">
+      <h3>Source</h3>
+      <div class="cfg-field">
+        <label>Posts directory</label>
+        <input value="/Users/mdproctor/mdproctor.github.io/legacy/posts/mark-proctor">
+        <div class="cfg-note">HTML files extracted from the blog mirror</div>
+      </div>
+      <div class="cfg-field">
+        <label>Assets directory</label>
+        <input value="/Users/mdproctor/mdproctor.github.io/legacy/assets">
+      </div>
+    </div>
+    <div class="cfg-section">
+      <h3>Output</h3>
+      <div class="cfg-field">
+        <label>Markdown output directory</label>
+        <input value="/Users/mdproctor/mdproctor.github.io/mark-proctor">
+      </div>
+      <div class="cfg-field">
+        <label>Issues file</label>
+        <input value="/Users/mdproctor/mdproctor.github.io/mark-proctor/.issues.json">
+      </div>
+    </div>
+    <div class="cfg-section">
+      <h3>Filter</h3>
+      <div class="cfg-field">
+        <label>Author filter (leave blank for all)</label>
+        <input value="Mark Proctor">
+        <div class="cfg-note">Only process posts by this author</div>
+      </div>
+    </div>
+    <div class="cfg-section">
+      <h3>Server</h3>
+      <div class="cfg-field">
+        <label>Static server port</label>
+        <input value="8766" style="width:100px">
+      </div>
+      <div class="cfg-field">
+        <label>API server port</label>
+        <input value="8767" style="width:100px">
+      </div>
+    </div>
+    <footer>
+      <button class="primary" onclick="toggleConfig()">Save &amp; Close</button>
+      <button onclick="toggleConfig()">Cancel</button>
+    </footer>
+  </div>
+</div>
+
+<script>
+// ── Sample post data ─────────────────────────────────────────────
+const POSTS = [
+  {
+    slug: '2006-05-31-what-is-a-rule-engine',
+    date: '2006-05-31', title: 'What is a Rule Engine?',
+    archStatus: 'ok', mdStatus: 'reviewed',
+    archIssues: [], mdIssues: [],
+    htmlContent: `
+      <div class="sim-post">
+        <h1>What is a Rule Engine?</h1>
+        <div class="meta">May 31, 2006 · Mark Proctor</div>
+        <p>Drools is a Rule Engine but it is more correctly classified as a Business Rule Management System (BRMS). This overview describes what a rule engine is and why you should care.</p>
+        <h2>What is a Rule?</h2>
+        <p>A rule is a statement of business logic in an if/then format. When a set of conditions is met (the "when" part), an action is taken (the "then" part).</p>
+        <pre>rule "Is of valid age"
+  when
+    $a : Applicant( age &lt; 18 )
+  then
+    $a.setValid( false );
+end</pre>
+        <h2>Production Rule Systems</h2>
+        <p>A production rule system uses a forward chaining inference engine based on the Rete algorithm, patented by Charles Forgy in 1979.</p>
+        <img src="/legacy/assets/images/2006/rete-diagram.png" alt="Rete algorithm diagram" style="max-width:100%;border:1px solid #ddd;border-radius:4px;margin:10px 0">
+        <p>Drools extends this with a hybrid algorithm that combines forward and backward chaining, enabling complex event processing and temporal reasoning.</p>
+      </div>`,
+    mdContent: `
+      <div class="sim-md">
+        <div class="fm-card">
+          <h1>What is a Rule Engine?</h1>
+          <div class="meta">2006-05-31 · Mark Proctor</div>
+          <div class="tags"><span class="fm-tag">Drools</span><span class="fm-tag">Rules</span></div>
+        </div>
+        <p>Drools is a Rule Engine but it is more correctly classified as a Business Rule Management System (BRMS). This overview describes what a rule engine is and why you should care.</p>
+        <h2>What is a Rule?</h2>
+        <p>A rule is a statement of business logic in an if/then format.</p>
+        <pre>rule "Is of valid age"\n  when\n    $a : Applicant( age &lt; 18 )\n  then\n    $a.setValid( false );\nend</pre>
+        <h2>Production Rule Systems</h2>
+        <p>A production rule system uses a forward chaining inference engine based on the Rete algorithm, patented by Charles Forgy in 1979.</p>
+        <p><img src="/legacy/assets/images/2006/rete-diagram.png" alt="Rete algorithm diagram"></p>
+      </div>`
+  },
+  {
+    slug: '2006-06-02-rule-execution-flow',
+    date: '2006-06-02', title: 'Rule Execution Flow with a Production Rule System',
+    archStatus: 'warn', mdStatus: 'warn',
+    archIssues: [
+      { level:'warn', text:'[WARN] 1 image unrecovered — data: placeholder remains (waltz-on-opsj.png)' },
+    ],
+    mdIssues: [
+      { level:'warn', text:'[WARN] content_phrase_missing: "Some times workflow is nothing but a decision tree…"' },
+      { level:'warn', text:'[WARN] content_phrase_missing: "Let\'s start by calling these special Agenda Groups nodes…"' },
+    ],
+    htmlContent: `
+      <div class="sim-post">
+        <h1>Rule Execution Flow with a Production Rule System</h1>
+        <div class="meta">June 2, 2006 · Mark Proctor</div>
+        <p>I've been working on sequential rule execution control within Drools. The idea came from working with <em>waltz</em> on OPSJ.</p>
+        <p>Some times workflow is nothing but a decision tree, a series of ordered execution steps where the current position is kept as state.</p>
+        <div class="missing-img highlight">⚠ 📷 Missing image — waltz on OPSJ (could not recover from Wayback Machine)</div>
+        <h2>Agenda Groups as Nodes</h2>
+        <p>Let's start by calling these special Agenda Groups "nodes". A rule can be in a node, the rule's consequence can move to the next node.</p>
+        <pre>node "start"
+  target-node "next" "process"
+  when
+    $f : Fact()
+  then
+    // move to next node
+end</pre>
+      </div>`,
+    mdContent: `
+      <div class="sim-md">
+        <div class="fm-card">
+          <h1>Rule Execution Flow with a Production Rule System</h1>
+          <div class="meta">2006-06-02 · Mark Proctor</div>
+        </div>
+        <p>I've been working on sequential rule execution control within Drools. The idea came from working with waltz on OPSJ.</p>
+        <blockquote>📷 Missing image — waltz on OPSJ</blockquote>
+        <h2>Agenda Groups as Nodes</h2>
+        <pre>node "start"\n  target-node "next" "process"\n  when\n    $f : Fact()\n  then\n    // move\nend</pre>
+      </div>`
+  },
+  {
+    slug: '2006-06-20-real-world-rule-engines',
+    date: '2006-06-20', title: 'Real World Rule Engines',
+    archStatus: 'ok', mdStatus: 'none',
+    archIssues: [], mdIssues: [],
+    htmlContent: `
+      <div class="sim-post">
+        <h1>Real World Rule Engines</h1>
+        <div class="meta">June 20, 2006 · Mark Proctor</div>
+        <p>Here is an excellent article, introduction reproduced below, that gives an overview of rule engines in real world deployments.</p>
+        <p>For many developers, rule engines are buzzwords, or black boxes that magically transform business logic. This article aims to demystify them.</p>
+        <h2>Key Use Cases</h2>
+        <ul>
+          <li>Insurance underwriting and claims processing</li>
+          <li>Credit scoring and risk assessment</li>
+          <li>Regulatory compliance checking</li>
+          <li>Fraud detection</li>
+        </ul>
+      </div>`,
+    mdContent: null
+  },
+  {
+    slug: '2006-07-10-why-java-code-is-bad',
+    date: '2006-07-10', title: 'Why Java Code is Bad for Rules and a Declarative Alternative',
+    archStatus: 'warn', mdStatus: 'none',
+    archIssues: [
+      { level:'warn', text:'[WARN] YouTube embed has empty src — Playwright recovery needed' },
+    ],
+    mdIssues: [],
+    htmlContent: `
+      <div class="sim-post">
+        <h1>Why Java Code is Bad for Rules</h1>
+        <div class="meta">July 10, 2006 · Mark Proctor</div>
+        <p>So the moment we start putting in complex nested if structures we lose the ability to clearly express the intent of the code.</p>
+        <div style="background:#f0f0f0;border:2px dashed #e3b341;padding:20px;text-align:center;color:#856404;border-radius:4px;margin:14px 0">
+          ⚠ YouTube embed — src could not be recovered automatically<br>
+          <small>Use "Fix Embeds" to attempt Playwright recovery</small>
+        </div>
+        <p>While Drools has no plans to drop its Java support and we sometimes need it for complex expressions, the declarative approach scales much better.</p>
+      </div>`,
+    mdContent: null
+  },
+  {
+    slug: '2006-10-10-jboss-rules-server',
+    date: '2006-10-10', title: 'JBoss Rules Server',
+    archStatus: 'ok', mdStatus: 'ok',
+    archIssues: [], mdIssues: [],
+    htmlContent: `
+      <div class="sim-post">
+        <h1>JBoss Rules Server</h1>
+        <div class="meta">October 10, 2006 · Mark Proctor</div>
+        <p>Many people are asking what our plans are for a Rules Server. This post outlines the roadmap for a stateless rules execution server.</p>
+        <p>The plan is to expose rules execution as a service, allowing applications to call the rule engine remotely via REST or JMS.</p>
+      </div>`,
+    mdContent: `
+      <div class="sim-md">
+        <div class="fm-card">
+          <h1>JBoss Rules Server</h1>
+          <div class="meta">2006-10-10 · Mark Proctor</div>
+        </div>
+        <p>Many people are asking what our plans are for a Rules Server. This post outlines the roadmap.</p>
+        <p>The plan is to expose rules execution as a service via REST or JMS.</p>
+      </div>`
+  }
+];
+
+let selected = 0;
+let currentView = 'split';
+let currentFilter = 'all';
+
+// ── Render nav ───────────────────────────────────────────────────
+function renderNav() {
+  const list = document.getElementById('post-list');
+  list.innerHTML = '';
+  POSTS.forEach((p, i) => {
+    if (currentFilter === 'issues' && p.archStatus === 'ok' && p.mdStatus !== 'warn' && p.mdStatus !== 'none') return;
+    if (currentFilter === 'clean'  && (p.archStatus !== 'ok' || p.mdStatus === 'none')) return;
+    if (currentFilter === 'none'   && p.mdStatus !== 'none') return;
+
+    const archBadge = {
+      ok:   '<span class="badge arch-ok">✓ Archive</span>',
+      warn: `<span class="badge arch-warn">⚠ ${p.archIssues.length} issue${p.archIssues.length!==1?'s':''}</span>`,
+      err:  '<span class="badge arch-err">✗ Archive</span>',
+      none: '<span class="badge arch-none">○ Unscanned</span>',
+    }[p.archStatus] || '';
+
+    const mdBadge = {
+      reviewed: '<span class="badge md-ok">✓ MD</span>',
+      ok:       '<span class="badge md-ok">✓ MD</span>',
+      warn:     '<span class="badge md-warn">⚠ MD</span>',
+      none:     '<span class="badge md-none">— MD</span>',
+    }[p.mdStatus] || '';
+
+    const el = document.createElement('div');
+    el.className = 'post-item' + (i === selected ? ' selected' : '');
+    el.id = 'post-' + i;
+    el.innerHTML = `
+      <div class="post-date">${p.date}</div>
+      <div class="post-title">${p.title}</div>
+      <div class="post-badges">${archBadge}${mdBadge}</div>`;
+    el.onclick = () => selectPost(i);
+    list.appendChild(el);
+  });
+}
+
+// ── Select post ──────────────────────────────────────────────────
+function selectPost(i) {
+  selected = i;
+  const p = POSTS[i];
+
+  // Nav highlight
+  document.querySelectorAll('.post-item').forEach(el => el.classList.remove('selected'));
+  const el = document.getElementById('post-' + i);
+  if (el) { el.classList.add('selected'); el.scrollIntoView({ block: 'nearest' }); }
+
+  // Crumb
+  document.getElementById('crumb-title').textContent = p.title;
+
+  // Archive issues strip
+  const archStrip = document.getElementById('arch-issues');
+  const archBadge = document.getElementById('arch-badge');
+  if (p.archIssues.length) {
+    archStrip.innerHTML = p.archIssues.map(i =>
+      `<div class="issue-line ${i.level}">${i.text}</div>`).join('');
+    archStrip.classList.add('visible');
+    archBadge.style.display = '';
+    archBadge.style.background = '#2d1f0f';
+    archBadge.style.color = '#e3b341';
+    archBadge.style.borderRadius = '4px';
+    archBadge.style.padding = '2px 7px';
+    archBadge.style.fontSize = '10px';
+    archBadge.textContent = `⚠ ${p.archIssues.length} issue${p.archIssues.length!==1?'s':''}`;
+  } else {
+    archStrip.classList.remove('visible');
+    archBadge.style.display = 'none';
+  }
+
+  // MD issues strip
+  const mdStrip = document.getElementById('md-issues');
+  const mdBadge = document.getElementById('md-badge');
+  if (p.mdIssues.length) {
+    mdStrip.innerHTML = p.mdIssues.map(i =>
+      `<div class="issue-line ${i.level}">${i.text}</div>`).join('');
+    mdStrip.classList.add('visible');
+    mdBadge.style.display = '';
+    mdBadge.style.background = '#2d1f0f';
+    mdBadge.style.color = '#e3b341';
+    mdBadge.style.borderRadius = '4px';
+    mdBadge.style.padding = '2px 7px';
+    mdBadge.style.fontSize = '10px';
+    mdBadge.textContent = `⚠ ${p.mdIssues.length} warning${p.mdIssues.length!==1?'s':''}`;
+  } else {
+    mdStrip.classList.remove('visible');
+    mdBadge.style.display = 'none';
+  }
+
+  // HTML panel
+  document.getElementById('html-content').innerHTML = p.htmlContent;
+
+  // MD panel
+  const mdContent = document.getElementById('md-content');
+  const mdPrompt  = document.getElementById('md-generate-prompt');
+  if (p.mdContent) {
+    mdContent.innerHTML = p.mdContent;
+    mdContent.style.display = '';
+    mdPrompt.style.display = 'none';
+  } else {
+    mdContent.innerHTML = '';
+    mdContent.style.display = 'none';
+    mdPrompt.style.display = 'flex';
+  }
+
+  // Warn button if archive issues
+  document.getElementById('btn-recover').className =
+    p.archStatus === 'warn' ? 'warn tooltip' : 'tooltip';
+}
+
+function simulateGenerate() {
+  const p = POSTS[selected];
+  p.mdStatus = 'ok';
+  p.mdContent = `<div class="sim-md">
+    <div class="fm-card"><h1>${p.title}</h1><div class="meta">${p.date} · Mark Proctor</div></div>
+    <p><em>Generated from archive HTML.</em> Content appears here after conversion.</p>
+  </div>`;
+  selectPost(selected);
+  renderNav();
+}
+
+// ── View switching ────────────────────────────────────────────────
+function setView(v) {
+  currentView = v;
+  document.getElementById('split-view').style.display    = v === 'split'    ? 'flex' : 'none';
+  document.getElementById('pipeline-view').style.display = v === 'pipeline' ? 'flex' : 'none';
+  document.getElementById('tab-split').classList.toggle('active',    v === 'split');
+  document.getElementById('tab-pipeline').classList.toggle('active', v === 'pipeline');
+}
+
+// ── Filter ────────────────────────────────────────────────────────
+function filter(btn, f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderNav();
+}
+
+// ── Config ────────────────────────────────────────────────────────
+function toggleConfig() {
+  document.getElementById('config-overlay').classList.toggle('open');
+}
+
+// ── Drag divider ──────────────────────────────────────────────────
+const div = document.getElementById('divider');
+let drag = false;
+div.addEventListener('mousedown', () => { drag = true; });
+document.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const panels = document.getElementById('panels');
+  const rect = panels.getBoundingClientRect();
+  const pct = Math.max(25, Math.min(75, (e.clientX - rect.left) / rect.width * 100));
+  panels.children[0].style.flex = 'none';
+  panels.children[0].style.width = pct + '%';
+  panels.children[2].style.flex = '1';
+});
+document.addEventListener('mouseup', () => { drag = false; });
+
+// ── Init ──────────────────────────────────────────────────────────
+renderNav();
+selectPost(0);
+</script>
+</body>
+</html>
