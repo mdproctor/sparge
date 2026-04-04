@@ -1,6 +1,16 @@
 # Sparge — Comprehensive Handoff Document
 
-*Written April 2026. For a future Claude continuing this work with Mark Proctor.*
+---
+
+## Document History
+
+Handoff documents are date-stamped so future summaries can be compared against previous ones to show progress, catch regressions, and improve the quality of each successive handoff.
+
+| Version | Date | Author | Description |
+|---|---|---|---|
+| 1.0 | 2026-04-04 | Claude Sonnet 4.6 (1M) | Initial comprehensive handoff — full journey, architecture, test plan, roadmap |
+
+*When adding a new entry: copy this file, increment version, update date and description, add a brief "what changed since last handoff" section near the top.*
 
 ---
 
@@ -538,3 +548,369 @@ The relationship between `convert_post.py` (MD generation) and the new directory
 Mark started this wanting to migrate his blog posts. We've built something much more general and architecturally interesting than that original goal required. The tool is now capable of being a genuine open-source project for blog archival. But Mark's 577 posts are still only ~12 reviewed/converted. At some point the right move is to use the tool for its actual purpose rather than keep building it.
 
 The next 2-3 sessions should probably alternate between: (1) fixing the `convert_post.py` portability issue and validating the new pipeline with the real KIE blog, and (2) actually reviewing Mark's posts.
+
+---
+
+## Detailed Test Plan — Avoiding Regressions
+
+This section maps every significant behaviour to a test (automated or manual), explains what regression it guards against, and specifies exactly how to run or verify it. Future Claude should use this as a checklist before claiming anything is working.
+
+---
+
+### Running the Full Automated Suite
+
+```bash
+cd /Users/mdproctor/claude/sparge
+
+# Kill any stale server first — stale active-project state causes false failures
+kill $(lsof -ti :9000) 2>/dev/null
+
+# Start a clean server
+python3 server.py &
+sleep 3  # wait for startup + init_from_source on 577 posts
+
+# Run everything
+python3 -m pytest tests/ -q
+# Expected: 315 passed in ~35s
+
+# For verbose output on a specific file:
+python3 -m pytest tests/test_ingest_integration.py -v
+```
+
+**Important:** Always restart the server between test runs. If a previous run activated a temporary project and cleanup failed (e.g. test was interrupted), `_active_project_id` in server memory points at a deleted project, causing `test_active_field_present` to fail with "no active project". A fresh `python3 server.py` resets everything from `projects.json`.
+
+---
+
+### Test File Map
+
+| File | Tests | What it covers | Regression risk if broken |
+|---|---|---|---|
+| `test_md_validator.py` | 80 | All 31 validation checks | MD quality gates silently disabled |
+| `test_scan_html.py` | 57 | All 9 HTML issue detectors | Users can't see/fix HTML problems |
+| `test_ingest.py` | 50 | detect, discover, preview, ingest, date extraction, URL filtering | Import pipeline broken |
+| `test_ingest_integration.py` | 42 | Full pipeline end-to-end with mock blog | 3-stage architecture broken silently |
+| `test_asset_store.py` | 31 | URL dedup, per-post folders, global routing, collisions | Assets duplicated or lost |
+| `test_consolidate.py` | 13 | Hash dedup, HTML reference rewriting, idempotency | Consolidation corrupts paths |
+| `test_server_api.py` | 33 | All HTTP endpoints, project CRUD, wipe, pipeline via API | Server API broken |
+| `test_security.py` | 23 | XSS, file://, scheme injection, sitemap injection | Security regressions |
+
+---
+
+### Per-Feature Regression Tests
+
+#### 1. MD Validation (31 checks)
+
+**File:** `tests/test_md_validator.py`
+
+**How to run:**
+```bash
+python3 -m pytest tests/test_md_validator.py -v
+# Expected: 80 passed
+```
+
+**Key regression risks:**
+- `test_catches_duplicate` — uses full content hash, not prefix. If changed back to prefix matching, Spring XML configs sharing long preambles produce false positives.
+- `test_clean_angle_bracket_links` — html2text produces `](<https://...>)` format. If the `links_dropped` regex is changed, this format gets miscounted and hundreds of posts incorrectly flag as having dropped links.
+- `test_entities_in_code_ok` — HTML entities inside code blocks should NOT trigger. If the code-stripping regex changes, this breaks.
+- `test_clean_post_has_no_errors` — the clean-post integration test. If any check becomes too aggressive, this fails and signals a false-positive regression.
+
+**Manual verification:** Generate MD for any KIE post, then Validate MD. Issue panel should show only real problems.
+
+---
+
+#### 2. HTML Scanning (9 checks)
+
+**File:** `tests/test_scan_html.py`
+
+**How to run:**
+```bash
+python3 -m pytest tests/test_scan_html.py -v
+# Expected: 57 passed
+```
+
+**Key regression risks:**
+- `test_catches_data_src` — data: placeholders are ERROR level. If check is silenced, lazy-load failures become invisible.
+- `test_clean_when_placeholder_follows` — `missing-image` class divs must NOT trigger the signal detector. If `_strip_junk` changes, placeholders might get scanned as content.
+- `test_selector_for_img` / `test_selector_uses_id_when_available` — CSS selectors are needed for the issue-highlighting feature. If `_selector()` returns None for common cases, clicking issue rows does nothing.
+- `TestScanPostIntegration::test_handles_unreadable_file` — if the scanner raises instead of returning an error dict, the server returns 500 on any scan.
+
+**Manual verification:** Click `🔍 Scan` on a post with known issues (try any 2006 post). Issue panel should show the detected problems. Click an issue row — the element should highlight with a red border in the HTML iframe.
+
+---
+
+#### 3. Ingest Pipeline
+
+**Files:** `tests/test_ingest.py`, `tests/test_ingest_integration.py`
+
+**How to run:**
+```bash
+python3 -m pytest tests/test_ingest.py tests/test_ingest_integration.py -v
+# Expected: 92 passed (~5s for unit, ~4s for integration)
+```
+
+**Key regression risks:**
+
+*Date extraction (`test_ingest.py::TestDateExtraction`):*
+- 11 parametrized cases. If `extract_date_from_url()` regex changes, append mode silently stops filtering (passes everything or nothing).
+- Year range is 2000–2030. KIE blog starts 2006 — safely in range. Don't narrow the range.
+
+*URL filtering (`test_ingest.py::TestFilterUrlsAfter`):*
+- `test_cutoff_is_exclusive` — the cutoff is strictly AFTER, not including the cutoff date. If changed to `>=`, append mode re-downloads the last already-ingested post every time.
+- `test_undated_urls_always_included` — URLs with no date MUST pass through. If changed to exclude, any post with an unusual URL format gets silently skipped.
+
+*Integration pipeline (`test_ingest_integration.py`):*
+- `TestSourceIntegrity::test_source_html_has_original_image_urls` — source files must have bare `/assets/` paths ABSENT (only full http:// URLs allowed). If `ingest_post()` ever rewrites source/, this breaks.
+- `TestAppendMode::test_append_after_wipe_starts_fresh` — after a wipe, using cutoff `2000-01-01` should return all dated URLs. If `filter_urls_after()` has an off-by-one on the exclusive comparison, this fails.
+- `TestConsolidationAfterIngest::test_consolidation_is_idempotent` — running consolidation twice should promote 0 on the second run. If `promote_to_global()` doesn't update the index, files get moved twice and are lost.
+- `TestWipeAndReimport::test_reimport_after_wipe_no_stale_assets` — after wipe and reimport, every URL in the index should have a file on disk. If the sidecar isn't written to cleaned/ (the bug we fixed), date fields are None and newest-date returns null.
+
+**The sidecar bug:** `ingest_post()` must write `{slug}.json` to BOTH `source_dir/` AND `cleaned_dir/`. If only written to `source_dir/`, `init_from_source()` reads from `cleaned_dir/` and finds no sidecar → date = None → append mode doesn't work. This was a real bug found by tests.
+
+---
+
+#### 4. Asset Organisation
+
+**File:** `tests/test_asset_store.py`, `tests/test_consolidate.py`
+
+**How to run:**
+```bash
+python3 -m pytest tests/test_asset_store.py tests/test_consolidate.py -v
+# Expected: 44 passed
+```
+
+**Key regression risks:**
+
+*Asset store:*
+- `test_second_post_routes_to_global` — same URL from different posts returns the EXISTING path (no new download). If URL lookup breaks, the same image gets downloaded into every post's folder.
+- `test_collision_across_posts_no_suffix` — same filename in DIFFERENT posts is NOT a collision. If the collision check doesn't scope to the same folder, `diagram.png` in post-a would get named `diagram-2.png` in post-b even though they're separate.
+- `test_index_persists_across_instances` — the `.url-index.json` must survive an `AssetStore` object being re-created. If the file isn't written on `record()`, every server restart re-downloads all assets.
+
+*Consolidation:*
+- `test_different_content_same_filename_not_consolidated` — two posts with an image called `img.png` but DIFFERENT content must NOT be consolidated. Only identical content (same SHA-256) gets promoted. If hash comparison is skipped, unrelated images get merged.
+- `test_idempotent_second_run_promotes_nothing` — after consolidation, running again should show `promoted: 0`. If the index isn't updated when promoting, the second run finds the same files again and tries to promote them again (they're already in global/).
+- `test_html_reference_updated_to_global` — after promotion, ALL cleaned HTML files must have updated references. If the regex substitution misses a file, that post's images silently become broken after consolidation.
+
+---
+
+#### 5. Server API
+
+**File:** `tests/test_server_api.py`
+
+**How to run:**
+```bash
+# Server must be running first
+python3 -m pytest tests/test_server_api.py -v
+# Expected: 33 passed
+```
+
+**Note:** 3 tests use the mock_blog_server fixture and do real network calls to discover/preview/ingest. These take ~3s extra. The remaining 30 tests are fast HTTP calls to the running server.
+
+**Key regression risks:**
+
+*Projects list:*
+- `test_active_field_present` — EXACTLY ONE project should have `active: true`. If `_api_projects_list()` stops computing this (e.g., `_active_project_id` becomes None due to a startup error), no project shows as active and the UI can't open any project.
+
+*Wipe endpoint:*
+- `test_wipe_rejects_legacy_schema_projects` — wipe MUST return 400 for legacy-schema projects. If this guard is removed, running wipe on the KIE project would delete `legacy/posts/mark-proctor/` — catastrophic data loss.
+- `test_wipe_nonexistent_project_returns_404` — if wipe silently succeeds for missing projects, users can wipe things that don't exist with no error feedback.
+
+*Newest-date endpoint:*
+- `test_returns_null_date_for_empty_project` — a freshly-wiped or new project must return `{date: null, count: 0}`. If it returns a non-null date, append mode thinks there's already content and skips posts that should be imported.
+
+*Pipeline tests:*
+- `test_wipe_and_reimport_same_count` — count after wipe+reimport must match count after first import. If the sidecar location bug recurs, state doesn't get populated and count stays 0.
+- `test_ingest_status_tracks_progress` — `done == 5` after ingesting 5 posts. If the worker doesn't decrement on error (it increments `done` even on failure), this test passes but errors are silently hidden.
+
+**Test isolation note:** `TestIngestPipelineViaApi._cleanup()` MUST re-activate `kie-mark-proctor` before deleting the test project. If this line is removed, the next test that calls `GET /api/projects` will see no active project and many tests will fail. This was a real bug found when the cleanup didn't restore state.
+
+---
+
+#### 6. Security
+
+**File:** `tests/test_security.py`
+
+**How to run:**
+```bash
+python3 -m pytest tests/test_security.py -v
+# Expected: 23 passed (~30s — includes real network timeouts)
+```
+
+**Why these tests are slow:** `test_internal_ip_ingest_is_bounded` tries to connect to `10.255.255.1` which times out (good — it means we're waiting for the timeout). `test_huge_response_does_not_hang` sends 5MB of data. These are intentionally slow to verify the security properties hold under load.
+
+**Key regression risks:**
+
+- `test_onerror_attribute_stripped` — `onerror="alert(1)"` on an `<img>` must be gone after extraction. This was a REAL BUG: before we added `_strip_junk()` attribute sanitisation, ALL event handlers survived into cleaned HTML. If the sanitisation loop is removed from `_strip_junk()`, this test fails and real XSS becomes possible.
+
+- `test_file_url_returns_error` — `preview_post('file:///etc/passwd', session)` must return an error dict, not the contents of the file. If `_normalise_url()` is changed to convert `file://` to `https://` (wrong) or to not filter it, this test fails and local file reads become possible through the API.
+
+- `test_file_urls_in_sitemap_filtered` — a sitemap containing `<loc>file:///etc/passwd</loc>` must not include that URL in `discover_urls()` results. Verified by `_is_post_url()` scheme check. If the scheme check is removed, the ingest worker would try to `session.get('file:///etc/passwd')` which on some systems reads local files.
+
+- `test_path_traversal_in_sitemap_not_fetched` — `http://localhost/../../etc/passwd` in a sitemap must be rejected. Verified by `'..' in path` check in `_is_post_url()`. If removed, the worker fetches the traversal URL.
+
+- `test_bad_urls_return_error_not_exception` — every bad URL must return a dict with `error` field, never raise. If any of the 5 parametrized cases raises, the server worker's try/except catches it but the test fails because the public API contract is broken.
+
+- `test_huge_response_does_not_hang` — 15-second SIGALRM timeout. If `preview_post()` hangs on a 5MB response (e.g., if timeout parameter was removed from session.get), this test fails with TimeoutError.
+
+**The http→https normalisation bug (already fixed but watch for regression):** `_normalise_url()` used to force-convert `http://` to `https://`. This caused `discover_urls()` to try `https://localhost:{port}` for the mock blog server, which isn't TLS-enabled, silently getting 0 results. The fix: `http://` is preserved as-is (caller chose it explicitly); only bare domains without a scheme get `https://`. The security tests now test local URLs correctly.
+
+---
+
+### Manual Tests — Things That Can't Be Automated
+
+These require a browser and human judgment. Future Claude should run these when making UI changes or after any significant refactoring.
+
+#### MT-1: Projects Page — Import Modal Flow
+
+**When to run:** After any change to `ui/projects.html` or `server.py` project endpoints.
+
+**Steps:**
+1. Open `http://localhost:9000/`
+2. Verify both projects appear (KIE Blog — Mark Proctor with 577 posts, KIE Blog — Fresh Import with 0 posts)
+3. Click `⬇ Import` on KIE Blog — Mark Proctor. **Expected:** Modal opens, "Append newer posts" shows a date (e.g., 2016-08-05), "Wipe" is red. Escape closes without action.
+4. Click `⬇ Import` on KIE Blog — Fresh Import. **Expected:** Modal opens, "Append newer posts" is dimmed (no posts yet), "New project" is selected by default.
+5. Choose "New project" → Continue. **Expected:** New Project form scrolls into view, not the kie-fresh ingest panel.
+6. Click `⬇ Import` on Fresh Import again → Choose "Append" → Continue. **Expected:** Inline ingest panel opens with URL input.
+7. Enter `https://blog.kie.org` → click Discover. **Expected:** "Found N posts, WordPress" message appears, Run button appears.
+8. **Do NOT actually run** unless you intend to import — it's slow and writes to disk.
+
+**Regression check:** If the projects page shows empty, check browser console for JS errors. The most common cause: `document.getElementById('import-modal')` returns null because the modal HTML is after the `</script>` tag — the `DOMContentLoaded` listener prevents this now, but if the listener is removed, the whole page breaks silently.
+
+#### MT-2: Review UI — Full Workflow on a Single Post
+
+**When to run:** After any change to `ui/index.html`, `server.py` post endpoints, or `scripts/convert_post.py`.
+
+**Steps:**
+1. Open `http://localhost:9000/`, click Open on KIE — Mark Proctor.
+2. Select the first post (2006-05-31-what-is-a-rule-engine).
+3. Verify: HTML panel shows the post, MD panel shows rendered markdown. Both panels should be side-by-side.
+4. Click `🔍 Scan` → wait. **Expected:** ✓ Scanned feedback. Issue panel opens automatically. Check HTML Issues and MD Issues columns are populated (or show "No issues recorded").
+5. Click `✓ Validate MD` → wait. **Expected:** Issue panel updates with any validation findings.
+6. Click `↺ Generate MD` (since MD already exists). **Expected:** Either "✓ No change" (if MD is up-to-date) or diff modal appears.
+7. If diff modal appears: verify side-by-side columns, synced scrolling between columns, Escape closes it, "Keep Existing" closes without saving.
+8. Click `⟺ Sync` (should be highlighted). Scroll the HTML iframe. **Expected:** MD panel scrolls in sync. Click Sync again to disable, scroll — panels independent.
+9. Click `○ Mark Reviewed`. **Expected:** button changes to `✓ Reviewed` (highlighted). Click again → back to unreviewed.
+10. Use `Cmd+→` to advance to next post, `Cmd+←` to go back. **Expected:** both panels update, scroll position is remembered when returning.
+
+#### MT-3: Issue Highlighting in Iframe
+
+**When to run:** After any change to the issue panel or highlight injection code in `ui/index.html`.
+
+**Steps:**
+1. Find a post with HTML issues (after scanning). Filter nav to "HTML ⚠".
+2. Open the issue panel (⚡ Issues button).
+3. Click an issue row that has a CSS selector (not dimmed). **Expected:** Red outline appears around the element in the HTML iframe, page scrolls to it.
+4. Click the same row again. **Expected:** Outline disappears.
+5. Click a different issue row. **Expected:** Previous outline gone, new element highlighted.
+6. Navigate to a different post. **Expected:** Highlight cleared.
+7. Close the issue panel. **Expected:** Highlight cleared.
+
+**What to check if broken:** The `__sparge-highlight-style__` element is injected into the iframe's `<head>`. Open browser devtools on the iframe's document and look for a `<style id="__sparge-highlight-style__">` element. If it's there but the highlight isn't visible, the CSS selector is wrong or the element doesn't exist in the iframe at that path.
+
+#### MT-4: Diff Modal and Staged Workflow
+
+**When to run:** After any change to the diff modal, staged workflow, or `_api_generate_md`.
+
+**Steps:**
+1. Select any post that has MD generated.
+2. Manually edit the MD (✎ Edit button → add a word → Save).
+3. Click `↺ Generate MD`. **Expected:** Diff modal appears showing the difference (your added word should be in the "Saved version" column).
+4. Click `📋 Stage for Review`. **Expected:** Modal closes, post action bar shows `📋 Review Staged` button (amber), MD panel panel header shows "📋 Staged — awaiting review".
+5. Click `📋 Review Staged`. **Expected:** Diff modal opens in "staged review" mode with "Saved version" vs "Staged version" columns, buttons are "✕ Reject Staged" (red) and "✓ Accept Staged" (green).
+6. Click `✓ Accept Staged`. **Expected:** MD panel updates to the new content, Staged button disappears, badges update.
+7. Repeat steps 2–4 but click `✕ Reject Staged`. **Expected:** staged file deleted, post returns to pre-staged state.
+
+#### MT-5: ⊙ Source / Cleaned Toggle (New-Schema Projects Only)
+
+**When to run:** After running a real import into kie-fresh, or after any change to `_loadHtmlPanel()` or `_updateSourceBanner()`.
+
+**Prerequisite:** kie-fresh project must have at least one ingested post (source/ and cleaned/ both populated).
+
+**Steps:**
+1. Open kie-fresh project, select any post.
+2. **Expected:** HTML panel shows "Cleaned HTML" label with `⊙ Source` button visible.
+3. Click `⊙ Source`. **Expected:** Panel switches to source HTML (original http:// image URLs, images might not load), label changes to "Original Source".
+4. Click `⊙ Cleaned`. **Expected:** Returns to cleaned view with local /assets/ images.
+5. Navigate to another post. **Expected:** View resets to Cleaned (not stuck on Source).
+
+**Note:** For the KIE legacy project, the `⊙ Source` button should NOT appear (both panels serve from the same directory). Verify this is the case.
+
+#### MT-6: Bulk Operations
+
+**When to run:** After any change to `generateAll()`, `scanAll()`, `validateAll()`, or their server endpoints.
+
+**Steps (use filtered scope to limit scope):**
+1. Filter to "No MD" (if any posts lack MD). Click `⚙ Gen scope`. **Expected:** Progress shows slug-by-slug, button re-enables when done, post count updates.
+2. Filter to "All". Click `🔍 Scan scope`. **Expected:** All 577 posts scanned, progress visible, HTML column in Overview updates.
+3. Filter to "HTML ⚠". Click `⟳ Consolidate`. **Expected:** Report shows N promoted, N HTML files updated (or 0/0 if nothing shared).
+4. Filter to "📋 Staged" (if any exist). Verify `✓ Accept all staged` and `✕ Reject all staged` buttons appear. Click Accept all → confirm dialog → all staged posts should flip to current.
+
+---
+
+### Test Plan for New Features
+
+When adding new features, the following tests should be written BEFORE or ALONGSIDE the implementation:
+
+#### For any new server endpoint:
+1. Unit test: endpoint returns correct status code for valid input
+2. Unit test: endpoint returns 404 for nonexistent resources
+3. Unit test: endpoint returns 400 for missing required parameters
+4. Integration test (if writes state): verify state is correct after the call
+5. Integration test (if modifies files): verify files exist/don't exist as expected
+6. Security: does the endpoint accept malicious input? (path traversal, XSS, large payloads)
+
+#### For any new ingest behaviour:
+1. Unit test against mock blog server (20 articles, known dates)
+2. Test the happy path: result has no error, expected files created
+3. Test idempotency: running twice produces same result, no duplicates
+4. Test edge cases: empty input, malformed URLs, unreachable host
+
+#### For any new UI feature:
+1. Check for JS errors on page load (DOM ordering issues — the modal bug)
+2. Verify API calls succeed with correct payloads (check Network tab)
+3. Manual test of the full flow including error states
+4. Verify the feature works for BOTH legacy and new-schema projects (or document which schema it requires)
+
+---
+
+### Regression Matrix — Critical Paths
+
+This table maps user-facing features to the tests that protect them. If a test in the "Protected by" column fails, the feature listed is likely broken.
+
+| Feature | Protected by | Manual test |
+|---|---|---|
+| Projects list loads | `TestProjectsList::test_returns_list` | MT-1 |
+| Active project shows | `TestProjectsList::test_active_field_present` | MT-1 |
+| Import modal opens | No automated test | MT-1 |
+| Discover URLs from blog | `TestIngestDiscover::test_discovers_mock_blog_posts` | MT-1 |
+| New project created | `TestProjectCreate::test_creates_project_with_local_paths` | MT-1 |
+| Project deleted cleanly | `TestProjectDelete::test_deletes_project` | MT-1 |
+| Wipe clears data | `TestProjectWipe::test_wipe_clears_data_directories` | — |
+| Wipe rejects legacy | `TestProjectWipe::test_wipe_rejects_legacy_schema_projects` | — |
+| Append date cutoff | `TestAppendMode::test_cutoff_is_exclusive` | MT-1 |
+| Post opens in review | No automated test | MT-2 |
+| Scan detects issues | `TestScanPostIntegration::test_detects_multiple_issue_types` | MT-2 |
+| Issue highlighting | `TestSelectorGeneration::test_selector_for_img` | MT-3 |
+| MD generation dry-run | `TestIngestDiscover::test_discovers_mock_blog_posts` | MT-2 |
+| Diff modal shows diff | No automated test | MT-4 |
+| Stage workflow | No automated test | MT-4 |
+| Scroll sync | No automated test | MT-2 |
+| Source/cleaned toggle | No automated test | MT-5 |
+| Bulk Gen scope | No automated test | MT-6 |
+| Bulk Scan scope | No automated test | MT-6 |
+| Consolidation | `TestConsolidationAfterIngest::*` | MT-6 |
+| XSS stripped | `TestXSSInContent::test_onerror_attribute_stripped` | — |
+| file:// rejected | `TestURLSchemeInjection::test_file_url_returns_error` | — |
+| Sitemap injection | `TestSitemapURLInjection::test_file_urls_in_sitemap_filtered` | — |
+| Full ingest pipeline | `TestFullPipelineLayout::*`, `TestIngestPipelineViaApi::*` | MT-5 (kie-fresh) |
+| Wipe+reimport cycle | `TestWipeAndReimport::*`, `TestProjectWipe::*` | MT-1 + MT-5 |
+| MD 31 validation checks | `TestValidatorStructure::test_clean_post_has_no_errors` | MT-2 |
+
+**Gaps (no automated coverage — future work):**
+- Import modal 3-mode selection logic (pure JS, needs browser test)
+- Diff modal side-by-side rendering (pure JS, needs browser test)
+- Staged workflow UI (pure JS, needs browser test)
+- Scroll sync algorithm (pure JS, needs browser test)
+- ⊙ Source/Cleaned toggle (pure JS, needs browser test)
+- Keyboard shortcuts (pure JS, needs browser test)
+
+These gaps are documented here so future Claude knows they exist and can add Playwright tests when the time comes.
