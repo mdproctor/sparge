@@ -804,6 +804,67 @@ def _fetch_and_extract(url: str, session) -> dict:
     return result
 
 
+# ── Date extraction from URLs ─────────────────────────────────────────────────
+
+def extract_date_from_url(url: str) -> str | None:
+    """
+    Extract a YYYY-MM-DD date from a blog post URL.
+    Returns None if no recognisable date pattern is found.
+
+    Supports:
+      /2024/03/15/post-title/    → '2024-03-15'
+      /2024-03-15-post-title     → '2024-03-15'
+      /2024/03/slug              → '2024-03-01'  (day assumed 01)
+    """
+    path = urlparse(url).path
+
+    def _valid(year: int, month: int, day: int) -> bool:
+        return 2000 <= year <= 2030 and 1 <= month <= 12 and 1 <= day <= 31
+
+    # Pattern 1: /YYYY/MM/DD/slug
+    m = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', path)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if _valid(y, mo, d):
+            return f'{y:04d}-{mo:02d}-{d:02d}'
+
+    # Pattern 2: /YYYY/MM/DD/slug (no trailing slash — end of path)
+    m = re.search(r'/(\d{4})/(\d{2})/(\d{2})(?:/|$)', path)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if _valid(y, mo, d):
+            return f'{y:04d}-{mo:02d}-{d:02d}'
+
+    # Pattern 3: /YYYY-MM-DD-slug or /YYYY-MM-DD/
+    m = re.search(r'/(\d{4})-(\d{2})-(\d{2})(?:[/-]|$)', path)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if _valid(y, mo, d):
+            return f'{y:04d}-{mo:02d}-{d:02d}'
+
+    # Pattern 4: WordPress-style /YYYY/MM/slug (no day)
+    m = re.search(r'/(\d{4})/(\d{2})/(?!\d{2}(?:[/-]|$))', path)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if _valid(y, mo, 1):
+            return f'{y:04d}-{mo:02d}-01'
+
+    return None
+
+
+def filter_urls_after(urls: list[str], after_date: str) -> list[str]:
+    """
+    Filter discovered URLs to only those newer than after_date (YYYY-MM-DD).
+    URLs whose date cannot be determined are included (safe default).
+    """
+    result: list[str] = []
+    for url in urls:
+        date = extract_date_from_url(url)
+        if date is None or date > after_date:
+            result.append(url)
+    return result
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def preview_post(url: str, session) -> dict:

@@ -225,6 +225,12 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_ui(path)
         elif path == '/api/projects':
             self._api_projects_list()
+        elif path.startswith('/api/projects/'):
+            pid  = path[len('/api/projects/'):]
+            if pid.endswith('/newest-date'):
+                self._api_projects_newest_date(pid[:-len('/newest-date')])
+            else:
+                self._json(404, {'error': 'unknown project endpoint'})
         elif path == '/api/config':
             self._api_config_get()
         elif path == '/api/posts':
@@ -253,6 +259,8 @@ class Handler(BaseHTTPRequestHandler):
             rest = path[len('/api/projects/'):]
             if rest.endswith('/activate'):
                 self._api_projects_activate(rest[:-len('/activate')])
+            elif rest.endswith('/wipe'):
+                self._api_projects_wipe(rest[:-len('/wipe')])
             elif rest.endswith('/ingest/run'):
                 proj_id = rest[:-len('/ingest/run')]
                 # Ingest into a specific project
@@ -365,6 +373,57 @@ class Handler(BaseHTTPRequestHandler):
         if not ok:
             self._json(404, {'error': f'project not found: {project_id}'}); return
         self._json(200, {'active': project_id, 'name': cfg.get('project_name', project_id)})
+
+    def _api_projects_newest_date(self, project_id: str):
+        """Return the newest post date already in this project's state."""
+        state_path = _project_dir(project_id) / 'state.json'
+        if not state_path.exists():
+            self._json(200, {'date': None, 'count': 0}); return
+        try:
+            state = json.loads(state_path.read_text())
+            dates = [
+                (v.get('date') or '')
+                for v in state.values()
+                if isinstance(v, dict) and v.get('date')
+            ]
+            newest = max(dates) if dates else None
+            self._json(200, {'date': newest, 'count': len(state)})
+        except Exception as e:
+            self._json(500, {'error': str(e)})
+
+    def _api_projects_wipe(self, project_id: str):
+        """
+        Delete all ingested data for a project (source/, cleaned/, assets/)
+        and reset its state to empty. The project config is preserved.
+        Only works on projects using the new data schema.
+        """
+        proj_dir = _project_dir(project_id)
+        config_path = proj_dir / 'config.json'
+        if not config_path.exists():
+            self._json(404, {'error': f'project not found: {project_id}'}); return
+        try:
+            proj_cfg = json.loads(config_path.read_text())
+            if 'data' not in proj_cfg:
+                self._json(400, {'error': 'Wipe only supported for new-schema projects (data: {...})'}); return
+            root = Path(proj_cfg['serve_root'])
+            d    = proj_cfg['data']
+            removed = []
+            for key in ('source_dir', 'cleaned_dir', 'assets_dir', 'md_dir'):
+                p = root / d.get(key, '')
+                if p.exists() and p != root:  # safety: never delete serve_root itself
+                    import shutil
+                    shutil.rmtree(p)
+                    removed.append(str(p))
+            # Reset state
+            state_path = proj_dir / 'state.json'
+            state_path.write_text('{}')
+            # If this is the active project, re-init
+            if project_id == _active_project_id:
+                State.init_from_source()
+            print(f'Wiped: {project_id} — removed {removed}')
+            self._json(200, {'wiped': True, 'removed': removed})
+        except Exception as e:
+            self._json(500, {'error': str(e)})
 
     def _api_config_get(self):
         public = {k: v for k, v in cfg.items() if not k.startswith('_')}

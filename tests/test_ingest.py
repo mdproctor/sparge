@@ -18,7 +18,14 @@ import requests
 # Make scripts/ importable (conftest.py also does this, but be explicit)
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from ingest import detect_platform, discover_urls, ingest_post, preview_post
+from ingest import (
+    detect_platform,
+    discover_urls,
+    extract_date_from_url,
+    filter_urls_after,
+    ingest_post,
+    preview_post,
+)
 
 # Import the mock blog fixtures and article metadata
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
@@ -328,3 +335,86 @@ class TestIngestPost:
         """result['error'] must be None on success."""
         result, _, _, _ = ingest_result
         assert result["error"] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestDateExtraction
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestDateExtraction:
+    @pytest.mark.parametrize("url,expected", [
+        # Pattern 1: /YYYY/MM/DD/slug/ (trailing slash)
+        ("https://blog.example.com/2024/03/15/my-post/", "2024-03-15"),
+        # Pattern 1: /YYYY/MM/DD/slug (no trailing slash)
+        ("https://blog.example.com/2024/03/15/my-post", "2024-03-15"),
+        # Pattern 2: slug prefix YYYY-MM-DD-title
+        ("https://blog.example.com/2023-11-05-great-article", "2023-11-05"),
+        # Pattern 2: slug prefix with trailing slash
+        ("https://blog.example.com/2023-11-05-great-article/", "2023-11-05"),
+        # Pattern 3: WordPress /YYYY/MM/slug (no day) → first of month
+        ("https://blog.example.com/2022/08/slug-no-day", "2022-08-01"),
+        # No date at all
+        ("https://blog.example.com/category/no-date-here", None),
+        # Root URL — no date
+        ("https://blog.example.com/", None),
+        # Year out of 2000–2030 range
+        ("https://blog.example.com/1999/01/15/too-old", None),
+        # Month 13 is invalid
+        ("https://blog.example.com/2024/13/15/bad-month", None),
+        # KIE-style: /YYYY/MM/slug (no day) — year in range
+        ("https://blog.kie.org/2011/05/drools-5-2-0-final-released/", "2011-05-01"),
+        # KIE-style with day
+        ("https://blog.kie.org/2011/05/30/drools-5-2-0-final-released/", "2011-05-30"),
+    ])
+    def test_extract_date_from_url(self, url, expected):
+        assert extract_date_from_url(url) == expected
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TestFilterUrlsAfter
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestFilterUrlsAfter:
+    # Realistic KIE-style URL set
+    URL_2020 = "https://blog.kie.org/2020/03/15/drools-7-36/"
+    URL_2019 = "https://blog.kie.org/2019/11/05/kogito/"
+    URL_2021 = "https://blog.kie.org/2021/01/20/optaplanner-8/"
+    URL_NODATE = "https://blog.kie.org/no-date-slug/"
+
+    def test_all_newer_than_cutoff_returned(self):
+        urls = [self.URL_2020, self.URL_2021]
+        result = filter_urls_after(urls, "2018-01-01")
+        assert result == urls
+
+    def test_all_older_than_cutoff_excluded(self):
+        urls = [self.URL_2019, self.URL_2020]
+        result = filter_urls_after(urls, "2021-12-31")
+        assert result == []
+
+    def test_mix_old_and_new(self):
+        urls = [self.URL_2019, self.URL_2020, self.URL_2021]
+        result = filter_urls_after(urls, "2019-12-31")
+        assert self.URL_2019 not in result
+        assert self.URL_2020 in result
+        assert self.URL_2021 in result
+
+    def test_no_date_url_always_included(self):
+        urls = [self.URL_2019, self.URL_NODATE]
+        # cutoff well after 2019 → 2019 post excluded, no-date always included
+        result = filter_urls_after(urls, "2021-12-31")
+        assert self.URL_NODATE in result
+        assert self.URL_2019 not in result
+
+    def test_empty_list_returns_empty(self):
+        assert filter_urls_after([], "2020-01-01") == []
+
+    def test_exact_date_match_excluded(self):
+        """URL whose date equals after_date must NOT be included (strictly after)."""
+        result = filter_urls_after([self.URL_2020], "2020-03-15")
+        assert result == []
+
+    def test_very_old_cutoff_includes_all_dated(self):
+        """after_date='2000-01-01' → all dated URLs (which are newer) are included."""
+        urls = [self.URL_2019, self.URL_2020, self.URL_2021]
+        result = filter_urls_after(urls, "2000-01-01")
+        assert result == urls

@@ -68,6 +68,26 @@ button.danger:hover { background:#2d0f0f; border-color:#f85149; }
 button.success { background:#1a3a1f; border-color:#238636; color:#3fb950; }
 button.success:hover { background:#238636; color:#fff; }
 
+/* ── Inline ingest panel (per-project card) ── */
+.ingest-panel {
+  display:none; margin-top:14px; padding:16px 18px;
+  background:#0d1117; border:1px solid #30363d; border-radius:6px;
+  border-top:2px solid #1f6feb;
+}
+.ingest-panel.open { display:block; }
+.ingest-row { display:flex; gap:8px; margin-bottom:10px; align-items:center; }
+.ingest-row input { flex:1; background:#161b22; border:1px solid #30363d;
+  border-radius:6px; padding:6px 10px; color:#c9d1d9; font-size:12px; font-family:monospace; }
+.ingest-row input:focus { outline:none; border-color:#1f6feb; }
+.ingest-info { font-size:12px; color:#8b949e; margin-bottom:10px; line-height:1.5; }
+.ingest-progress-bar { height:5px; background:#21262d; border-radius:3px;
+  overflow:hidden; margin-bottom:8px; }
+.ingest-progress-fill { height:100%; background:linear-gradient(90deg,#238636,#1f6feb);
+  border-radius:3px; width:0%; transition:width .4s; }
+.ingest-progress-text { font-size:11px; color:#8b949e; font-family:monospace; }
+.ingest-errors { font-size:11px; color:#f85149; max-height:80px; overflow-y:auto;
+  margin-top:6px; font-family:monospace; }
+
 /* ── New project button row ── */
 #new-proj-row { margin-top:8px; margin-bottom:24px; }
 
@@ -136,6 +156,27 @@ button.success:hover { background:#238636; color:#fff; }
 .ingest-errors { font-size:11px; color:#f85149; max-height:90px; overflow-y:auto;
                  line-height:1.6; }
 .ingest-done-row { margin-top:14px; display:flex; gap:8px; align-items:center; }
+
+/* ── Import mode modal ── */
+#import-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7);
+                z-index:200; align-items:center; justify-content:center; }
+#import-modal.open { display:flex; }
+#import-modal-box { background:#161b22; border:1px solid #30363d; border-radius:10px;
+                    width:480px; padding:28px; box-shadow:0 8px 32px rgba(0,0,0,.6); }
+#import-modal-box h3 { font-size:16px; color:#e6edf3; margin-bottom:4px; }
+.modal-proj-name { font-size:12px; color:#8b949e; margin-bottom:20px; }
+.mode-option { display:flex; gap:14px; align-items:flex-start; padding:14px 16px;
+               border:1px solid #30363d; border-radius:8px; cursor:pointer;
+               margin-bottom:8px; transition:border-color .15s; }
+.mode-option:hover { border-color:#8b949e; }
+.mode-option.selected { border-color:#1f6feb; background:#0d1f3a22; }
+.mode-option.danger.selected { border-color:#f85149; background:#2d0f0f22; }
+.mode-option input[type=radio] { margin-top:3px; flex-shrink:0; accent-color:#1f6feb; }
+.mode-label strong { display:block; font-size:13px; color:#e6edf3; margin-bottom:3px; }
+.mode-label span { font-size:12px; color:#8b949e; line-height:1.5; }
+.mode-label em { color:#e3b341; font-style:normal; }
+.modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:20px;
+                padding-top:16px; border-top:1px solid #30363d; }
 
 /* ── Empty state ── */
 #empty-state {
@@ -365,27 +406,255 @@ function renderProjects() {
   list.innerHTML = projects.map(p => {
     const s = p.stats || {};
     const isActive = p.active;
-    return `<div class="proj-card${isActive ? ' active-proj' : ''}">
-      <div class="proj-info">
-        <div class="proj-name">${esc(p.name)}</div>
-        <div class="proj-stats">
-          <span class="stat-item"><strong>${s.total||0}</strong> posts</span>
-          <span class="stat-item"><strong class="g">${s.reviewed||0}</strong> reviewed</span>
-          <span class="stat-item"><strong class="o">${s.staged||0}</strong> staged</span>
-          <span class="stat-item"><strong class="b">${s.md_generated||0}</strong> MD generated</span>
-          ${(s.html_issues||0) > 0 ? `<span class="stat-item"><strong style="color:#f85149">${s.html_issues}</strong> HTML issues</span>` : ''}
+    const noPosts = !s.total;
+    return `<div class="proj-card${isActive ? ' active-proj' : ''}" id="card-${p.id}">
+      <div style="display:flex;align-items:flex-start;gap:16px">
+        <div class="proj-info" style="flex:1;min-width:0">
+          <div class="proj-name">${esc(p.name)}</div>
+          <div class="proj-stats">
+            <span class="stat-item"><strong>${s.total||0}</strong> posts</span>
+            <span class="stat-item"><strong class="g">${s.reviewed||0}</strong> reviewed</span>
+            <span class="stat-item"><strong class="o">${s.staged||0}</strong> staged</span>
+            <span class="stat-item"><strong class="b">${s.md_generated||0}</strong> MD generated</span>
+            ${(s.html_issues||0) > 0 ? `<span class="stat-item"><strong style="color:#f85149">${s.html_issues}</strong> HTML issues</span>` : ''}
+          </div>
+          <div class="proj-date">Created ${fmtDate(p.created_at)}</div>
         </div>
-        <div class="proj-date">Created ${fmtDate(p.created_at)}</div>
+        <div class="proj-actions">
+          <button onclick="toggleIngestPanel('${p.id}')"
+            style="${noPosts ? 'background:#1a3a1f;border-color:#238636;color:#3fb950;' : ''}"
+            title="Import posts from a blog URL into this project">⬇ Import</button>
+          <button class="primary" onclick="openProject('${p.id}')">→ Open</button>
+          <button class="danger" onclick="deleteProject('${p.id}', ${JSON.stringify(esc(p.name))})">🗑 Delete</button>
+        </div>
       </div>
-      <div class="proj-actions">
-        <button class="primary" onclick="openProject('${p.id}')">→ Open</button>
-        <button class="danger" onclick="deleteProject('${p.id}', ${JSON.stringify(esc(p.name))})">🗑 Delete</button>
+      <!-- Inline ingest panel -->
+      <div class="ingest-panel" id="ingest-panel-${p.id}">
+        <div class="ingest-row">
+          <input id="ingest-url-${p.id}" type="url" placeholder="https://blog.kie.org"
+            onkeydown="if(event.key==='Enter')discoverForProject('${p.id}')">
+          <input id="ingest-author-${p.id}" type="text" placeholder="Author filter (optional)"
+            style="max-width:200px">
+          <button onclick="discoverForProject('${p.id}')" id="btn-discover-${p.id}">▶ Discover</button>
+        </div>
+        <div class="ingest-info" id="ingest-info-${p.id}"></div>
+        <div id="ingest-run-row-${p.id}" style="display:none">
+          <button class="success" onclick="runIngestForProject('${p.id}')"
+            id="btn-run-${p.id}">⬇ Import all posts</button>
+        </div>
+        <div id="ingest-prog-${p.id}" style="display:none;margin-top:12px">
+          <div class="ingest-progress-bar">
+            <div class="ingest-progress-fill" id="ingest-fill-${p.id}"></div>
+          </div>
+          <div class="ingest-progress-text" id="ingest-text-${p.id}">Starting…</div>
+          <div class="ingest-errors" id="ingest-errs-${p.id}"></div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button onclick="cancelIngestForProject()" id="btn-cancel-${p.id}"
+              style="font-size:11px;padding:4px 10px;color:#e3b341;border-color:#9e6a03">✕ Cancel</button>
+            <button onclick="openProject('${p.id}')" id="btn-open-after-${p.id}"
+              style="display:none;font-size:11px;padding:4px 10px">→ Open project</button>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
 
 // ── Open project ──────────────────────────────────────────────────
+// ── Per-project inline ingest ──────────────────────────────────────
+let _ingestProjectId = null;
+let _ingestUrls = [];
+let _ingestPollTimer = null;
+let _importMode = 'new';         // 'new' | 'append' | 'wipe'
+let _modalProjectId = null;
+let _newestDate = null;
+
+// ── Import mode modal ──────────────────────────────────────────────
+function selectMode(mode) {
+  _importMode = mode;
+  document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('selected'));
+  const radios = document.querySelectorAll('input[name="import-mode"]');
+  radios.forEach(r => { if (r.value === mode) { r.checked = true; r.closest('.mode-option').classList.add('selected'); } });
+}
+
+async function openImportModal(id) {
+  _modalProjectId = id;
+  _importMode = 'new';
+  selectMode('new');
+  const proj = projects.find(p => p.id === id);
+  document.getElementById('modal-proj-name').textContent = proj?.name || id;
+
+  // Fetch newest date for Append option label
+  const newestEl = document.getElementById('modal-newest');
+  const appendOpt = document.getElementById('mode-append-opt');
+  newestEl.textContent = '…';
+  try {
+    const r = await fetch(`${API}/api/projects/${encodeURIComponent(id)}/newest-date`);
+    const d = await r.json();
+    _newestDate = d.date;
+    if (d.date) {
+      newestEl.textContent = d.date;
+      appendOpt.style.opacity = '1'; appendOpt.style.pointerEvents = '';
+    } else {
+      newestEl.textContent = 'no posts yet';
+      appendOpt.style.opacity = '.4'; appendOpt.style.pointerEvents = 'none';
+    }
+  } catch(e) {
+    newestEl.textContent = 'unknown';
+  }
+  document.getElementById('import-modal').classList.add('open');
+}
+
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('open');
+  _modalProjectId = null;
+}
+
+async function confirmImportMode() {
+  closeImportModal();
+  const id = _modalProjectId || _ingestProjectId;
+  if (!id) return;
+
+  if (_importMode === 'wipe') {
+    if (!confirm(`⚠ Wipe ALL data for "${projects.find(p=>p.id===id)?.name||id}"?\n\nThis permanently deletes all source, cleaned, and asset files.\nThis cannot be undone.`)) return;
+    const r = await fetch(`${API}/api/projects/${encodeURIComponent(id)}/wipe`, {method:'POST'});
+    if (!r.ok) { alert('Wipe failed: ' + (await r.json().catch(()=>({error:r.status}))).error); return; }
+    await loadProjects();
+  }
+
+  if (_importMode === 'new') {
+    // Close all ingest panels, open the "New Project" form instead
+    document.querySelectorAll('.ingest-panel.open').forEach(p => p.classList.remove('open'));
+    document.getElementById('new-form-wrap')?.classList.add('visible');
+    document.getElementById('new-proj-row')?.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+
+  // Append or Wipe-then-import: open this project's inline ingest panel
+  _ingestProjectId = id;
+  document.querySelectorAll('.ingest-panel.open').forEach(p => p.classList.remove('open'));
+  const panel = document.getElementById(`ingest-panel-${id}`);
+  if (panel) panel.classList.add('open');
+}
+
+function toggleIngestPanel(id) {
+  openImportModal(id);
+}
+
+async function discoverForProject(id) {
+  const urlEl    = document.getElementById(`ingest-url-${id}`);
+  const authorEl = document.getElementById(`ingest-author-${id}`);
+  const infoEl   = document.getElementById(`ingest-info-${id}`);
+  const runRow   = document.getElementById(`ingest-run-row-${id}`);
+  const btn      = document.getElementById(`btn-discover-${id}`);
+  const url      = (urlEl?.value || '').trim();
+  if (!url) { urlEl?.focus(); return; }
+  btn.textContent = '⏳ Discovering…'; btn.disabled = true;
+  runRow.style.display = 'none';
+  infoEl.textContent = '';
+  try {
+    const r = await fetch(`${API}/api/ingest/discover`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ url, author_filter: (authorEl?.value||'').trim()||null })
+    });
+    const d = await r.json();
+    if (!r.ok) { infoEl.textContent = '✗ ' + (d.error||r.status); return; }
+    const allUrls = d.urls || [];
+    _ingestProjectId = id;
+
+    // For Append mode: filter to only URLs newer than _newestDate
+    if (_importMode === 'append' && _newestDate) {
+      _ingestUrls = allUrls.filter(u => {
+        const m = u.match(/(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+        if (!m) return true;  // can't determine date → include
+        const urlDate = `${m[1]}-${m[2]}-${m[3]}`;
+        return urlDate > _newestDate;
+      });
+    } else {
+      _ingestUrls = allUrls;
+    }
+
+    const filtered = _importMode === 'append' && _newestDate;
+    infoEl.innerHTML =
+      `<strong style="color:#e6edf3">${esc(d.name||url)}</strong> &nbsp;·&nbsp; ` +
+      `<span style="color:#58a6ff">${esc(d.platform)}</span> &nbsp;·&nbsp; ` +
+      `<span style="color:#3fb950"><strong>${_ingestUrls.length}</strong> ` +
+        `${filtered ? `new posts (of ${allUrls.length} total)` : 'posts found'}</span>` +
+      (filtered && _ingestUrls.length === 0 ? `<br><span style="color:#e3b341;font-size:11px">No new posts since ${_newestDate}</span>` : '') +
+      (_ingestUrls.length ? `<br><span style="color:#484f58;font-size:11px">` +
+        `First: ${esc(_ingestUrls[0].split('/').filter(Boolean).pop()||_ingestUrls[0])}</span>` : '');
+    runRow.style.display = _ingestUrls.length ? '' : 'none';
+  } catch(e) {
+    infoEl.textContent = '✗ ' + e.message;
+  } finally {
+    btn.textContent = '▶ Discover'; btn.disabled = false;
+  }
+}
+
+async function runIngestForProject(id) {
+  if (!_ingestUrls.length || _ingestProjectId !== id) return;
+  const runRow  = document.getElementById(`ingest-run-row-${id}`);
+  const progDiv = document.getElementById(`ingest-prog-${id}`);
+  const fill    = document.getElementById(`ingest-fill-${id}`);
+  const text    = document.getElementById(`ingest-text-${id}`);
+  const errs    = document.getElementById(`ingest-errs-${id}`);
+  const openBtn = document.getElementById(`btn-open-after-${id}`);
+  const cancelBtn = document.getElementById(`btn-cancel-${id}`);
+
+  runRow.style.display = 'none';
+  progDiv.style.display = 'block';
+  fill.style.width = '0%';
+  text.textContent = 'Starting import…';
+  errs.textContent = '';
+  openBtn.style.display = 'none';
+  cancelBtn.disabled = false;
+
+  // Activate the target project first so ingest writes to its directories
+  await fetch(`${API}/api/projects/${encodeURIComponent(id)}/activate`, {method:'POST'});
+
+  const authorEl = document.getElementById(`ingest-author-${id}`);
+  const r = await fetch(`${API}/api/ingest/run`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ urls: _ingestUrls, author_filter: (authorEl?.value||'').trim()||null })
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(()=>({error:'failed'}));
+    text.textContent = '✗ ' + (e.error||r.status);
+    return;
+  }
+
+  // Poll for progress
+  _ingestPollTimer = setInterval(async () => {
+    try {
+      const s = await (await fetch(`${API}/api/ingest/status`)).json();
+      const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+      fill.style.width = pct + '%';
+      if (s.running) {
+        const slug = s.current.split('/').filter(Boolean).pop() || '…';
+        text.textContent = `${s.done} / ${s.total}  —  ${slug}`;
+      } else {
+        text.textContent = `✓ Complete — ${s.done} posts imported` +
+          (s.errors.length ? `, ${s.errors.length} errors` : '');
+        clearInterval(_ingestPollTimer); _ingestPollTimer = null;
+        cancelBtn.disabled = true;
+        openBtn.style.display = '';
+        await loadProjects(); // refresh stats
+      }
+      if (s.errors.length) {
+        errs.innerHTML = s.errors.slice(-4).map(e =>
+          `<div>✗ ${esc(e.url.split('/').pop())}: ${esc(e.error)}</div>`).join('');
+      }
+    } catch(e) {}
+  }, 1500);
+}
+
+async function cancelIngestForProject() {
+  await fetch(`${API}/api/ingest/cancel`, {method:'POST'});
+  if (_ingestPollTimer) { clearInterval(_ingestPollTimer); _ingestPollTimer = null; }
+}
+
 async function openProject(id) {
   try {
     await fetch(`${API}/api/projects/${id}/activate`, {method:'POST'});
@@ -644,8 +913,56 @@ function showErr(id, msg) {
   el.classList.add('visible');
 }
 
+// Close modal on backdrop click or Escape
+document.getElementById('import-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('import-modal')) closeImportModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeImportModal();
+});
+
 // ── Init ──────────────────────────────────────────────────────────
 loadProjects();
 </script>
+
+<!-- Import mode modal -->
+<div id="import-modal">
+  <div id="import-modal-box">
+    <h3>⬇ Import posts</h3>
+    <div class="modal-proj-name" id="modal-proj-name"></div>
+
+    <label class="mode-option selected" onclick="selectMode('new')">
+      <input type="radio" name="import-mode" value="new" checked>
+      <div class="mode-label">
+        <strong>New project</strong>
+        <span>Import into a brand-new empty project.<br>
+              This project stays completely untouched.</span>
+      </div>
+    </label>
+
+    <label class="mode-option" id="mode-append-opt" onclick="selectMode('append')">
+      <input type="radio" name="import-mode" value="append">
+      <div class="mode-label">
+        <strong>Append newer posts</strong>
+        <span>Only fetch posts newer than <em id="modal-newest">…</em>.<br>
+              Existing posts and reviews are preserved.</span>
+      </div>
+    </label>
+
+    <label class="mode-option danger" onclick="selectMode('wipe')">
+      <input type="radio" name="import-mode" value="wipe">
+      <div class="mode-label">
+        <strong style="color:#f85149">⚠ Wipe and re-import</strong>
+        <span>Delete all source, cleaned, and asset files, then<br>
+              re-import everything from scratch.</span>
+      </div>
+    </label>
+
+    <div class="modal-footer">
+      <button onclick="closeImportModal()">Cancel</button>
+      <button class="primary" onclick="confirmImportMode()">Continue →</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
