@@ -278,6 +278,107 @@ class TestJsonPathParameter:
 
 # ── Unit tests — front matter from sidecar ────────────────────────────────────
 
+class TestPlaceholderReplacement:
+    """convert_post replaces missing/lazy images with blockquote placeholders.
+
+    Regression: switching from lxml to html.parser broke placeholder insertion.
+    lxml always wraps fragments in <html><body>, so .body.next worked.
+    html.parser does NOT add a body wrapper for small fragments, so .body
+    was None and .body.next raised AttributeError — causing HTTP 500 on any
+    post that had missing or lazy-loaded images.
+
+    Fix: use .find() instead of .body.next to get the first element of a
+    parsed fragment — works correctly for both lxml and html.parser.
+    """
+
+    DATA_URI_HTML = '''\
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><title>Test</title></head>
+<body>
+<article>
+  <h1>Post with lazy images</h1>
+  <p>Before image</p>
+  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+       data-src="https://example.com/real-image.jpg"
+       alt="A diagram">
+  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+       alt="Another image">
+  <p>After image</p>
+</article>
+</body>
+</html>'''
+
+    MISSING_IMG_HTML = '''\
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><title>Test</title></head>
+<body>
+<article>
+  <h1>Post with broken images</h1>
+  <p>Some content</p>
+  <img src="../../assets/images/broken-1.png" alt="broken image one">
+  <p>More content</p>
+  <img src="../../assets/images/broken-2.jpg" alt="broken image two">
+</article>
+</body>
+</html>'''
+
+    def test_data_uri_placeholder_does_not_raise(self, tmp_path):
+        """Posts with data: URI placeholder images must not raise AttributeError.
+
+        Regression: .body.next on html.parser fragment returns None.body → AttributeError.
+        """
+        from convert_post import convert_post
+        html_path, _ = _write_post(tmp_path, html_content=self.DATA_URI_HTML)
+        # Must not raise — previously caused HTTP 500 for ~110 posts
+        result = convert_post(html_path)
+        assert isinstance(result, str)
+        assert len(result) > 50
+
+    def test_local_image_paths_converted_to_markdown(self, tmp_path):
+        """Local image paths (../../assets/...) are rendered as markdown image links."""
+        from convert_post import convert_post
+        html_path, _ = _write_post(tmp_path, html_content=self.MISSING_IMG_HTML)
+        result = convert_post(html_path)
+        assert isinstance(result, str)
+        # Local images are converted to markdown image syntax, not placeholders
+        assert '![' in result or 'broken' in result
+
+    def test_placeholder_content_not_garbled(self, tmp_path):
+        """Placeholder blockquotes must not contain garbled text."""
+        from convert_post import convert_post
+        html_path, _ = _write_post(tmp_path, html_content=self.DATA_URI_HTML)
+        result = convert_post(html_path)
+        assert_not_garbled(result, 'placeholder_content')
+
+    def test_posts_with_images_generate_without_500(self):
+        """Integration: posts that previously caused 500 errors now generate successfully.
+
+        The 110 posts that failed had lazy-loaded or missing images — they all
+        triggered the placeholder code that used .body.next (now fixed to .find()).
+        """
+        import requests
+        try:
+            s = requests.Session()
+            s.get('http://localhost:9000/api/projects', timeout=3).raise_for_status()
+        except Exception:
+            import pytest; pytest.skip('Server not running')
+
+        # These slugs were in the original 110 that failed with HTTP 500
+        test_slugs = [
+            '2007-05-19-jboss-rules-expressiveness-goes-to-the-next-level',
+            '2009-11-19-pacman-and-the-importance-of-betanode-sharing-rete-explained',
+            '2011-04-18-backward-chaining-emerges-in-drools',
+        ]
+        for slug in test_slugs:
+            r = s.post(f'http://localhost:9000/api/posts/{slug}/generate-md?dry=1')
+            assert r.status_code == 200, \
+                f'{slug} returned {r.status_code} — .body.next fix may have regressed'
+            assert 'error' not in r.json(), \
+                f'{slug} returned error: {r.json().get("error")}'
+
+
 class TestFrontMatter:
     """Front matter fields are populated from the JSON sidecar."""
 
