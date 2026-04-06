@@ -53,6 +53,8 @@ def session():
         import requests
         s = requests.Session()
         s.get(f'{API}/projects', timeout=3).raise_for_status()
+        # Always activate the KIE project — other test modules may have switched it
+        s.post(f'{API}/projects/kie-mark-proctor/activate')
         return s
     except Exception:
         pytest.skip('Server not running on localhost:9000')
