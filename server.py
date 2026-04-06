@@ -126,8 +126,9 @@ POSTS_DIR    = cfg.get('_posts_dir', ROOT.parent / 'legacy' / 'posts')
 MD_DIR       = cfg.get('_md_dir',    ROOT.parent / 'mark-proctor')
 ENRICHED_DIR: Path = PROJECTS_DIR / 'kie-mark-proctor' / 'enriched'
 
-# Pre-import MD tools from parent scripts/ if available
-_parent_scripts = ROOT.parent / 'scripts'
+# MD tools live in scripts/ alongside the server
+# (convert_post.py and md_validator.py are self-contained here)
+_parent_scripts = ROOT / 'scripts'
 sys.path.insert(0, str(_parent_scripts))
 try:
     from convert_post import convert_post
@@ -475,13 +476,17 @@ class Handler(BaseHTTPRequestHandler):
         if not html_path.exists():
             self._json(404, {'error': f'HTML not found: {slug}'})
             return
+        # JSON sidecar always lives alongside the original post, not the enriched copy
+        json_path = POSTS_DIR / (slug + '.json')
+        if not json_path.exists():
+            json_path = None  # let convert_post fall back to html_path's directory
         md_path = MD_DIR / (slug + '.md')
         try:
-            content = convert_post(html_path)
+            content = convert_post(html_path, json_path=json_path)
             if dry:
                 # Return generated content without writing anything
                 print(f'Dry-run: {slug}.md')
-                self._text(200, content)
+                self._json(200, {'content': content})
                 return
             md_path.write_text(content, encoding='utf-8')
             State.mark_md_generated(slug)
