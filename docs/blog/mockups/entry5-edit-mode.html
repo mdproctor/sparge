@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1400">
+<title>Sparge — Edit Mode</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; height: 900px; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Top bar */
+  #topbar { background: #161b22; border-bottom: 1px solid #30363d; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  #topbar .logo { font-weight: 700; font-size: 15px; color: #58a6ff; display: flex; align-items: center; gap: 6px; }
+  #topbar .logo svg { width: 20px; height: 20px; }
+  .topbar-sep { width: 1px; height: 20px; background: #30363d; }
+
+  /* Three partition layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Left sidebar: edit controls (252px) ── */
+  #edit-sidebar { width: 252px; background: #161b22; border-right: 1px solid #30363d; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+
+  .es-section { padding: 14px 14px; border-bottom: 1px solid #30363d; }
+
+  .es-mode-label { font-size: 11px; font-weight: 700; color: #58a6ff; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .es-mode-label::before { content: '✎'; }
+
+  .es-slug { font-size: 10px; color: #8b949e; font-family: 'SFMono-Regular', Consolas, monospace; word-break: break-all; line-height: 1.4; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 5px 7px; margin-bottom: 10px; }
+
+  .es-unsaved { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #e3b341; }
+  .es-unsaved::before { content: '●'; }
+
+  .es-divider { height: 1px; background: #30363d; margin: 12px 0; }
+
+  .es-btn { width: 100%; padding: 7px 0; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid; display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 8px; font-family: inherit; }
+  .es-btn-save { background: #1a3a1f; border-color: #238636; color: #3fb950; }
+  .es-btn-discard { background: #2d0f0f; border-color: #8b1a1a; color: #f85149; }
+
+  .es-spacer { flex: 1; }
+
+  .es-back-section { padding: 12px 14px; border-top: 1px solid #30363d; }
+  .es-btn-back { width: 100%; padding: 6px 0; border-radius: 6px; font-size: 11px; cursor: pointer; border: 1px solid #30363d; color: #8b949e; background: #21262d; display: flex; align-items: center; justify-content: center; gap: 5px; font-family: inherit; margin-bottom: 6px; }
+  .es-note { font-size: 10px; color: #484f58; text-align: center; line-height: 1.4; }
+
+  /* ── Middle: CodeMirror-style editor ── */
+  #editor-panel { flex: 1; display: flex; flex-direction: column; background: #0d1117; border-right: 1px solid #30363d; overflow: hidden; min-width: 0; }
+
+  #editor-header { background: #161b22; border-bottom: 1px solid #30363d; padding: 5px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  #editor-header .ed-tab { font-size: 11px; color: #c9d1d9; background: #0d1117; border: 1px solid #30363d; border-bottom: none; padding: 4px 12px; border-radius: 4px 4px 0 0; display: flex; align-items: center; gap: 5px; }
+  #editor-header .ed-tab .unsaved-dot { color: #e3b341; font-size: 9px; }
+  .ed-info { font-size: 10px; color: #484f58; margin-left: auto; display: flex; gap: 12px; }
+
+  #code-area { flex: 1; overflow: hidden; display: flex; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 12px; line-height: 1.65; }
+  #line-numbers { background: #0d1117; color: #484f58; padding: 12px 0; text-align: right; min-width: 44px; border-right: 1px solid #21262d; flex-shrink: 0; user-select: none; }
+  .ln { padding: 0 10px; display: block; }
+  .ln.active { color: #c9d1d9; background: #1c2128; }
+
+  #code-lines { flex: 1; overflow: auto; padding: 12px 16px; white-space: pre; }
+
+  /* syntax tokens */
+  .t-tag   { color: #7ee787; }        /* tag names — green */
+  .t-attr  { color: #79c0ff; }        /* attribute names — blue */
+  .t-val   { color: #f78166; }        /* attribute values — orange-red */
+  .t-punct { color: #8b949e; }        /* punctuation < > = -->  */
+  .t-text  { color: #c9d1d9; }        /* plain text content */
+  .t-str   { color: #a5d6ff; }        /* strings in attrs */
+  .t-comment { color: #484f58; font-style: italic; }
+
+  /* cursor simulation */
+  .cursor-line { background: #1c2128; display: block; margin: 0 -16px; padding: 0 16px; }
+  .cursor { display: inline-block; width: 2px; height: 14px; background: #58a6ff; vertical-align: text-bottom; animation: blink 1s step-end infinite; margin-left: 1px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── Right: Live preview ── */
+  #preview-panel { width: 420px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+  #preview-header { background: #161b22; border-bottom: 1px solid #30363d; padding: 5px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 11px; color: #8b949e; }
+  .preview-label { color: #c9d1d9; font-weight: 600; }
+  .sync-dot { color: #3fb950; font-size: 9px; }
+  .sync-label { color: #3fb950; font-size: 10px; }
+
+  #preview-body { flex: 1; background: #fff; overflow-y: auto; }
+  .preview-article { padding: 24px 22px; font-family: Georgia, 'Times New Roman', serif; color: #24292e; font-size: 14px; line-height: 1.75; }
+  .preview-article h1 { font-size: 21px; font-weight: 700; color: #0d1117; margin-bottom: 14px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.3; }
+  .preview-article p { margin-bottom: 12px; }
+  .preview-article a { color: #0969da; }
+
+  .preview-video-fig { border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; margin: 14px 0; }
+  .preview-video-thumb { width: 100%; height: 120px; background: linear-gradient(135deg, #c8d0d8 0%, #b0b8c0 60%, #a0a8b0 100%); display: flex; align-items: center; justify-content: center; }
+  .preview-play { width: 36px; height: 36px; background: rgba(0,0,0,0.65); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .preview-play::after { content: ''; border-style: solid; border-color: transparent transparent transparent #fff; border-width: 7px 0 7px 13px; margin-left: 2px; }
+  .preview-figcaption { padding: 5px 10px; font-size: 11px; color: #0969da; background: #f6f8fa; border-top: 1px solid #d0d7de; font-family: sans-serif; }
+
+  .preview-pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 10px 12px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; line-height: 1.5; color: #24292e; margin: 10px 0; overflow-x: auto; }
+  .preview-pre .kw { color: #d73a49; }
+  .preview-pre .st { color: #032f62; }
+  .preview-pre .cm { color: #6a737d; font-style: italic; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 48 48" fill="none"><path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/><path d="M28,8 C28,8 18,28 18,36 A10,10 0 0,0 38,36 C38,28 28,8 28,8Z" fill="#388bfd"/><path d="M38,2 C38,2 34,10 34,13 A4,4 0 0,0 42,13 C42,10 38,2 38,2Z" fill="#79c0ff"/></svg>
+    Sparge
+  </div>
+  <div class="topbar-sep"></div>
+  <span style="font-size:11px;color:#8b949e">KIE Blog — Mark Proctor</span>
+  <div style="flex:1"></div>
+  <span style="font-size:10px;padding:2px 8px;background:#2d1f0f;border:1px solid #9e6a03;border-radius:10px;color:#e3b341">● Edit mode</span>
+</div>
+
+<div id="main">
+
+  <!-- LEFT: Edit controls sidebar -->
+  <div id="edit-sidebar">
+
+    <div class="es-section">
+      <div class="es-mode-label">EDITING HTML</div>
+      <div class="es-slug">2011-04-18-backward-chaining-emerges-in-drools</div>
+      <div class="es-unsaved">Unsaved changes</div>
+    </div>
+
+    <div class="es-section">
+      <div class="es-divider" style="margin:0 0 12px 0"></div>
+      <button class="es-btn es-btn-save">💾 Save</button>
+      <button class="es-btn es-btn-discard">✕ Discard changes</button>
+    </div>
+
+    <div class="es-section" style="border-bottom:none">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#484f58;margin-bottom:8px;font-weight:600">Cursor position</div>
+      <div style="font-size:11px;color:#8b949e;font-family:monospace">Ln 9, Col 14</div>
+    </div>
+
+    <div class="es-spacer"></div>
+
+    <div class="es-back-section">
+      <button class="es-btn-back">← Back to review</button>
+      <div class="es-note">Prompts if unsaved changes</div>
+    </div>
+  </div>
+
+  <!-- MIDDLE: Code editor -->
+  <div id="editor-panel">
+    <div id="editor-header">
+      <div class="ed-tab">
+        <span class="unsaved-dot">●</span>
+        post.html
+      </div>
+      <div class="ed-info">
+        <span>HTML</span>
+        <span>UTF-8</span>
+        <span>LF</span>
+      </div>
+    </div>
+
+    <div id="code-area">
+      <div id="line-numbers">
+        <span class="ln">1</span>
+        <span class="ln">2</span>
+        <span class="ln">3</span>
+        <span class="ln">4</span>
+        <span class="ln">5</span>
+        <span class="ln">6</span>
+        <span class="ln">7</span>
+        <span class="ln">8</span>
+        <span class="ln">9</span>
+        <span class="ln active">10</span>
+        <span class="ln">11</span>
+        <span class="ln">12</span>
+        <span class="ln">13</span>
+        <span class="ln">14</span>
+        <span class="ln">15</span>
+        <span class="ln">16</span>
+        <span class="ln">17</span>
+        <span class="ln">18</span>
+        <span class="ln">19</span>
+        <span class="ln">20</span>
+        <span class="ln">21</span>
+        <span class="ln">22</span>
+        <span class="ln">23</span>
+        <span class="ln">24</span>
+        <span class="ln">25</span>
+      </div>
+      <div id="code-lines"><span class="t-punct">&lt;</span><span class="t-tag">h1</span><span class="t-punct">&gt;</span><span class="t-text">Backward Chaining emerges in Drools</span><span class="t-punct">&lt;/</span><span class="t-tag">h1</span><span class="t-punct">&gt;</span>
+<span class="t-text"> </span>
+<span class="t-punct">&lt;</span><span class="t-tag">p</span><span class="t-punct">&gt;</span><span class="t-text">Drools 5.2 introduces proper backward chaining</span>
+<span class="t-text">support, allowing rules to derive facts by querying</span>
+<span class="t-text">for them rather than asserting them reactively.</span><span class="t-punct">&lt;/</span><span class="t-tag">p</span><span class="t-punct">&gt;</span>
+<span class="t-text"> </span>
+<span class="t-punct">&lt;</span><span class="t-tag">figure</span> <span class="t-attr">class</span><span class="t-punct">=</span><span class="t-str">"video-embed"</span><span class="t-punct">&gt;</span>
+  <span class="t-punct">&lt;</span><span class="t-tag">a</span> <span class="t-attr">href</span><span class="t-punct">=</span><span class="t-str">"https://youtu.be/dQw4BC9a-RI"</span>
+<span class="cursor-line">     <span class="t-attr">target</span><span class="t-punct">=</span><span class="t-str">"_blank"</span> <span class="t-attr">rel</span><span class="t-punct">=</span><span class="t-str">"noopener"</span><span class="t-punct">&gt;</span><span class="cursor"></span></span>
+    <span class="t-punct">&lt;</span><span class="t-tag">img</span> <span class="t-attr">src</span><span class="t-punct">=</span><span class="t-str">"assets/yt-thumb-dQw4BC9a.jpg"</span>
+         <span class="t-attr">alt</span><span class="t-punct">=</span><span class="t-str">"Drools Backward Chaining Demo"</span>
+         <span class="t-attr">width</span><span class="t-punct">=</span><span class="t-str">"560"</span> <span class="t-attr">height</span><span class="t-punct">=</span><span class="t-str">"315"</span><span class="t-punct">&gt;</span>
+  <span class="t-punct">&lt;/</span><span class="t-tag">a</span><span class="t-punct">&gt;</span>
+  <span class="t-punct">&lt;</span><span class="t-tag">figcaption</span><span class="t-punct">&gt;</span><span class="t-text">▶ Watch on YouTube — Drools Backward</span>
+  <span class="t-text">Chaining Demo (14:32)</span><span class="t-punct">&lt;/</span><span class="t-tag">figcaption</span><span class="t-punct">&gt;</span>
+<span class="t-punct">&lt;/</span><span class="t-tag">figure</span><span class="t-punct">&gt;</span>
+<span class="t-text"> </span>
+<span class="t-punct">&lt;</span><span class="t-tag">figure</span> <span class="t-attr">class</span><span class="t-punct">=</span><span class="t-str">"gist-embed"</span><span class="t-punct">&gt;</span>
+  <span class="t-punct">&lt;</span><span class="t-tag">pre</span><span class="t-punct">&gt;&lt;</span><span class="t-tag">code</span> <span class="t-attr">class</span><span class="t-punct">=</span><span class="t-str">"language-drools"</span><span class="t-punct">&gt;</span>
+<span class="t-text">query isContainedIn( String x, String y )</span>
+<span class="t-text">  Location( x, y; )</span>
+<span class="t-text">  or ( Location( x, z; )</span>
+<span class="t-text">       and isContainedIn( z, y; ) )</span>
+<span class="t-text">end</span>
+  <span class="t-punct">&lt;/</span><span class="t-tag">code</span><span class="t-punct">&gt;&lt;/</span><span class="t-tag">pre</span><span class="t-punct">&gt;</span></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Live preview -->
+  <div id="preview-panel">
+    <div id="preview-header">
+      <span>👁</span>
+      <span class="preview-label">Live preview</span>
+      <div style="flex:1"></div>
+      <span class="sync-dot">●</span>
+      <span class="sync-label">synced scroll</span>
+    </div>
+    <div id="preview-body">
+      <div class="preview-article">
+        <h1>Backward Chaining emerges in Drools</h1>
+
+        <p>Drools 5.2 introduces proper backward chaining support, allowing rules to derive facts by querying for them rather than asserting them reactively. This is a significant step toward full Prolog-style logic programming within the RETE network.</p>
+
+        <p>To illustrate the concept, I recorded a short walkthrough of the new query syntax and how it interacts with the working memory:</p>
+
+        <div class="preview-video-fig">
+          <div class="preview-video-thumb">
+            <div class="preview-play"></div>
+          </div>
+          <div class="preview-figcaption">▶ Watch on YouTube — Drools Backward Chaining Demo (14:32)</div>
+        </div>
+
+        <p>The <code>query</code> keyword in DRL lets you define named queries callable from Java or other rules:</p>
+
+        <pre class="preview-pre"><span class="kw">query</span> isContainedIn( String x, String y )
+  Location( x, y; )
+  <span class="kw">or</span>
+  ( Location( x, z; ) <span class="kw">and</span> isContainedIn( z, y; ) )
+<span class="kw">end</span>
+
+<span class="kw">rule</span> <span class="st">"Find keys"</span>
+  <span class="kw">when</span>
+    isContainedIn( <span class="st">"key"</span>, <span class="st">"office"</span>; )
+  <span class="kw">then</span>
+    System.out.println( <span class="st">"key is in office"</span> );
+<span class="kw">end</span></pre>
+
+        <p>Notice that the semicolons inside the parentheses separate input from output parameters — a binding convention borrowed from constraint logic programming that took some adjustment.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

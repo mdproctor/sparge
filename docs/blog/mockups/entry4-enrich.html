@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1400">
+<title>Sparge — Content Fidelity / Enrichment</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; height: 900px; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Top bar */
+  #topbar { background: #161b22; border-bottom: 1px solid #30363d; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  #topbar .logo { font-weight: 700; font-size: 15px; color: #58a6ff; display: flex; align-items: center; gap: 6px; }
+  #topbar .logo svg { width: 20px; height: 20px; }
+  .topbar-sep { width: 1px; height: 20px; background: #30363d; }
+
+  /* Main layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Nav sidebar */
+  #nav { width: 252px; background: #161b22; border-right: 1px solid #30363d; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  #nav-stats { padding: 10px 12px; border-bottom: 1px solid #30363d; }
+  #nav-stats h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #58a6ff; margin-bottom: 8px; font-weight: 600; }
+  .srow { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
+  .sl { color: #8b949e; }
+  .sv { font-weight: 600; }
+  .sv.o { color: #e3b341; }
+  .sv.b { color: #58a6ff; }
+  .sv.g { color: #3fb950; }
+  #pbar { height: 3px; background: #30363d; border-radius: 2px; margin-top: 8px; }
+  #pfill { height: 100%; width: 35%; background: #1f6feb; border-radius: 2px; }
+  #nav-filters { padding: 6px 8px; border-bottom: 1px solid #30363d; display: flex; gap: 4px; flex-wrap: wrap; }
+  .fb { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+  .fb.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  #post-list { flex: 1; overflow-y: auto; }
+  .pi { padding: 8px 12px; border-bottom: 1px solid #21262d; cursor: pointer; }
+  .pi.selected { background: #1c2128; border-left: 2px solid #1f6feb; }
+  .pi-title { font-size: 12px; color: #c9d1d9; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pi-meta { font-size: 10px; color: #484f58; }
+  .pi-badges { display: flex; gap: 4px; margin-top: 3px; }
+  .badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .b-warn { background: #2d1f0f; color: #e3b341; }
+  .b-ok { background: #12261e; color: #3fb950; }
+  .b-none { background: #21262d; color: #8b949e; }
+  .b-enrich { background: #1c2a4a; color: #58a6ff; }
+
+  /* Content area */
+  #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Action bar */
+  #post-action-bar { background: #161b22; border-bottom: 1px solid #30363d; padding: 6px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  #post-crumb { font-size: 12px; color: #c9d1d9; flex: 1; }
+  #post-crumb strong { color: #58a6ff; }
+  .sep { width: 1px; height: 18px; background: #30363d; }
+  button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 3px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  button.success { background: #1a3a1f; border-color: #238636; color: #3fb950; }
+  button.warn { background: #2d1f0f; border-color: #9e6a03; color: #e3b341; }
+  button.primary { background: #1f6feb; border-color: #388bfd; color: #fff; }
+
+  /* Enrichment stat pill */
+  .enrich-pill { display: flex; align-items: center; gap: 4px; background: #12261e; border: 1px solid #2ea043; border-radius: 10px; padding: 2px 8px; font-size: 10px; color: #3fb950; }
+  .enrich-pill .enrich-detail { color: #8b949e; font-size: 10px; }
+
+  /* Panel heads */
+  #panel-heads { display: flex; border-bottom: 1px solid #30363d; background: #161b22; flex-shrink: 0; }
+  .ph { flex: 1; padding: 5px 12px; font-size: 11px; color: #8b949e; border-right: 1px solid #30363d; display: flex; align-items: center; gap: 6px; }
+  .ph:last-child { border-right: none; }
+  .ph-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; }
+  .ph-enrich { background: #1c2a4a; color: #58a6ff; }
+  .ph-ok { background: #12261e; color: #3fb950; }
+
+  /* Panels */
+  #panels { display: flex; flex: 1; overflow: hidden; }
+  .panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  #divider { width: 4px; background: #21262d; cursor: col-resize; flex-shrink: 0; }
+
+  /* HTML panel */
+  #html-panel-body { flex: 1; background: #fff; overflow-y: auto; }
+  .fake-article { padding: 24px; font-family: Georgia, serif; color: #333; font-size: 14px; line-height: 1.7; }
+  .fake-article h1 { font-size: 22px; color: #0d1117; margin-bottom: 12px; font-family: sans-serif; font-weight: 700; }
+  .fake-article p { margin-bottom: 12px; }
+  .fake-article a { color: #0969da; text-decoration: none; }
+
+  /* Enriched figure: video embed */
+  .enriched-figure { border: 2px solid #1f6feb; border-radius: 6px; margin: 14px 0; background: #f0f7ff; overflow: hidden; position: relative; }
+  .enriched-label { position: absolute; top: 6px; right: 6px; background: #1f6feb; color: #fff; font-size: 9px; font-family: sans-serif; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: .04em; z-index: 5; }
+  .video-thumb { width: 100%; height: 140px; background: linear-gradient(135deg, #c0c8d0 0%, #a8b0b8 50%, #98a0a8 100%); display: flex; align-items: center; justify-content: center; position: relative; }
+  .play-btn { width: 42px; height: 42px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .play-btn::after { content: ''; border-style: solid; border-color: transparent transparent transparent #fff; border-width: 8px 0 8px 16px; margin-left: 3px; }
+  .video-thumb-label { position: absolute; bottom: 6px; left: 8px; font-size: 10px; color: rgba(255,255,255,0.8); font-family: sans-serif; }
+  figcaption { padding: 6px 10px; font-size: 11px; color: #0969da; font-family: sans-serif; background: #e8f3ff; border-top: 1px solid #b3d4ff; }
+  figcaption a { color: #0969da; }
+
+  /* Enriched figure: gist embed */
+  .gist-figure { border: 2px solid #2ea043; border-radius: 6px; margin: 14px 0; background: #f3fff5; overflow: hidden; position: relative; }
+  .gist-label { position: absolute; top: 6px; right: 6px; background: #2ea043; color: #fff; font-size: 9px; font-family: sans-serif; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: .04em; }
+  .gist-head { background: #e6f4ea; padding: 6px 10px; border-bottom: 1px solid #b6dcbe; font-size: 11px; color: #2ea043; font-family: sans-serif; display: flex; align-items: center; gap: 6px; }
+  .gist-code { background: #fafffe; padding: 10px 14px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; color: #24292e; line-height: 1.5; }
+  .gist-code .kw { color: #d73a49; }
+  .gist-code .cn { color: #6f42c1; }
+  .gist-code .st { color: #032f62; }
+  .gist-code .cm { color: #6a737d; font-style: italic; }
+
+  /* MD panel */
+  #md-panel-body { flex: 1; background: #0d1117; overflow-y: auto; padding: 16px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; line-height: 1.6; color: #c9d1d9; }
+  .md-h1 { color: #58a6ff; font-size: 15px; font-weight: bold; margin-bottom: 12px; }
+  .md-h2 { color: #79c0ff; font-size: 12px; font-weight: bold; margin: 14px 0 8px; }
+  .md-p { margin-bottom: 10px; color: #c9d1d9; }
+  .md-link { color: #58a6ff; }
+  .md-comment { color: #484f58; font-style: italic; }
+  .md-figure { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px 10px; margin: 8px 0; }
+  .md-figure-yt { border-color: #1f6feb; background: #0d1c30; }
+  .md-figure-gist { border-color: #2ea043; background: #0d1e12; }
+  .md-tag { color: #79c0ff; }
+  .md-attr { color: #e3b341; }
+  .md-val { color: #a5d6ff; }
+  .md-code-block { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 10px 12px; margin: 8px 0; font-size: 11px; }
+  .md-code-block .kw { color: #ff7b72; }
+  .md-code-block .cn { color: #d2a8ff; }
+  .md-code-block .st { color: #a5d6ff; }
+  .md-code-block .cm { color: #8b949e; font-style: italic; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 48 48" fill="none"><path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/><path d="M28,8 C28,8 18,28 18,36 A10,10 0 0,0 38,36 C38,28 28,8 28,8Z" fill="#388bfd"/><path d="M38,2 C38,2 34,10 34,13 A4,4 0 0,0 42,13 C42,10 38,2 38,2Z" fill="#79c0ff"/></svg>
+    Sparge
+  </div>
+  <div class="topbar-sep"></div>
+  <span style="font-size:11px;color:#8b949e">KIE Blog — Mark Proctor</span>
+</div>
+
+<div id="main">
+  <!-- Nav -->
+  <div id="nav">
+    <div id="nav-stats">
+      <h3>KIE Blog — Mark Proctor</h3>
+      <div class="srow"><span class="sl">Total</span><span class="sv">577</span></div>
+      <div class="srow"><span class="sl">HTML issues</span><span class="sv o">214</span></div>
+      <div class="srow"><span class="sl">MD generated</span><span class="sv b">31</span></div>
+      <div class="srow"><span class="sl">Enriched</span><span class="sv g">8</span></div>
+      <div class="srow"><span class="sl">YT embeds</span><span class="sv b">23</span></div>
+      <div class="srow"><span class="sl">Gists inlined</span><span class="sv b">14</span></div>
+      <div id="pbar"><div id="pfill"></div></div>
+    </div>
+    <div id="nav-filters">
+      <button class="fb active">All</button>
+      <button class="fb">HTML⚠</button>
+      <button class="fb">YT</button>
+      <button class="fb">Gist</button>
+    </div>
+    <div id="post-list">
+      <div class="pi">
+        <div class="pi-title">What is a Rule Engine</div>
+        <div class="pi-meta">2006-05-31</div>
+        <div class="pi-badges"><span class="badge b-ok">✓ Enriched</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Rule Execution Flow</div>
+        <div class="pi-meta">2006-06-02</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 1 HTML</span><span class="badge b-none">○ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Real World Rule Engines</div>
+        <div class="pi-meta">2006-06-20</div>
+        <div class="pi-badges"><span class="badge b-ok">✓ Clean</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Why Java Code is Bad for Rules</div>
+        <div class="pi-meta">2006-07-10</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 2 HTML</span></div>
+      </div>
+      <div class="pi selected">
+        <div class="pi-title">Backward Chaining emerges in Drools</div>
+        <div class="pi-meta">2011-04-18</div>
+        <div class="pi-badges"><span class="badge b-enrich">✦ 1yt 1gist</span><span class="badge b-ok">✓ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Drools Fusion Temporal Operators</div>
+        <div class="pi-meta">2010-08-20</div>
+        <div class="pi-badges"><span class="badge b-enrich">✦ 2yt</span><span class="badge b-none">○ MD</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+    <div id="post-action-bar">
+      <div id="post-crumb">
+        <strong>Backward Chaining emerges in Drools</strong>
+        <span style="color:#8b949e">· 2011-04-18 · Mark Proctor</span>
+      </div>
+      <div class="sep"></div>
+      <div class="enrich-pill">
+        <span>✓ Enriched</span>
+        <span class="enrich-detail">1yt 1gist 5cls</span>
+      </div>
+      <div class="sep"></div>
+      <button>🔍 Scan</button>
+      <button class="primary">↺ Generate MD</button>
+      <button class="success">✓ Validate MD</button>
+      <button>✓ Reviewed</button>
+      <div class="sep"></div>
+      <button style="font-size:10px;padding:2px 7px;background:#1c2a4a;border-color:#1f6feb;color:#58a6ff">✎ Edit HTML</button>
+    </div>
+
+    <div id="panel-heads">
+      <div class="ph">
+        Enriched Archive HTML
+        <span class="ph-badge ph-enrich">✦ enriched</span>
+        <span class="ph-badge" style="background:#12261e;color:#3fb950;margin-left:2px">✓ clean</span>
+      </div>
+      <div class="ph">
+        Generated Markdown
+        <span class="ph-badge ph-ok">✓ valid</span>
+      </div>
+    </div>
+
+    <div id="panels">
+      <!-- HTML panel: enriched content -->
+      <div class="panel" id="html-panel">
+        <div id="html-panel-body">
+          <div class="fake-article">
+            <h1>Backward Chaining emerges in Drools</h1>
+            <p>Drools 5.2 introduces proper backward chaining support, allowing rules to derive facts by querying for them rather than asserting them reactively. This is a significant step toward full Prolog-style logic programming within the RETE network.</p>
+
+            <p>To illustrate the concept, I recorded a short walkthrough of the new query syntax and how it interacts with the working memory:</p>
+
+            <!-- Enriched YouTube embed -->
+            <figure class="enriched-figure" style="margin:14px 0">
+              <div class="enriched-label">✦ YT ENRICHED</div>
+              <div class="video-thumb">
+                <div class="play-btn"></div>
+                <span class="video-thumb-label">youtube.com · Drools Backward Chaining Demo</span>
+              </div>
+              <figcaption>▶ <a href="#">Watch on YouTube — Drools Backward Chaining Demo (14:32)</a></figcaption>
+            </figure>
+
+            <p>The new <code>query</code> keyword in DRL lets you define named queries that can be called from Java or from within rules themselves. Here's the essential pattern using the family relationship example from the test suite:</p>
+
+            <!-- Enriched Gist embed -->
+            <figure class="gist-figure" style="margin:14px 0">
+              <div class="gist-label">✦ GIST INLINED</div>
+              <div class="gist-head">
+                <span>📄</span>
+                <span>BackwardChaining.drl — gist:mproctor/3a8f72c</span>
+              </div>
+              <div class="gist-code"><span class="cm">// Drools backward chaining query example</span>
+<span class="kw">query</span> <span class="st">isContainedIn</span>( String x, String y )
+  Location( x, y; )
+  <span class="kw">or</span>
+  ( Location( x, z; ) <span class="kw">and</span> isContainedIn( z, y; ) )
+<span class="kw">end</span>
+
+<span class="kw">rule</span> <span class="st">"Find keys"</span>
+  <span class="kw">when</span>
+    isContainedIn( <span class="st">"key"</span>, <span class="st">"office"</span>; )
+  <span class="kw">then</span>
+    System.out.println( <span class="st">"key is in office"</span> );
+<span class="kw">end</span></div>
+            </figure>
+
+            <p>Notice that the semicolons inside the parentheses are part of the query binding syntax — this separates input from output parameters and took some getting used to coming from pure Prolog.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="divider"></div>
+
+      <!-- MD panel -->
+      <div class="panel" id="md-panel">
+        <div id="md-panel-body">
+<div class="md-h1"># Backward Chaining emerges in Drools</div>
+<div class="md-p" style="color:#8b949e;font-size:10px;margin-bottom:12px">date: 2011-04-18 · author: Mark Proctor · tags: Drools, BackwardChaining</div>
+
+<div class="md-p">Drools 5.2 introduces proper backward chaining support, allowing rules to derive facts by querying for them rather than asserting them reactively. This is a significant step toward full Prolog-style logic programming within the RETE network.</div>
+
+<div class="md-p">To illustrate the concept, I recorded a short walkthrough of the new query syntax and how it interacts with the working memory:</div>
+
+<div class="md-figure md-figure-yt">
+<div style="color:#58a6ff;font-size:10px;margin-bottom:4px">✦ youtube embed</div>
+<span class="md-tag">{{&lt; youtube</span> <span class="md-attr">id</span>=<span class="md-val">"dQw4BC9a-RI"</span> <span class="md-tag">&gt;}}</span>
+<div style="color:#484f58;font-size:10px;margin-top:4px;font-style:italic">caption: "▶ Watch on YouTube — Drools Backward Chaining Demo (14:32)"</div>
+</div>
+
+<div class="md-p">The new `query` keyword in DRL lets you define named queries that can be called from Java or from within rules themselves. Here's the essential pattern using the family relationship example from the test suite:</div>
+
+<div class="md-figure md-figure-gist">
+<div style="color:#3fb950;font-size:10px;margin-bottom:6px">✦ gist inlined · gist:mproctor/3a8f72c</div>
+<div class="md-code-block"><span class="cm">// Drools backward chaining query example</span>
+<span class="kw">query</span> isContainedIn( String x, String y )
+  Location( x, y; )
+  <span class="kw">or</span>
+  ( Location( x, z; ) <span class="kw">and</span> isContainedIn( z, y; ) )
+<span class="kw">end</span>
+
+<span class="kw">rule</span> <span class="st">"Find keys"</span>
+  <span class="kw">when</span>
+    isContainedIn( <span class="st">"key"</span>, <span class="st">"office"</span>; )
+  <span class="kw">then</span>
+    System.out.println( <span class="st">"key is in office"</span> );
+<span class="kw">end</span></div>
+</div>
+
+<div class="md-p">Notice that the semicolons inside the parentheses are part of the query binding syntax — this separates input from output parameters and took some getting used to coming from pure Prolog.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

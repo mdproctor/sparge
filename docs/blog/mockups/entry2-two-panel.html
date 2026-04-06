@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1400">
+<title>Sparge — Two Panel Reviewer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; height: 900px; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Top bar */
+  #topbar { background: #161b22; border-bottom: 1px solid #30363d; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  #topbar .logo { font-weight: 700; font-size: 15px; color: #58a6ff; display: flex; align-items: center; gap: 6px; }
+  #topbar .logo svg { width: 20px; height: 20px; }
+  .topbar-sep { width: 1px; height: 20px; background: #30363d; }
+
+  /* Main layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Nav sidebar */
+  #nav { width: 252px; background: #161b22; border-right: 1px solid #30363d; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  #nav-stats { padding: 10px 12px; border-bottom: 1px solid #30363d; }
+  #nav-stats h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #58a6ff; margin-bottom: 8px; font-weight: 600; }
+  .srow { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
+  .sl { color: #8b949e; }
+  .sv { font-weight: 600; }
+  .sv.o { color: #e3b341; }
+  .sv.b { color: #58a6ff; }
+  .sv.g { color: #3fb950; }
+  #pbar { height: 3px; background: #30363d; border-radius: 2px; margin-top: 8px; }
+  #pfill { height: 100%; width: 35%; background: #1f6feb; border-radius: 2px; }
+  #nav-filters { padding: 6px 8px; border-bottom: 1px solid #30363d; display: flex; gap: 4px; flex-wrap: wrap; }
+  .fb { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+  .fb.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  #post-list { flex: 1; overflow-y: auto; }
+  .pi { padding: 8px 12px; border-bottom: 1px solid #21262d; cursor: pointer; }
+  .pi:hover { background: #161b22; }
+  .pi.selected { background: #1c2128; border-left: 2px solid #1f6feb; }
+  .pi-title { font-size: 12px; color: #c9d1d9; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pi-meta { font-size: 10px; color: #484f58; }
+  .pi-badges { display: flex; gap: 4px; margin-top: 3px; }
+  .badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .b-warn { background: #2d1f0f; color: #e3b341; }
+  .b-ok { background: #12261e; color: #3fb950; }
+  .b-none { background: #21262d; color: #8b949e; }
+
+  /* Content area */
+  #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Action bar */
+  #post-action-bar { background: #161b22; border-bottom: 1px solid #30363d; padding: 6px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  #post-crumb { font-size: 12px; color: #c9d1d9; flex: 1; }
+  #post-crumb strong { color: #58a6ff; }
+  .sep { width: 1px; height: 18px; background: #30363d; }
+  button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 3px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+  button.success { background: #1a3a1f; border-color: #238636; color: #3fb950; }
+  button.warn { background: #2d1f0f; border-color: #9e6a03; color: #e3b341; }
+
+  /* Panel heads */
+  #panel-heads { display: flex; border-bottom: 1px solid #30363d; background: #161b22; flex-shrink: 0; }
+  .ph { flex: 1; padding: 5px 12px; font-size: 11px; color: #8b949e; border-right: 1px solid #30363d; display: flex; align-items: center; gap: 6px; }
+  .ph:last-child { border-right: none; }
+  .ph-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #2d1f0f; color: #e3b341; }
+
+  /* Panels */
+  #panels { display: flex; flex: 1; overflow: hidden; }
+  .panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  #divider { width: 4px; background: #21262d; cursor: col-resize; flex-shrink: 0; }
+
+  /* HTML panel with iframe simulation */
+  #html-panel-body { flex: 1; background: #fff; overflow: hidden; position: relative; }
+  .fake-article { padding: 24px; font-family: Georgia, serif; color: #333; font-size: 14px; line-height: 1.7; height: 100%; overflow: hidden; }
+  .fake-article h1 { font-size: 22px; color: #0d1117; margin-bottom: 12px; font-family: sans-serif; }
+  .fake-article p { margin-bottom: 12px; }
+  .fake-article a { color: #0969da; text-decoration: none; }
+
+  /* Issue highlights */
+  .issue-highlight { position: relative; display: inline; }
+  .issue-highlight.error { outline: 2px solid #f85149; background: rgba(248,81,73,0.08); }
+  .issue-highlight.warn { outline: 2px solid #e3b341; background: rgba(227,179,65,0.08); }
+  .issue-label { position: absolute; top: -18px; left: 0; background: #f85149; color: #fff; font-size: 9px; font-family: sans-serif; padding: 1px 4px; border-radius: 2px; white-space: nowrap; z-index: 10; }
+  .issue-label.warn { background: #9e6a03; }
+  .broken-img { display: inline-flex; align-items: center; justify-content: center; width: 200px; height: 90px; background: #f6f8fa; border: 1px solid #d0d7de; color: #8b949e; font-size: 11px; font-family: sans-serif; border-radius: 4px; position: relative; }
+
+  /* MD panel */
+  #md-panel-body { flex: 1; background: #0d1117; overflow-y: auto; padding: 16px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; line-height: 1.6; color: #c9d1d9; }
+  .md-h1 { color: #58a6ff; font-size: 16px; font-weight: bold; margin-bottom: 12px; }
+  .md-h2 { color: #79c0ff; font-size: 13px; font-weight: bold; margin: 14px 0 8px; }
+  .md-p { margin-bottom: 10px; }
+  .md-link { color: #58a6ff; }
+  .md-missing { color: #f85149; font-style: italic; font-size: 11px; margin: 8px 0; padding: 4px 8px; background: #2d0f0f; border-left: 2px solid #f85149; }
+  .md-code { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px 10px; margin: 8px 0; font-size: 11px; color: #a5d6ff; }
+
+  /* Issue panel */
+  #issue-panel { width: 220px; background: #161b22; border-left: 1px solid #30363d; flex-shrink: 0; overflow-y: auto; }
+  #issue-panel h4 { padding: 8px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; border-bottom: 1px solid #30363d; }
+  .issue-row { padding: 6px 10px; border-bottom: 1px solid #21262d; font-size: 10px; }
+  .issue-row .i-type { font-weight: 600; margin-bottom: 2px; }
+  .issue-row .i-type.error { color: #f85149; }
+  .issue-row .i-type.warn { color: #e3b341; }
+  .issue-row .i-detail { color: #8b949e; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 48 48" fill="none"><path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/><path d="M28,8 C28,8 18,28 18,36 A10,10 0 0,0 38,36 C38,28 28,8 28,8Z" fill="#388bfd"/><path d="M38,2 C38,2 34,10 34,13 A4,4 0 0,0 42,13 C42,10 38,2 38,2Z" fill="#79c0ff"/></svg>
+    Sparge
+  </div>
+  <div class="topbar-sep"></div>
+  <span style="font-size:11px;color:#8b949e">KIE Blog — Mark Proctor</span>
+</div>
+
+<div id="main">
+  <!-- Nav -->
+  <div id="nav">
+    <div id="nav-stats">
+      <h3>KIE Blog — Mark Proctor</h3>
+      <div class="srow"><span class="sl">Total</span><span class="sv">577</span></div>
+      <div class="srow"><span class="sl">HTML issues</span><span class="sv o">214</span></div>
+      <div class="srow"><span class="sl">MD generated</span><span class="sv b">31</span></div>
+      <div class="srow"><span class="sl">MD issues</span><span class="sv o">1</span></div>
+      <div class="srow"><span class="sl">Reviewed</span><span class="sv g">18</span></div>
+      <div id="pbar"><div id="pfill"></div></div>
+    </div>
+    <div id="nav-filters">
+      <button class="fb active">All</button>
+      <button class="fb">HTML⚠</button>
+      <button class="fb">MD⚠</button>
+      <button class="fb">Stale</button>
+      <button class="fb">No MD</button>
+    </div>
+    <div id="post-list">
+      <div class="pi selected">
+        <div class="pi-title">What is a Rule Engine</div>
+        <div class="pi-meta">2006-05-31</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 3 HTML</span><span class="badge b-ok">✓ HTML</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Rule Execution Flow with a Production Rule System</div>
+        <div class="pi-meta">2006-06-02</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 1 HTML</span><span class="badge b-none">○ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Real World Rule Engines</div>
+        <div class="pi-meta">2006-06-20</div>
+        <div class="pi-badges"><span class="badge b-ok">✓ HTML</span><span class="badge b-ok">✓ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Why Java Code is Bad for Rules</div>
+        <div class="pi-meta">2006-07-10</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 2 HTML</span><span class="badge b-none">○ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Rete with Lazy Joins</div>
+        <div class="pi-meta">2006-11-05</div>
+        <div class="pi-badges"><span class="badge b-ok">✓ HTML</span><span class="badge b-ok">✓ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">JBoss Rules Server</div>
+        <div class="pi-meta">2006-10-10</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 1 HTML</span><span class="badge b-none">○ MD</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Beyond ORM</div>
+        <div class="pi-meta">2006-10-22</div>
+        <div class="pi-badges"><span class="badge b-ok">✓ HTML</span><span class="badge b-none">○ MD</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+    <div id="post-action-bar">
+      <div id="post-crumb"><strong>What is a Rule Engine</strong> <span style="color:#8b949e">· 2006-05-31 · Mark Proctor</span></div>
+      <div class="sep"></div>
+      <button>🔍 Scan</button>
+      <button class="success">↺ Generate MD</button>
+      <button>✓ Validate MD</button>
+      <button>✓ Reviewed</button>
+      <button>🚩 Flag</button>
+      <div class="sep"></div>
+      <button class="warn">⚡ Issues</button>
+      <button class="success" style="font-size:10px;padding:2px 7px">⟺ Sync</button>
+    </div>
+
+    <div id="panel-heads">
+      <div class="ph">Original Archive HTML <span class="ph-badge">⚠ 3</span></div>
+      <div class="ph">Converted Markdown <span class="ph-badge" style="background:#12261e;color:#3fb950">✓ clean</span></div>
+    </div>
+
+    <div id="panels">
+      <!-- HTML panel -->
+      <div class="panel" id="html-panel">
+        <div id="html-panel-body">
+          <div class="fake-article">
+            <h1>What is a Rule Engine</h1>
+            <p>Drools is a <a href="#">Rule Engine</a> but it is more correctly classified as a <a href="#">Production Rule System</a>. The term "Production Rule" originates from <a href="#">formal grammar</a> – where it is described as "an abstract structure that describes a formal language precisely."</p>
+            <p>Production Rules is a Rule Based approach to implementing an Expert System and is considered "applied artificial intelligence". The term Rule Engine is quite ambiguous in that it can be any system that uses rules, in any form, that can be applied to data to produce outcomes.</p>
+            <p>
+              <span class="issue-highlight error" style="display:block;margin:8px 0">
+                <span class="issue-label">missing image</span>
+                <span class="broken-img">🖼 img/rete-diagram.png<br><span style="font-size:9px;margin-top:2px">file not found on disk</span></span>
+              </span>
+            </p>
+            <p>A Production Rule System is <a href="#">turing complete</a> with a focus on <a href="#">knowledge representation</a> to express <a href="#">propositional</a> and <a href="#">first order logic</a> in a concise, non ambiguous and declarative manner.</p>
+            <p>
+              <span class="issue-highlight warn">The brain of a Production Rules System is an <a href="#">Inference Engine</a> that is able to scale to a large number of rules and facts</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div id="divider"></div>
+
+      <!-- MD panel -->
+      <div class="panel" id="md-panel">
+        <div id="md-panel-body">
+          <div class="md-h1">## What is a Rule Engine</div>
+          <div style="font-size:10px;color:#484f58;margin-bottom:12px">tags: rules, workflow · author: Mark Proctor · date: 2006-05-31</div>
+          <div class="md-p">Drools is a [Rule Engine](http://en.wikipedia.org/wiki/Rule_engine) but it is more correctly classified as a [Production Rule System](http://www.dbmi.columbia.edu/homepages/wandong/KR/krproductionrule.html). The term "Production Rule" originates from [formal grammar](http://en.wikipedia.org/wiki/Formal_grammar).</div>
+          <div class="md-p">Production Rules is a Rule Based approach to implementing an Expert System and is considered "applied artificial intelligence". The term Rule Engine is quite ambiguous in that it can be any system that uses rules, in any form, that can be applied to data to produce outcomes.</div>
+          <div class="md-missing">⚠ **Missing image** — img/rete-diagram.png (file not found on disk)</div>
+          <div class="md-p">A Production Rule System is [turing complete](http://en.wikipedia.org/wiki/Turing_complete) with a focus on [knowledge representation](http://en.wikipedia.org/wiki/Knowledge_representation) to express [propositional](http://en.wikipedia.org/wiki/Propositional_logic) and [first order logic](http://en.wikipedia.org/wiki/First_order_logic) in a concise, non ambiguous and declarative manner.</div>
+          <div class="md-p">The brain of a Production Rules System is an [Inference Engine](http://en.wikipedia.org/wiki/Inference_engine) that is able to scale to a large number of rules and facts; the engine is able to schedule many rules through the use of a "conflict resolution" strategy.</div>
+          <div class="md-h2">## Forward and Backward Chaining</div>
+          <div class="md-p">There are [two methods of execution for Rule-Based Systems](http://ai-depot.com/Tutorial/RuleBased-Methods.html) — [Forward Chaining](http://en.wikipedia.org/wiki/Forward_chaining) and [Backward Chaining](http://en.wikipedia.org/wiki/Backward_chaining).</div>
+        </div>
+      </div>
+
+      <!-- Issue panel -->
+      <div id="issue-panel">
+        <h4>Issues (3)</h4>
+        <div class="issue-row">
+          <div class="i-type error">missing_local_image</div>
+          <div class="i-detail">img/rete-diagram.png — file not found on disk</div>
+        </div>
+        <div class="issue-row">
+          <div class="i-type warn">external_image</div>
+          <div class="i-detail">img still pointing to blog.kie.org/wp-content/...</div>
+        </div>
+        <div class="issue-row">
+          <div class="i-type warn">word_count_low</div>
+          <div class="i-detail">MD word count 312 vs HTML 489 — possible content drop</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

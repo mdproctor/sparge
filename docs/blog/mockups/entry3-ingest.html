@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1400">
+<title>Sparge — Ingest Pipeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; height: 900px; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Top bar */
+  #topbar { background: #161b22; border-bottom: 1px solid #30363d; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  #topbar .logo { font-weight: 700; font-size: 15px; color: #58a6ff; display: flex; align-items: center; gap: 6px; }
+  #topbar .logo svg { width: 20px; height: 20px; }
+  .topbar-sep { width: 1px; height: 20px; background: #30363d; }
+
+  /* Main layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Nav sidebar */
+  #nav { width: 252px; background: #161b22; border-right: 1px solid #30363d; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  #nav-stats { padding: 10px 12px; border-bottom: 1px solid #30363d; }
+  #nav-stats h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #58a6ff; margin-bottom: 8px; font-weight: 600; }
+  .srow { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
+  .sl { color: #8b949e; }
+  .sv { font-weight: 600; }
+  .sv.o { color: #e3b341; }
+  .sv.b { color: #58a6ff; }
+  .sv.g { color: #3fb950; }
+  #pbar { height: 3px; background: #30363d; border-radius: 2px; margin-top: 8px; }
+  #pfill { height: 100%; width: 5%; background: #1f6feb; border-radius: 2px; }
+  #nav-filters { padding: 6px 8px; border-bottom: 1px solid #30363d; display: flex; gap: 4px; flex-wrap: wrap; }
+  .fb { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 2px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+  .fb.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  #post-list { flex: 1; overflow-y: auto; }
+  .pi { padding: 8px 12px; border-bottom: 1px solid #21262d; cursor: pointer; }
+  .pi.selected { background: #1c2128; border-left: 2px solid #1f6feb; }
+  .pi-title { font-size: 12px; color: #c9d1d9; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pi-meta { font-size: 10px; color: #484f58; }
+  .pi-badges { display: flex; gap: 4px; margin-top: 3px; }
+  .badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .b-warn { background: #2d1f0f; color: #e3b341; }
+  .b-ok { background: #12261e; color: #3fb950; }
+  .b-none { background: #21262d; color: #8b949e; }
+  .b-queue { background: #1c2a4a; color: #58a6ff; }
+
+  /* Content area */
+  #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Tab bar */
+  #tab-bar { background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; padding: 0 12px; gap: 0; flex-shrink: 0; }
+  .tab { padding: 8px 16px; font-size: 12px; color: #8b949e; border-bottom: 2px solid transparent; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+  .tab.active { color: #c9d1d9; border-bottom-color: #58a6ff; }
+  .tab svg { opacity: 0.6; }
+
+  /* Ingest panel */
+  #ingest-area { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* Two column layout */
+  #ingest-body { display: flex; flex: 1; gap: 0; overflow: hidden; }
+  #ingest-left { width: 440px; border-right: 1px solid #30363d; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  #ingest-right { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Source config section */
+  .section { padding: 16px 20px; border-bottom: 1px solid #30363d; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; font-weight: 600; margin-bottom: 12px; }
+
+  /* URL input row */
+  .url-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .url-input { flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; color: #c9d1d9; font-size: 12px; font-family: 'SFMono-Regular', Consolas, monospace; }
+  .url-input:focus { outline: none; border-color: #58a6ff; }
+
+  /* Platform badge */
+  .platform-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 12px; }
+  .platform-icon { width: 20px; height: 20px; background: #21262d; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .platform-name { font-size: 12px; color: #c9d1d9; font-weight: 600; flex: 1; }
+  .platform-check { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: #12261e; color: #3fb950; font-weight: 600; }
+
+  /* Discover button */
+  .btn-primary { background: #1f6feb; border: 1px solid #388bfd; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; text-align: center; }
+  .btn-blue-lg { background: #1f6feb; border: 1px solid #388bfd; color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-secondary { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+  /* Discovery result info */
+  .discovery-result { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #12261e; border: 1px solid #2ea043; border-radius: 6px; margin-bottom: 12px; font-size: 11px; color: #3fb950; }
+  .discovery-result span { color: #c9d1d9; }
+
+  /* Options */
+  .option-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+  .option-row input[type="checkbox"] { accent-color: #1f6feb; }
+  .option-label { color: #8b949e; }
+
+  /* Post list in ingest right panel */
+  #ingest-right-head { padding: 10px 16px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 8px; flex-shrink: 0; background: #161b22; }
+  #ingest-right-head .count-badge { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .check-all-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8b949e; flex: 1; }
+
+  #discovered-list { flex: 1; overflow-y: auto; }
+  .dl-item { display: flex; align-items: center; gap: 10px; padding: 7px 16px; border-bottom: 1px solid #21262d; font-size: 11px; }
+  .dl-item input[type="checkbox"] { accent-color: #1f6feb; flex-shrink: 0; }
+  .dl-url { color: #58a6ff; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; flex: 1; }
+  .dl-date { color: #484f58; font-size: 10px; flex-shrink: 0; width: 80px; text-align: right; }
+
+  /* Progress footer */
+  #ingest-footer { background: #161b22; border-top: 1px solid #30363d; padding: 12px 16px; flex-shrink: 0; }
+  #ingest-footer-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .progress-label { font-size: 12px; color: #c9d1d9; flex: 1; }
+  .progress-label strong { color: #58a6ff; }
+  .progress-pct { font-size: 11px; color: #8b949e; }
+  #prog-bar-wrap { height: 6px; background: #21262d; border-radius: 3px; margin-bottom: 8px; }
+  #prog-bar-fill { height: 100%; width: 54%; background: linear-gradient(90deg, #1f6feb, #388bfd); border-radius: 3px; }
+  .progress-sub { font-size: 10px; color: #484f58; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 48 48" fill="none"><path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/><path d="M28,8 C28,8 18,28 18,36 A10,10 0 0,0 38,36 C38,28 28,8 28,8Z" fill="#388bfd"/><path d="M38,2 C38,2 34,10 34,13 A4,4 0 0,0 42,13 C42,10 38,2 38,2Z" fill="#79c0ff"/></svg>
+    Sparge
+  </div>
+  <div class="topbar-sep"></div>
+  <span style="font-size:11px;color:#8b949e">KIE Blog — Mark Proctor</span>
+  <div style="flex:1"></div>
+  <span style="font-size:10px;color:#484f58">v0.4.1</span>
+</div>
+
+<div id="main">
+  <!-- Nav sidebar -->
+  <div id="nav">
+    <div id="nav-stats">
+      <h3>KIE Blog — Mark Proctor</h3>
+      <div class="srow"><span class="sl">Total posts</span><span class="sv">577</span></div>
+      <div class="srow"><span class="sl">HTML issues</span><span class="sv o">214</span></div>
+      <div class="srow"><span class="sl">MD generated</span><span class="sv b">31</span></div>
+      <div class="srow"><span class="sl">Reviewed</span><span class="sv g">0</span></div>
+      <div id="pbar"><div id="pfill"></div></div>
+    </div>
+    <div id="nav-filters">
+      <button class="fb">All</button>
+      <button class="fb">HTML⚠</button>
+      <button class="fb">No MD</button>
+      <button class="fb">Stale</button>
+    </div>
+    <div id="post-list">
+      <div class="pi selected">
+        <div class="pi-title">What is a Rule Engine</div>
+        <div class="pi-meta">2006-05-31</div>
+        <div class="pi-badges"><span class="badge b-queue">⏳ Queued</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Rule Execution Flow</div>
+        <div class="pi-meta">2006-06-02</div>
+        <div class="pi-badges"><span class="badge b-queue">⏳ Queued</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Real World Rule Engines</div>
+        <div class="pi-meta">2006-06-20</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 2 HTML</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Why Java Code is Bad for Rules</div>
+        <div class="pi-meta">2006-07-10</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 3 HTML</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">Rete with Lazy Joins</div>
+        <div class="pi-meta">2006-11-05</div>
+        <div class="pi-badges"><span class="badge b-ok">✓ Clean</span></div>
+      </div>
+      <div class="pi">
+        <div class="pi-title">JBoss Rules Server</div>
+        <div class="pi-meta">2006-10-10</div>
+        <div class="pi-badges"><span class="badge b-warn">⚠ 1 HTML</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+    <div id="tab-bar">
+      <div class="tab active">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588z"/></svg>
+        Ingest
+      </div>
+      <div class="tab">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M14.5 3h-13a.5.5 0 0 0 0 1h13a.5.5 0 0 0 0-1zM14.5 7h-13a.5.5 0 0 0 0 1h13a.5.5 0 0 0 0-1zM14.5 11h-13a.5.5 0 0 0 0 1h13a.5.5 0 0 0 0-1z"/></svg>
+        Review
+      </div>
+      <div class="tab">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5L9.5 0zm0 1v2a1 1 0 0 0 1 1h2L9.5 1z"/></svg>
+        Export
+      </div>
+    </div>
+
+    <div id="ingest-area">
+      <div id="ingest-body">
+
+        <!-- Left: Source config -->
+        <div id="ingest-left">
+
+          <div class="section">
+            <div class="section-title">Source URL</div>
+            <div class="url-row">
+              <input class="url-input" type="text" value="https://blog.kie.org" readonly>
+              <button class="btn-secondary" style="flex-shrink:0">Change</button>
+            </div>
+            <div class="platform-row">
+              <div class="platform-icon">W</div>
+              <span class="platform-name">WordPress</span>
+              <span class="platform-check">✓ Detected</span>
+            </div>
+            <button class="btn-primary" style="margin-bottom:10px;opacity:0.6;cursor:default">🔍 Discover posts</button>
+            <div class="discovery-result">
+              <span>✓</span>
+              <span>Discovered <strong style="color:#3fb950">577 posts</strong> via WordPress REST API</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Ingest Options</div>
+            <div class="option-row">
+              <input type="checkbox" checked id="opt1">
+              <label for="opt1" class="option-label">Download images locally</label>
+            </div>
+            <div class="option-row">
+              <input type="checkbox" checked id="opt2">
+              <label for="opt2" class="option-label">Fetch embedded Gists</label>
+            </div>
+            <div class="option-row">
+              <input type="checkbox" checked id="opt3">
+              <label for="opt3" class="option-label">Resolve YouTube embeds</label>
+            </div>
+            <div class="option-row">
+              <input type="checkbox" id="opt4">
+              <label for="opt4" class="option-label">Strip sidebar / nav content</label>
+            </div>
+            <div class="option-row">
+              <input type="checkbox" checked id="opt5">
+              <label for="opt5" class="option-label">Preserve original post slugs</label>
+            </div>
+          </div>
+
+          <div class="section" style="border-bottom:none">
+            <div class="section-title">Progress</div>
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span style="font-size:12px;color:#c9d1d9">Ingesting posts…</span>
+                <span style="font-size:11px;color:#58a6ff;font-weight:600">312 / 577</span>
+              </div>
+              <div id="prog-bar-wrap"><div id="prog-bar-fill"></div></div>
+              <div class="progress-sub">
+                <span>54% complete</span>
+                <span>~4 min remaining</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;font-size:10px;color:#8b949e;margin-bottom:14px">
+              <span style="padding:2px 8px;background:#12261e;border-radius:10px;color:#3fb950">✓ 298 saved</span>
+              <span style="padding:2px 8px;background:#2d1f0f;border-radius:10px;color:#e3b341">⚠ 14 warned</span>
+              <span style="padding:2px 8px;background:#21262d;border-radius:10px;color:#8b949e">○ 265 queued</span>
+            </div>
+            <button class="btn-blue-lg" style="opacity:0.5;cursor:default">
+              ⏸ Pause ingestion
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Discovered post list -->
+        <div id="ingest-right">
+          <div id="ingest-right-head">
+            <div class="check-all-row">
+              <input type="checkbox" checked id="checkall">
+              <label for="checkall" style="color:#8b949e;font-size:11px">Select all</label>
+            </div>
+            <span class="count-badge">577 discovered</span>
+          </div>
+          <div id="discovered-list">
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/05/what-is-a-rule-engine/</span>
+              <span class="dl-date">2006-05-31</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/06/rule-execution-flow/</span>
+              <span class="dl-date">2006-06-02</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/06/real-world-rule-engines/</span>
+              <span class="dl-date">2006-06-20</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/07/why-java-code-is-bad-for-rules/</span>
+              <span class="dl-date">2006-07-10</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/10/jboss-rules-server/</span>
+              <span class="dl-date">2006-10-10</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/10/beyond-orm/</span>
+              <span class="dl-date">2006-10-22</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2006/11/rete-with-lazy-joins/</span>
+              <span class="dl-date">2006-11-05</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2007/02/drools-jsr-94-support/</span>
+              <span class="dl-date">2007-02-14</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2007/03/drools-and-esb-integration/</span>
+              <span class="dl-date">2007-03-08</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2007/06/drools-4-released/</span>
+              <span class="dl-date">2007-06-18</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2007/09/truth-maintenance-in-drools/</span>
+              <span class="dl-date">2007-09-22</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2008/01/event-driven-rules-in-drools-fusion/</span>
+              <span class="dl-date">2008-01-10</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2008/04/complex-event-processing-with-drools/</span>
+              <span class="dl-date">2008-04-03</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2008/07/drools-solver-planning/</span>
+              <span class="dl-date">2008-07-29</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2009/02/drools-5-expert-flow-guvnor/</span>
+              <span class="dl-date">2009-02-11</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2009/05/the-rule-language-evolution/</span>
+              <span class="dl-date">2009-05-30</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2010/01/unified-kie-api/</span>
+              <span class="dl-date">2010-01-14</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2010/08/drools-fusion-temporal-operators/</span>
+              <span class="dl-date">2010-08-20</span>
+            </div>
+            <div class="dl-item">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2011/04/backward-chaining-emerges-in-drools/</span>
+              <span class="dl-date">2011-04-18</span>
+            </div>
+            <div class="dl-item" style="opacity:0.5">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2011/09/drools-planner-cloud-optimization/</span>
+              <span class="dl-date">2011-09-05</span>
+            </div>
+            <div class="dl-item" style="opacity:0.4">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2012/01/jbpm5-human-tasks/</span>
+              <span class="dl-date">2012-01-17</span>
+            </div>
+            <div class="dl-item" style="opacity:0.3">
+              <input type="checkbox" checked>
+              <span class="dl-url">/2012/06/kie-workbench-6/</span>
+              <span class="dl-date">2012-06-04</span>
+            </div>
+            <div class="dl-item" style="color:#484f58">
+              <input type="checkbox" checked>
+              <span class="dl-url" style="color:#484f58">/2013/03/drools-6-alpha/</span>
+              <span class="dl-date">2013-03-22</span>
+            </div>
+            <div class="dl-item" style="color:#484f58">
+              <input type="checkbox" checked>
+              <span class="dl-url" style="color:#484f58">/2013/11/drools-6-final-release/</span>
+              <span class="dl-date">2013-11-08</span>
+            </div>
+          </div>
+          <!-- Bottom action bar -->
+          <div style="padding:12px 16px;border-top:1px solid #30363d;background:#161b22;display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:11px;color:#8b949e">577 of 577 selected</span>
+            <div style="flex:1"></div>
+            <button style="background:#21262d;border:1px solid #30363d;color:#8b949e;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer">Cancel</button>
+            <button class="btn-blue-lg" style="padding:6px 18px;font-size:12px">⬇ Ingest selected (577)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
