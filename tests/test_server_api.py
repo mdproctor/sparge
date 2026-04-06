@@ -405,4 +405,78 @@ class TestSaveHtmlEndpoint:
         )
 
 
+class TestConsolidateEndpoint:
+    """POST /api/consolidate runs content-hash deduplication across all post assets."""
+
+    def test_consolidate_returns_200_with_result(self, server):
+        """Endpoint returns 200 and a result dict with expected keys."""
+        r = SESSION_HTTP.post(f'{API}/consolidate')
+        assert r.status_code == 200, f'Expected 200, got {r.status_code}: {r.text}'
+        data = r.json()
+        assert 'promoted' in data, 'Result must include promoted count'
+        assert 'updated_html' in data, 'Result must include updated_html count'
+        assert 'duplicates' in data, 'Result must include duplicates list'
+
+    def test_consolidate_promoted_is_int(self, server):
+        """promoted field is a non-negative integer."""
+        r = SESSION_HTTP.post(f'{API}/consolidate')
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data['promoted'], int)
+        assert data['promoted'] >= 0
+
+    def test_consolidate_updated_html_is_int(self, server):
+        """updated_html field is a non-negative integer."""
+        r = SESSION_HTTP.post(f'{API}/consolidate')
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data['updated_html'], int)
+        assert data['updated_html'] >= 0
+
+    def test_consolidate_duplicates_is_list(self, server):
+        """duplicates field is a list."""
+        r = SESSION_HTTP.post(f'{API}/consolidate')
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data['duplicates'], list)
+
+    def test_consolidate_is_idempotent(self, server):
+        """Running consolidate twice in a row is safe — second run promotes nothing new."""
+        r1 = SESSION_HTTP.post(f'{API}/consolidate')
+        r2 = SESSION_HTTP.post(f'{API}/consolidate')
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        # Second run should promote 0 (everything already promoted or no duplicates)
+        d2 = r2.json()
+        assert d2['promoted'] == 0, \
+            f'Second consolidate run should promote 0, got {d2["promoted"]}'
+
+    def test_consolidate_requires_active_project(self, server, tmp_path):
+        """Endpoint works correctly with the active project and returns structured data."""
+        # Activate a fresh empty project to confirm endpoint handles it gracefully
+        proj_name = f'consolidate-test-{uuid.uuid4().hex[:6]}'
+        r = SESSION_HTTP.post(f'{API}/projects', json={
+            'name': proj_name,
+            'serve_root': str(tmp_path),
+            'posts_dir': 'posts',
+            'assets_dir': 'assets',
+            'md_dir': 'md',
+        })
+        assert r.status_code == 200
+        proj_id = r.json()['id']
+        SESSION_HTTP.post(f'{API}/projects/{proj_id}/activate')
+
+        # Consolidate on empty project — should return zeros, not error
+        r = SESSION_HTTP.post(f'{API}/consolidate')
+        assert r.status_code == 200
+        data = r.json()
+        assert data['promoted'] == 0
+        assert data['updated_html'] == 0
+
+        _cleanup_project(proj_id)
+
+        # Re-activate the real project
+        SESSION_HTTP.post(f'{API}/projects/kie-mark-proctor/activate')
+
+
 # mock_blog_server fixture is provided by conftest.py
