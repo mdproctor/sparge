@@ -171,7 +171,7 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
             f'<blockquote class="missing-image"><strong>📷 Missing image</strong> — '
             f'<em>{suggestion.strip()}</em></blockquote>'
         )
-        placeholder = BeautifulSoup(placeholder_html, 'html.parser').body.next
+        placeholder = BeautifulSoup(placeholder_html, 'html.parser').find()
         target.replace_with(placeholder)
 
     # Pass 2: standalone data: placeholder imgs (no noscript sibling)
@@ -222,7 +222,7 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
             f'<blockquote class="missing-image"><strong>📷 Missing image</strong> — '
             f'<em>{suggestion}</em></blockquote>'
         )
-        placeholder = BeautifulSoup(placeholder_html, 'html.parser').body.next
+        placeholder = BeautifulSoup(placeholder_html, 'html.parser').find()
         # Replace the outermost wrapping element (figure > a > img, or a > img, or just img)
         target = img
         if isinstance(img.parent, Tag) and img.parent.name == 'a':
@@ -257,7 +257,7 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
             f'<blockquote class="missing-image"><strong>📷 Missing image</strong> — '
             f'<em>{text[:80]}</em></blockquote>'
         )
-        placeholder = BeautifulSoup(placeholder_html, 'html.parser').body.next
+        placeholder = BeautifulSoup(placeholder_html, 'html.parser').find()
         p.insert_after(placeholder)
 
     # ── Write placeholders back to the archive HTML so both views show them ──────
@@ -290,7 +290,7 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         key = f'@@CODEBLOCK_{len(code_blocks):03d}@@'
         code_blocks[key] = (lang or '', code_text)
         from bs4 import BeautifulSoup as _BS
-        repl = _BS(f'<p>{key}</p>', 'html.parser').body.next
+        repl = _BS(f'<p>{key}</p>', 'html.parser').find()
         pre.replace_with(repl)
 
     # Convert to Markdown
