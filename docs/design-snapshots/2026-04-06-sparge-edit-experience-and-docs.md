@@ -2,7 +2,7 @@
 **Date:** 2026-04-06
 **Topic:** Edit experience, content fidelity, and project documentation
 **Supersedes:** [2026-04-05-sparge-pipeline-and-storage](2026-04-05-sparge-pipeline-and-storage.md)
-**Superseded by:** *(leave blank — filled in if this snapshot is later superseded)*
+**Superseded by:** [2026-04-06-sparge-consolidation](2026-04-06-sparge-consolidation.md)
 
 ---
 
