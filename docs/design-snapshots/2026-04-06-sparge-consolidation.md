@@ -2,7 +2,7 @@
 **Date:** 2026-04-06
 **Topic:** Codebase consolidation into ~/claude/sparge
 **Supersedes:** [2026-04-06-sparge-edit-experience-and-docs](2026-04-06-sparge-edit-experience-and-docs.md)
-**Superseded by:** *(leave blank — filled in if this snapshot is later superseded)*
+**Superseded by:** [2026-04-06-canonical-paths-and-confusion](2026-04-06-canonical-paths-and-confusion.md)
 
 ---
 
