@@ -429,3 +429,85 @@ class TestSelectorGeneration:
         second_p = soup.find_all('p')[1]
         sel = _selector(second_p)
         assert 'nth-of-type(2)' in sel
+
+
+class TestMissingLocalImagesWithPostsDir:
+    """check_missing_local_images resolves assets from posts_dir, not post_path."""
+
+    def test_resolves_from_posts_dir_not_post_path(self, tmp_path):
+        """When posts_dir is given, assets are resolved relative to it —
+        not relative to the scanned file. This ensures enriched copies
+        (outside the original posts tree) resolve correctly."""
+        # Set up a realistic project layout:
+        #   serve_root/
+        #     legacy/
+        #       posts/mark-proctor/{slug}.html   <- original
+        #       assets/images/test.jpg           <- asset EXISTS here
+        #     sparge-projects/{id}/enriched/{slug}.html  <- enriched copy
+
+        serve_root = tmp_path / 'serve_root'
+        posts_dir  = serve_root / 'legacy' / 'posts' / 'mark-proctor'
+        assets_dir = serve_root / 'legacy' / 'assets' / 'images'
+        enriched_dir = tmp_path / 'sparge-projects' / 'proj' / 'enriched'
+
+        posts_dir.mkdir(parents=True)
+        assets_dir.mkdir(parents=True)
+        enriched_dir.mkdir(parents=True)
+
+        # Create an asset at the correct location
+        (assets_dir / 'test.jpg').write_bytes(b'JPEG')
+
+        html = '''<html><body><article>
+            <img src="../../assets/images/test.jpg" alt="present">
+            <img src="../../assets/images/missing.jpg" alt="absent">
+        </article></body></html>'''
+
+        # Write enriched copy — lives OUTSIDE the original posts tree
+        enriched_file = enriched_dir / 'my-post.html'
+        enriched_file.write_text(html)
+
+        from bs4 import BeautifulSoup
+        from scan_html import check_missing_local_images
+        soup = BeautifulSoup(html, 'lxml')
+        article = soup.find('article')
+
+        # WITHOUT posts_dir: resolves from enriched_dir.parent.parent.parent
+        # which is tmp_path/sparge-projects — assets not there, so BOTH flagged
+        issues_no_dir = check_missing_local_images(article, enriched_file, posts_dir=None)
+        assert len(issues_no_dir) == 2, \
+            'Without posts_dir both images appear missing (old behaviour)'
+
+        # WITH posts_dir: resolves from posts_dir.parent.parent = serve_root/legacy/
+        # test.jpg IS there, missing.jpg is not
+        issues_with_dir = check_missing_local_images(article, enriched_file, posts_dir=posts_dir)
+        assert len(issues_with_dir) == 1, \
+            'With posts_dir only the truly missing image is flagged'
+        assert 'missing.jpg' in issues_with_dir[0]['detail']
+
+    def test_scan_post_passes_posts_dir_through(self, tmp_path):
+        """scan_post() accepts posts_dir and passes it to check_missing_local_images."""
+        serve_root = tmp_path / 'serve_root'
+        posts_dir  = serve_root / 'legacy' / 'posts' / 'mark-proctor'
+        assets_dir = serve_root / 'legacy' / 'assets' / 'images'
+        enriched_dir = tmp_path / 'enriched'
+
+        posts_dir.mkdir(parents=True)
+        assets_dir.mkdir(parents=True)
+        enriched_dir.mkdir(parents=True)
+        (assets_dir / 'logo.jpg').write_bytes(b'JPEG')
+
+        html = '<html><body><article><img src="../../assets/images/logo.jpg"></article></body></html>'
+        enriched_file = enriched_dir / 'post.html'
+        enriched_file.write_text(html)
+
+        from scan_html import scan_post
+
+        # Without posts_dir: logo.jpg appears missing (wrong base)
+        issues_bad = scan_post(enriched_file, posts_dir=None)
+        missing_bad = [i for i in issues_bad if i['type'] == 'missing_local_image']
+        assert len(missing_bad) == 1
+
+        # With posts_dir: logo.jpg found correctly
+        issues_good = scan_post(enriched_file, posts_dir=posts_dir)
+        missing_good = [i for i in issues_good if i['type'] == 'missing_local_image']
+        assert len(missing_good) == 0

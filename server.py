@@ -553,7 +553,10 @@ class Handler(BaseHTTPRequestHandler):
 
             # ── Step 2: Scan the enriched HTML (or original if enrich unavailable) ──
             scan_path = enriched_path if enriched_path.exists() else html_path
-            raw_issues = _scan_post(scan_path)
+            # Pass POSTS_DIR so check_missing_local_images resolves relative
+            # asset paths correctly even when scanning an enriched copy
+            # (which lives outside the original posts tree).
+            raw_issues = _scan_post(scan_path, posts_dir=POSTS_DIR)
             issues = [
                 {'type': i['type'], 'level': i['level'],
                  'check': i['type'],

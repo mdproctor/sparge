@@ -200,14 +200,30 @@ def check_tracking_pixels(article: Tag) -> list[dict]:
     return issues
 
 
-def check_missing_local_images(article: Tag, post_path: Path) -> list[dict]:
+def check_missing_local_images(article: Tag, post_path: Path,
+                               posts_dir: Path | None = None) -> list[dict]:
     """
     Images using ../../assets/ relative paths where the file doesn't exist.
     LESSON: After extraction, some images may have been referenced but never
     actually downloaded to the assets directory.
+
+    posts_dir: the canonical posts directory from the project config
+      (e.g. legacy/posts/mark-proctor/). When provided, resolves assets
+      relative to posts_dir/../.. — i.e. the project's serve_root/legacy/
+      directory — regardless of where the HTML file being scanned is
+      physically located (original or enriched copy).
+      When None, falls back to navigating 3 levels up from post_path
+      (legacy behaviour, only correct when scanning the original file).
     """
     issues = []
-    legacy_dir = post_path.parent.parent.parent  # posts/author/ -> posts/ -> legacy/
+    if posts_dir is not None:
+        # Generic: resolve from the canonical posts location in the project
+        # ../../assets/ from posts_dir means posts_dir.parent.parent / assets/
+        base_dir = posts_dir.parent.parent
+    else:
+        # Legacy fallback: 3 levels up from the scanned file
+        # Only correct when post_path IS the original post at posts_dir/{slug}.html
+        base_dir = post_path.parent.parent.parent
     for img in article.find_all('img'):
         if not isinstance(img, Tag):
             continue
@@ -215,7 +231,7 @@ def check_missing_local_images(article: Tag, post_path: Path) -> list[dict]:
         if not src.startswith('../../assets/'):
             continue
         rel = src.replace('../../', '')
-        abs_path = legacy_dir / rel
+        abs_path = base_dir / rel
         if not abs_path.exists():
             issues.append(_issue(
                 'missing_local_image', 'ERROR',
@@ -344,10 +360,16 @@ def check_missing_image_signals(article: Tag) -> list[dict]:
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def scan_post(html_path: Path) -> list[dict]:
+def scan_post(html_path: Path, posts_dir: Path | None = None) -> list[dict]:
     """
     Scan a single archived HTML post and return all detected issues.
     Each issue is a dict with keys: type, level, detail, selector.
+
+    posts_dir: canonical posts directory from the project config.
+      Pass this when scanning an enriched copy (which lives outside the
+      original posts tree) so that relative asset paths resolve correctly.
+      When None, falls back to deriving the base from html_path (only
+      correct when scanning the original post file).
     """
     try:
         soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
@@ -361,15 +383,12 @@ def scan_post(html_path: Path) -> list[dict]:
     if not article or not isinstance(article, Tag):
         return [_issue('no_article', 'ERROR', 'No <article> or <body> element found')]
 
-    # Strip scripts/noscripts from the clone we inspect — except we DO want to check them
-    # so we work on the raw article, specific checks handle scripts/noscripts explicitly
-
     issues: list[dict] = []
     issues += check_data_placeholders(article)
     issues += check_noscript_remnants(article)
     issues += check_external_images(article)
     issues += check_tracking_pixels(article)
-    issues += check_missing_local_images(article, html_path)
+    issues += check_missing_local_images(article, html_path, posts_dir=posts_dir)
     issues += check_empty_embeds(article)
     issues += check_unreplaced_gists(article)
     issues += check_wordpress_chrome(article)
