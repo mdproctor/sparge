@@ -8,6 +8,24 @@ Regression guards for:
      (needed when converting enriched copies outside the original posts tree)
   3. Front matter fields sourced from JSON sidecar
 
+Known garbling signatures — any of these in the output is a bug:
+
+  Pattern A: 'ÃÂÃÂ' — lxml double-encoding.
+    Origin: BeautifulSoup(html, 'lxml') sees <meta charset="utf-8">, re-encodes
+    the Python str to UTF-8 bytes internally, then serialises as Latin-1.
+    U+201C (") → UTF-8 E2 80 9C → Latin-1 chars â + ctrl → re-encoded Ã¢ÂÂ
+
+  Pattern B: 'Ã¢Â' — triple-encoding (old server writing lxml output to disk).
+    Produced when Pattern A output is itself treated as a byte sequence and
+    encoded again. Seen when the old convert_post.py (lxml) wrote a garbled
+    MD file, then something re-encoded those bytes as UTF-8 again.
+    E.g. U+201C → lxml → Ã¢ÂÂ bytes → re-read as Latin-1 → re-encoded → Ã¢Â…
+
+  Pattern C: 'â€' — single Windows-1252 mismatch.
+    Produced when UTF-8 bytes are decoded as Windows-1252 and displayed as-is.
+
+  Any of these means a parser or encoding step is wrong somewhere in the pipeline.
+
 Run: python3 -m pytest tests/test_convert_post.py -v
 """
 import json
@@ -19,7 +37,29 @@ import pytest
 MIGRATOR_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(MIGRATOR_ROOT / 'scripts'))
 
-# Minimal valid sidecar — fields convert_post actually reads
+# ── Garbling signatures ───────────────────────────────────────────────────────
+
+# All known garbling patterns. Any match = encoding bug.
+GARBLING_SIGNATURES = [
+    'ÃÂÃÂ',   # Pattern A: lxml double-encoding via <meta charset> sniffing
+    'Ã¢Â',    # Pattern B: triple-encoding (lxml output re-encoded)
+    'â€',      # Pattern C: UTF-8 decoded as Windows-1252
+    'Ã¢ÂÂ',   # Pattern B variant — the exact triple-encode of left double quote
+]
+
+
+def assert_not_garbled(text: str, label: str = ''):
+    """Assert none of the known garbling signatures appear in text."""
+    prefix = f'{label}: ' if label else ''
+    for sig in GARBLING_SIGNATURES:
+        assert sig not in text, (
+            f'{prefix}Garbling pattern {repr(sig)} found in output. '
+            f'This means a parser is double-encoding non-ASCII characters. '
+            f'Ensure html.parser (not lxml) is used in convert_post.py.'
+        )
+
+
+# ── Minimal valid sidecar — fields convert_post actually reads
 MINIMAL_SIDECAR = {
     'title': 'Test Post',
     'date': '2006-05-31',
@@ -69,23 +109,20 @@ class TestNonAsciiPreservation:
     """
 
     def test_em_dash_not_garbled(self, tmp_path):
-        """Em dash U+2014 must appear in output, not as ÃÂÃÂ¢..."""
+        """Em dash U+2014 must survive, not become ÃÂÃÂ¢... or Ã¢Â..."""
         from convert_post import convert_post
         html_path, _ = _write_post(tmp_path)
         result = convert_post(html_path)
+        assert_not_garbled(result, 'em_dash_test')
         assert '\u2014' in result or '—' in result, \
-            'Em dash garbled — lxml charset sniffing bug may have regressed'
-        assert 'ÃÂÃÂ' not in result, \
-            'Double-encoding detected — lxml being used instead of html.parser'
+            'Em dash should appear in output in some form'
 
     def test_curly_quotes_not_garbled(self, tmp_path):
-        """Curly quotes U+201C/U+201D must survive."""
+        """Curly quotes U+201C/U+201D — content must be readable, not garbled."""
         from convert_post import convert_post
         html_path, _ = _write_post(tmp_path)
         result = convert_post(html_path)
-        assert 'ÃÂÃÂ' not in result
-        # Either the curly quotes survived or were converted to straight quotes
-        # — either is acceptable, garbling is not
+        assert_not_garbled(result, 'curly_quotes_test')
         assert 'Production Rule' in result
 
     def test_en_dash_not_garbled(self, tmp_path):
@@ -93,15 +130,14 @@ class TestNonAsciiPreservation:
         from convert_post import convert_post
         html_path, _ = _write_post(tmp_path)
         result = convert_post(html_path)
-        assert 'ÃÂÃÂ' not in result
+        assert_not_garbled(result, 'en_dash_test')
 
     def test_right_single_quote_not_garbled(self, tmp_path):
         """Apostrophe/right single quote U+2019 in contractions must survive."""
         from convert_post import convert_post
         html_path, _ = _write_post(tmp_path)
         result = convert_post(html_path)
-        assert 'ÃÂÃÂ' not in result
-        # "It's" should appear in some form
+        assert_not_garbled(result, 'apostrophe_test')
         assert 'considered' in result
 
     def test_meta_charset_does_not_trigger_garbling(self, tmp_path):
@@ -115,18 +151,50 @@ class TestNonAsciiPreservation:
         assert '<meta charset' in html_with_charset, 'Test requires meta charset in HTML'
         html_path, _ = _write_post(tmp_path, html_content=html_with_charset)
         result = convert_post(html_path)
-        assert 'ÃÂÃÂ' not in result, \
-            '<meta charset="utf-8"> triggered lxml garbling — html.parser fix regressed'
+        assert_not_garbled(result, 'meta_charset_test')
 
-    def test_garbling_signature_absent(self, tmp_path):
-        """The specific garbling pattern from the bug must never appear."""
+    def test_all_garbling_signatures_absent(self, tmp_path):
+        """None of the known garbling patterns must appear.
+
+        Covers Pattern A (lxml double-encode), Pattern B (triple-encode from
+        old server), and Pattern C (Windows-1252 mismatch).
+        """
         from convert_post import convert_post
         html_path, _ = _write_post(tmp_path)
         result = convert_post(html_path)
-        # This exact pattern is the lxml double-encoding signature
-        for bad in ('ÃÂÃÂ', 'Ã¢Â€', '\xc3\x82\xc3\x82'):
-            assert bad not in result, \
-                f'Garbling pattern {repr(bad)} found — html.parser fix regressed'
+        assert_not_garbled(result, 'all_signatures_test')
+
+    def test_triple_encoding_pattern_absent(self, tmp_path):
+        """Pattern B (Ã¢Â) — the triple-encoding signature — must not appear.
+
+        This was seen when the old lxml-based server wrote garbled MD to disk.
+        The garbled content (pattern A) was then re-read as bytes and re-encoded,
+        producing pattern B. Testing explicitly guards this second-order regression.
+        """
+        from convert_post import convert_post
+        html_path, _ = _write_post(tmp_path)
+        result = convert_post(html_path)
+        assert 'Ã¢Â' not in result, \
+            'Triple-encoding (pattern B) detected — old lxml garbling may have returned'
+
+    def test_real_post_not_garbled(self):
+        """Convert an actual KIE archive post and verify no garbling.
+
+        Uses the canonical regression post 'What is a Rule Engine' (2006)
+        which has curly quotes, em dashes, and en dashes throughout.
+        Skips if the legacy posts directory is not available.
+        """
+        from convert_post import convert_post
+        posts_dir = Path('/Users/mdproctor/mdproctor.github.io/legacy/posts/mark-proctor')
+        slug = '2006-05-31-what-is-a-rule-engine'
+        html_path = posts_dir / f'{slug}.html'
+        json_path = posts_dir / f'{slug}.json'
+        if not html_path.exists():
+            import pytest; pytest.skip('Legacy posts directory not available')
+        result = convert_post(html_path, json_path=json_path if json_path.exists() else None)
+        assert_not_garbled(result, 'real_post_what_is_a_rule_engine')
+        assert 'Drools' in result, 'Real post content must appear in output'
+        assert 'Rule Engine' in result or 'rule engine' in result.lower()
 
 
 # ── Unit tests — json_path parameter ──────────────────────────────────────────
@@ -300,17 +368,16 @@ class TestGenerateMdEndpoint:
         assert len(data['content']) > 100, 'Content should be non-trivial'
 
     def test_dry_run_no_garbling(self, server, post_with_non_ascii):
-        """Dry run output must not contain the lxml double-encoding signature.
+        """Dry run output must not contain any known garbling signature.
 
-        Regression: lxml was used in convert_post.py, garbling em dashes and
-        curly quotes. Fixed by switching to html.parser.
+        Regression A: lxml double-encoding via <meta charset> sniffing.
+        Regression B: triple-encoding when garbled output written/read again.
+        Regression C: Windows-1252 byte mismatch.
         """
         r = SESSION.post(f'{API}/posts/{post_with_non_ascii}/generate-md?dry=1')
         assert r.status_code == 200
         content = r.json().get('content', '')
-        assert 'ÃÂÃÂ' not in content, \
-            'Garbling detected in generated MD — lxml fix in convert_post.py may have regressed'
-        assert 'Ã¢Â€' not in content
+        assert_not_garbled(content, 'generate_md_dry_run')
 
     def test_generate_md_produces_front_matter(self, server, post_with_non_ascii):
         """Generated MD must start with YAML front matter."""
@@ -351,5 +418,4 @@ class TestGenerateMdEndpoint:
         md_file = md_dir / f'{post_with_non_ascii}.md'
         if md_file.exists():
             content = md_file.read_text(encoding='utf-8')
-            assert 'ÃÂÃÂ' not in content, \
-                'Garbling found in generated .md file on disk'
+            assert_not_garbled(content, 'md_file_on_disk')
