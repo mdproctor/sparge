@@ -1,7 +1,7 @@
 """
 Per-post state manager.
 
-State lives in sparge/state.json — one entry per post slug.
+State lives in blog-migrator/state.json — one entry per post slug.
 Each entry tracks:
   - ingested_at   : when the HTML was first seen
   - html.hash     : sha256[:12] of source HTML — changes trigger MD stale flag
@@ -69,7 +69,7 @@ def _is_stale(entry: dict) -> bool:
     return bool(generated and html_hash and md_hash and html_hash != md_hash)
 
 
-def _enrich(entry: dict) -> dict:
+def _computed(entry: dict) -> dict:
     """Add computed fields before returning to callers."""
     entry = dict(entry)
     entry['md'] = dict(entry.get('md', {}))
@@ -80,12 +80,12 @@ def _enrich(entry: dict) -> dict:
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def get_all() -> list[dict]:
-    return [_enrich(e) for e in _load().values()]
+    return [_computed(e) for e in _load().values()]
 
 
 def get(slug: str) -> dict | None:
     entry = _load().get(slug)
-    return _enrich(entry) if entry else None
+    return _computed(entry) if entry else None
 
 
 def update(slug: str, patch: dict):
@@ -127,6 +127,19 @@ def mark_md_generated(slug: str):
         'staged_at': None,
         'issues': [],
         'validated_at': None,
+    }})
+
+
+def mark_enriched(slug: str, stats: dict):
+    """Record enrichment stats for a post."""
+    update(slug, {'enriched': {
+        'generated_at': _now(),
+        'youtube_replaced':   stats.get('youtube_replaced', 0),
+        'gists_replaced':     stats.get('gists_replaced', 0),
+        'gists_failed':       stats.get('gists_failed', 0),
+        'classes_normalised': stats.get('classes_normalised', 0),
+        'languages_detected': stats.get('languages_detected', 0),
+        'embeds_wrapped':     stats.get('embeds_wrapped', 0),
     }})
 
 

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head><title>Edit Mode Unit Tests</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #0d1117; color: #c9d1d9; }
+  .pass { color: #3fb950; } .fail { color: #f85149; }
+  h2 { color: #58a6ff; margin-top: 24px; }
+  h3 { color: #79c0ff; margin: 16px 0 8px; }
+  pre#out { line-height: 1.6; }
+  .section { border-top: 1px solid #30363d; padding-top: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h2>Edit Mode Unit Tests</h2>
+<pre id="out"></pre>
+
+<!-- Mock DOM elements that the edit mode code uses -->
+<div id="nav" style="display:none"></div>
+<div id="edit-sidebar" style="display:none"></div>
+<div id="edit-sidebar-mode"></div>
+<div id="edit-sidebar-slug"></div>
+<div id="edit-sidebar-dirty" style="display:none"></div>
+<div id="orig-frame" style="display:none"></div>
+<div id="html-editor" style="display:none"></div>
+<div id="md-preview" style="display:none"></div>
+<div id="md-wrap" style="display:none"></div>
+<div id="md-empty" style="display:none"></div>
+<div id="md-editor" style="display:none"></div>
+<button id="btn-edit-html">✎ Edit HTML</button>
+<button id="btn-edit-md">✎ Edit</button>
+<button id="btn-edit-save">💾 Save</button>
+<div id="unsaved-modal" style="display:none"></div>
+<button id="um-save"></button>
+<button id="um-discard"></button>
+<button id="um-cancel"></button>
+
+<script>
+// ── Test infrastructure ────────────────────────────────────────────────────────
+let passed = 0, failed = 0, total = 0;
+const out = document.getElementById('out');
+
+function section(name) {
+  out.innerHTML += `\n<span class="section"><strong>${name}</strong></span>\n`;
+}
+
+function assert(label, actual, expected) {
+  total++;
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  out.innerHTML += `<span class="${ok?'pass':'fail'}">${ok?'✓':'✗'} ${label}`;
+  if (!ok) out.innerHTML += `\n  expected: ${JSON.stringify(expected)}\n  actual:   ${JSON.stringify(actual)}`;
+  out.innerHTML += '</span>\n';
+  ok ? passed++ : failed++;
+}
+
+function assertTrue(label, val) { assert(label, !!val, true); }
+function assertFalse(label, val) { assert(label, !!val, false); }
+
+const $ = id => document.getElementById(id);
+function visible(id) { return $( id) && $( id).style.display !== 'none'; }
+function hidden(id)  { return !$( id) || $( id).style.display === 'none'; }
+
+// ── Pure function implementations (copy from index.html) ──────────────────────
+function scrollPercent(scrollTop, scrollHeight, clientHeight) {
+  const max = scrollHeight - clientHeight;
+  return max <= 0 ? 0 : Math.min(1, Math.max(0, scrollTop / max));
+}
+function scrollFromPercent(pct, scrollHeight, clientHeight) {
+  const max = scrollHeight - clientHeight;
+  return max <= 0 ? 0 : Math.round(pct * max);
+}
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ── State machine (simplified version for testing) ────────────────────────────
+let editState = null;
+let editDirty = false;
+
+// Mock CodeMirror editor
+function makeMockEditor(initialValue = '') {
+  let value = initialValue;
+  const listeners = {};
+  return {
+    getValue: () => value,
+    setValue: (v) => { value = v; },
+    refresh: () => {},
+    getScrollInfo: () => ({ top: 0, height: 1000, clientHeight: 500 }),
+    scrollTo: () => {},
+    on: (event, fn) => { listeners[event] = fn; },
+    off: (event) => { delete listeners[event]; },
+    trigger: (event, ...args) => { if (listeners[event]) listeners[event](...args); },
+  };
+}
+
+let mockHtmlEditor = null;
+let mockMdEditor   = null;
+
+function enterReviewMode() {
+  editState = null;
+  editDirty = false;
+  $('nav').style.display = '';
+  $('edit-sidebar').style.display = 'none';
+  $('orig-frame').style.display = '';
+  $('html-editor').style.display = 'none';
+  $('md-preview').style.display = 'none';
+  $('md-wrap').style.display = '';
+  $('btn-edit-html').textContent = '✎ Edit HTML';
+  $('btn-edit-html').classList.remove('editing');
+  $('btn-edit-md').textContent = '✎ Edit';
+  $('btn-edit-md').classList.remove('editing');
+}
+
+function enterEditModeSimulated(mode, content) {
+  editState = mode;
+  editDirty = false;
+  $('nav').style.display = 'none';
+  $('edit-sidebar').style.display = 'flex';
+  $('edit-sidebar-mode').textContent = mode === 'html' ? '✎ EDITING HTML' : '✎ EDITING MD';
+  $('edit-sidebar-slug').textContent = 'test-slug';
+  $('edit-sidebar-dirty').style.display = 'none';
+  $('orig-frame').style.display = 'none';
+  $('html-editor').style.display = 'block';
+  $('md-wrap').style.display = 'none';
+  $('md-empty').style.display = 'none';
+  $('md-editor').style.display = 'none';
+  $('md-preview').style.display = 'block';
+  $('btn-edit-html').classList.toggle('editing', mode === 'html');
+  $('btn-edit-md').classList.toggle('editing', mode === 'md');
+  if (mode === 'html') {
+    mockHtmlEditor = makeMockEditor(content);
+  } else {
+    mockMdEditor = makeMockEditor(content);
+  }
+}
+
+function simulateChange(mode) {
+  editDirty = true;
+  $('edit-sidebar-dirty').style.display = 'block';
+}
+
+function simulateCancel() {
+  // Cancel = exit edit mode WITHOUT calling save
+  enterReviewMode();
+}
+
+function simulateSave(mode, newContent) {
+  // Simulate a successful save
+  const editor = mode === 'html' ? mockHtmlEditor : mockMdEditor;
+  if (editor) editor.setValue(newContent);
+  editDirty = false;
+  enterReviewMode();
+  return newContent;
+}
+
+// ── Test Suite ─────────────────────────────────────────────────────────────────
+
+// Section 1: Pure function tests
+section('1. Scroll math — pure functions');
+assert('scrollPercent: top',         scrollPercent(0,   1000, 500), 0);
+assert('scrollPercent: bottom',      scrollPercent(500, 1000, 500), 1);
+assert('scrollPercent: mid',         scrollPercent(250, 1000, 500), 0.5);
+assert('scrollPercent: no room',     scrollPercent(0,   400,  500), 0);
+assert('scrollPercent: clamped > 1', scrollPercent(999, 1000, 500), 1);
+assert('scrollPercent: clamped < 0', scrollPercent(-10, 1000, 500), 0);
+assert('scrollFromPercent: 0%',      scrollFromPercent(0,   1000, 500), 0);
+assert('scrollFromPercent: 100%',    scrollFromPercent(1,   1000, 500), 500);
+assert('scrollFromPercent: 50%',     scrollFromPercent(0.5, 1000, 500), 250);
+assert('scrollFromPercent: no room', scrollFromPercent(0.5, 400,  500), 0);
+assert('round-trip',                 scrollFromPercent(scrollPercent(123, 800, 400), 800, 400), 123);
+
+// Section 2: Panel visibility in review mode
+section('2. Review mode — panel visibility');
+enterReviewMode();
+assertTrue('nav visible in review mode',         visible('nav'));
+assertTrue('orig-frame visible in review mode',  visible('orig-frame'));
+assertTrue('md-wrap visible in review mode',     visible('md-wrap'));
+assertFalse('edit-sidebar hidden in review mode', visible('edit-sidebar'));
+assertFalse('html-editor hidden in review mode',  visible('html-editor'));
+assertFalse('md-preview hidden in review mode',   visible('md-preview'));
+assert('editState is null in review mode', editState, null);
+assert('editDirty is false in review mode', editDirty, false);
+
+// Section 3: Panel visibility in HTML edit mode
+section('3. HTML edit mode — panel visibility');
+enterReviewMode(); // reset
+enterEditModeSimulated('html', '<h1>Test</h1>');
+assert('editState is html', editState, 'html');
+assertFalse('nav hidden in HTML edit mode',      visible('nav'));
+assertTrue('edit-sidebar visible',               visible('edit-sidebar'));
+assertFalse('orig-frame hidden in edit mode',    visible('orig-frame'));
+assertTrue('html-editor visible',                visible('html-editor'));
+assertTrue('md-preview visible (live preview)',  visible('md-preview'));
+assertFalse('md-wrap hidden',                    visible('md-wrap'));
+assertFalse('md-empty hidden',                   visible('md-empty'));
+assert('edit-html button has editing class',
+  $('btn-edit-html').classList.contains('editing'), true);
+assert('edit-md button does NOT have editing class',
+  $('btn-edit-md').classList.contains('editing'), false);
+assert('edit-sidebar-mode shows HTML',
+  $('edit-sidebar-mode').textContent, '✎ EDITING HTML');
+assert('edit-sidebar-slug shows test-slug',
+  $('edit-sidebar-slug').textContent, 'test-slug');
+assertFalse('dirty indicator hidden on entry', visible('edit-sidebar-dirty'));
+
+// Section 4: Panel visibility in MD edit mode
+section('4. MD edit mode — panel visibility');
+enterReviewMode(); // reset
+enterEditModeSimulated('md', '# Test Post\n\nContent here.');
+assert('editState is md', editState, 'md');
+assertFalse('nav hidden in MD edit mode',       visible('nav'));
+assertTrue('edit-sidebar visible',              visible('edit-sidebar'));
+assertFalse('orig-frame hidden',                visible('orig-frame'));
+assertTrue('html-editor visible (CodeMirror)',  visible('html-editor'));
+assertTrue('md-preview visible',               visible('md-preview'));
+assert('edit-md button has editing class',
+  $('btn-edit-md').classList.contains('editing'), true);
+assert('edit-html button does NOT have editing class',
+  $('btn-edit-html').classList.contains('editing'), false);
+assert('edit-sidebar-mode shows MD',
+  $('edit-sidebar-mode').textContent, '✎ EDITING MD');
+
+// Section 5: Dirty flag tracking
+section('5. Dirty flag tracking');
+enterReviewMode();
+enterEditModeSimulated('html', '<p>Original</p>');
+assert('dirty is false on entry', editDirty, false);
+assertFalse('dirty indicator hidden on entry', visible('edit-sidebar-dirty'));
+
+simulateChange('html');
+assert('dirty is true after change', editDirty, true);
+assertTrue('dirty indicator visible after change', visible('edit-sidebar-dirty'));
+
+// Section 6: Cancel flow (HTML)
+section('6. HTML edit → cancel → panels restored');
+enterReviewMode();
+enterEditModeSimulated('html', '<p>Original HTML</p>');
+simulateChange('html');
+assert('in html edit mode before cancel', editState, 'html');
+assert('dirty before cancel', editDirty, true);
+
+simulateCancel();
+assert('editState null after cancel', editState, null);
+assert('editDirty false after cancel', editDirty, false);
+assertTrue('nav restored after cancel',              visible('nav'));
+assertFalse('edit-sidebar hidden after cancel',      visible('edit-sidebar'));
+assertTrue('orig-frame restored after cancel',       visible('orig-frame'));
+assertFalse('html-editor hidden after cancel',       visible('html-editor'));
+assertFalse('md-preview hidden after cancel',        visible('md-preview'));
+assertTrue('md-wrap restored after cancel',          visible('md-wrap'));
+assert('edit-html button reset',
+  $('btn-edit-html').classList.contains('editing'), false);
+assert('edit-html button text reset',
+  $('btn-edit-html').textContent, '✎ Edit HTML');
+
+// Section 7: Cancel flow (MD)
+section('7. MD edit → cancel → panels restored');
+enterReviewMode();
+enterEditModeSimulated('md', '# Test\n\nContent');
+simulateChange('md');
+simulateCancel();
+assert('editState null after MD cancel', editState, null);
+assertTrue('nav restored after MD cancel',          visible('nav'));
+assertFalse('edit-sidebar hidden after MD cancel',  visible('edit-sidebar'));
+assert('edit-md button reset',
+  $('btn-edit-md').classList.contains('editing'), false);
+
+// Section 8: Save flow (HTML)
+section('8. HTML edit → save → panels restored, content updated');
+enterReviewMode();
+const htmlOriginal = '<p>Original HTML content</p>';
+enterEditModeSimulated('html', htmlOriginal);
+simulateChange('html');
+
+const savedContent = simulateSave('html', '<p>Modified HTML content</p>');
+assert('editState null after save', editState, null);
+assert('editDirty false after save', editDirty, false);
+assertTrue('nav restored after save',              visible('nav'));
+assertFalse('edit-sidebar hidden after save',      visible('edit-sidebar'));
+assertTrue('orig-frame restored after save',       visible('orig-frame'));
+assertFalse('html-editor hidden after save',       visible('html-editor'));
+assert('editor holds saved content',
+  mockHtmlEditor.getValue(), '<p>Modified HTML content</p>');
+
+// Section 9: Save flow (MD)
+section('9. MD edit → save → panels restored, content updated');
+enterReviewMode();
+enterEditModeSimulated('md', '# Original\n\nContent');
+simulateChange('md');
+simulateSave('md', '# Modified\n\nNew content here');
+assert('editState null after MD save', editState, null);
+assert('editDirty false after MD save', editDirty, false);
+assertTrue('nav restored after MD save',          visible('nav'));
+assertFalse('edit-sidebar hidden after MD save',  visible('edit-sidebar'));
+assert('MD editor holds saved content',
+  mockMdEditor.getValue(), '# Modified\n\nNew content here');
+
+// Section 10: Toggle between HTML and MD edit modes
+section('10. Mode switching — HTML → cancel → MD → cancel');
+enterReviewMode();
+enterEditModeSimulated('html', '<p>HTML</p>');
+assert('in HTML edit mode', editState, 'html');
+simulateCancel();
+assert('back to review after HTML cancel', editState, null);
+
+enterEditModeSimulated('md', '# MD content');
+assert('in MD edit mode', editState, 'md');
+simulateCancel();
+assert('back to review after MD cancel', editState, null);
+assertTrue('nav visible after both cancels', visible('nav'));
+
+// Section 11: Re-entering edit mode after cancel preserves clean state
+section('11. Re-enter edit mode after cancel — clean state');
+enterReviewMode();
+enterEditModeSimulated('html', '<p>First entry</p>');
+simulateChange('html');
+simulateCancel();
+
+// Re-enter
+enterEditModeSimulated('html', '<p>Second entry</p>');
+assert('editDirty reset on re-entry', editDirty, false);
+assertFalse('dirty indicator hidden on re-entry', visible('edit-sidebar-dirty'));
+assert('editState is html on re-entry', editState, 'html');
+
+// ── Summary ────────────────────────────────────────────────────────────────────
+out.innerHTML += `\n<strong class="${failed?'fail':'pass'}">${passed}/${total} passed${failed?' — '+failed+' FAILED':''}</strong>`;
+</script>
+</body>
+</html>

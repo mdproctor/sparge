@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sparge</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
@@ -69,6 +68,22 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 /* ── Nav ── */
 #nav { width:252px; flex-shrink:0; background:#161b22; border-right:1px solid #30363d;
        display:flex; flex-direction:column; overflow:hidden; }
+#edit-sidebar {
+  display: none;
+  width: 252px;
+  flex-shrink: 0;
+  background: #161b22;
+  border-right: 1px solid #30363d;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+#edit-sidebar-mode { font-size:10px; color:#58a6ff; font-weight:bold; letter-spacing:.06em; text-transform:uppercase; }
+#edit-sidebar-slug { font-size:11px; color:#8b949e; word-break:break-all; line-height:1.5; }
+#edit-sidebar-dirty { font-size:10px; color:#e3b341; display:none; }
+.edit-sidebar-divider { border-top:1px solid #30363d; }
+
 #nav-stats { padding:10px 12px; border-bottom:1px solid #30363d; flex-shrink:0; }
 #nav-stats h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em;
                 color:#8b949e; margin-bottom:8px; }
@@ -230,6 +245,21 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .cfg-note { font-size:10px; color:#484f58; margin-top:3px; }
 #cfg-ftr { margin-top:auto; padding-top:16px; border-top:1px solid #30363d; display:flex; gap:8px; }
 </style>
+<!-- CodeMirror 5 — syntax-highlighted editors -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+  .CodeMirror { height: 100%; font-size: 13px; font-family: 'SFMono-Regular', Consolas, monospace; }
+  .CodeMirror-scroll { height: 100%; }
+  #md-editor, #html-editor { height: 100%; }
+</style>
 </head>
 <body>
 
@@ -254,6 +284,19 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 </div>
 
 <div id="main">
+  <!-- Edit sidebar — replaces nav in edit mode -->
+  <div id="edit-sidebar">
+    <div id="edit-sidebar-mode">✎ Editing</div>
+    <div id="edit-sidebar-slug"></div>
+    <div id="edit-sidebar-dirty">● Unsaved changes</div>
+    <div class="edit-sidebar-divider"></div>
+    <button id="btn-edit-save" onclick="saveEditContent()" class="success" style="padding:7px">💾 Save</button>
+    <button id="btn-edit-discard" onclick="discardEdit()" style="background:#2d0f0f;border-color:#f85149;color:#f85149;padding:7px">✕ Discard changes</button>
+    <div style="margin-top:auto">
+      <button onclick="exitEditMode()" style="width:100%;padding:7px">← Back to review</button>
+      <div style="font-size:10px;color:#484f58;margin-top:6px;text-align:center">Prompts if unsaved changes</div>
+    </div>
+  </div>
   <!-- Nav -->
   <div id="nav">
     <div id="nav-stats">
@@ -267,6 +310,9 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
       <div id="pbar"><div id="pfill" style="width:0%"></div></div>
     </div>
     <div id="nav-filters">
+      <select id="author-select" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:3px 6px;font-size:12px;cursor:pointer" title="Filter by author">
+        <option value="">All authors</option>
+      </select>
       <button class="fb active" onclick="setFilter(this,'all')">All</button>
       <button class="fb" onclick="setFilter(this,'html-issues')">HTML⚠</button>
       <button class="fb" onclick="setFilter(this,'md-issues')">MD⚠</button>
@@ -278,7 +324,7 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
       <button onclick="generateAll()" id="btn-gen-all" style="font-size:11px;padding:3px 8px" title="Generate MD for posts in current scope that don't have it yet">⚙ Gen scope</button>
       <button onclick="scanAll()" id="btn-scan-all" style="font-size:11px;padding:3px 8px" title="Scan HTML for all posts in current scope">🔍 Scan scope</button>
       <button onclick="validateAll()" id="btn-val-all" style="font-size:11px;padding:3px 8px" title="Validate MD for all posts in current scope that have MD">✓ Validate scope</button>
-      <button onclick="runConsolidate()" id="btn-consolidate" style="font-size:11px;padding:3px 8px;background:#1f1a00;border-color:#9e6a03;color:#e3b341" title="Hash-scan all assets, move shared ones to global/, rewrite cleaned HTML references">⟳ Consolidate</button>
+      <button onclick="consolidateAssets()" id="btn-consolidate" style="font-size:11px;padding:3px 8px" title="De-duplicate shared assets across all posts">⟳ Consolidate</button>
       <span id="gen-progress"></span>
     </div>
     <!-- Bulk staged actions — only meaningful when filtered to Staged -->
@@ -309,12 +355,10 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
         <button onclick="toggleLayout()" id="btn-layout" title="Toggle split / single panel">☰ Single</button>
       </div>
       <div id="panel-heads">
-        <div class="ph" id="ph-html-label">Cleaned HTML
+        <div class="ph">Original Archive HTML
           <span class="ph-badge" id="ph-html-badge" style="display:none"></span>
           <span class="ph-badge" id="ph-assets-badge" style="display:none"></span>
-          <button id="btn-source-view" onclick="toggleSourceView()"
-            style="margin-left:auto;background:none;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer"
-            title="Toggle between cleaned HTML and original source">⊙ Source</button>
+          <button id="btn-edit-html" onclick="toggleHtmlEditMode()" title="Edit the enriched HTML copy" style="margin-left:auto;background:none;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">✎ Edit HTML</button>
         </div>
         <div class="ph">Converted Markdown
           <span class="ph-badge" id="ph-md-badge" style="display:none"></span>
@@ -331,18 +375,14 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
         <div class="panel" id="html-panel">
           <div class="panel-body" style="overflow:hidden;display:flex;flex-direction:column">
             <iframe id="orig-frame" src="about:blank"></iframe>
+            <div id="html-editor" style="display:none;height:100%"></div>
           </div>
         </div>
         <div id="divider"></div>
         <div class="panel" id="md-panel">
           <div class="panel-body" id="md-panel-body">
-            <!-- Edit mode toolbar — shown only when editing -->
-            <div id="md-edit-bar" style="display:none;padding:6px 12px;background:#161b22;border-bottom:1px solid #30363d;display:none;align-items:center;gap:8px;flex-shrink:0">
-              <span style="font-size:11px;color:#8b949e;flex:1">Editing — changes save directly to disk</span>
-              <button onclick="saveEdit()" style="background:#1a3a1f;border-color:#238636;color:#3fb950;padding:4px 12px;font-size:12px">💾 Save</button>
-              <button onclick="cancelEdit()" style="padding:4px 12px;font-size:12px">✕ Cancel</button>
-            </div>
-            <textarea id="md-editor" style="display:none;width:100%;height:100%;background:#0d1117;color:#c9d1d9;border:none;outline:none;padding:16px;font-family:'SFMono-Regular',Consolas,monospace;font-size:13px;line-height:1.6;resize:none;box-sizing:border-box"></textarea>
+            <div id="md-editor" style="display:none;height:100%"></div>
+            <div id="md-preview" style="display:none;padding:16px 20px;overflow:auto;height:100%;box-sizing:border-box;font-family:sans-serif;font-size:14px;line-height:1.6;color:#24292e;background:#fff"></div>
             <div id="md-wrap"></div>
             <div id="md-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#8b949e;text-align:center;padding:40px">
               <div style="font-size:36px">📝</div>
@@ -464,6 +504,7 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 <script>
 const API = '';
 let allPosts = [], currentSlug = null, currentFilter = 'all', cfg = {};
+let currentAuthor = '';
 let layout = 'split', activeTab = 'orig', issuesOpen = false;
 let currentHighlightSelector = null, currentHighlightRow = null;
 
@@ -705,63 +746,265 @@ async function replaceWithNew() {
 }
 
 // ── MD edit mode ──────────────────────────────────────────────────
-let editMode = false;
+// Edit mode state
+let editState = null;   // null | 'html' | 'md'
+let editDirty = false;
+let mdEditor   = null;
+let htmlEditor = null;
 
-function toggleEditMode() {
-  if (!currentSlug) return;
-  editMode ? cancelEdit() : enterEditMode();
+function scrollPercent(scrollTop, scrollHeight, clientHeight) {
+  const max = scrollHeight - clientHeight;
+  return max <= 0 ? 0 : Math.min(1, Math.max(0, scrollTop / max));
+}
+function scrollFromPercent(pct, scrollHeight, clientHeight) {
+  const max = scrollHeight - clientHeight;
+  return max <= 0 ? 0 : Math.round(pct * max);
+}
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-async function enterEditMode() {
+async function toggleEditMode() {
   if (!currentSlug) return;
-  // Fetch raw MD
-  const p = allPosts.find(x=>x.slug===currentSlug);
-  if (!p?.md?.generated_at) return;
-  const r = await fetch(`/${cfg.output?.md_dir||'mark-proctor'}/${currentSlug}.md?v=${Date.now()}`);
-  if (!r.ok) return;
-  const raw = await r.text();
+  editState === 'md' ? await exitEditMode() : enterEditMode('md');
+}
 
-  editMode = true;
-  $('md-editor').value = raw;
-  $('md-editor').style.display = 'block';
-  $('md-edit-bar').style.display = 'flex';
+async function toggleHtmlEditMode() {
+  if (!currentSlug) return;
+  editState === 'html' ? await exitEditMode() : enterEditMode('html');
+}
+
+async function enterEditMode(mode) {
+  if (!currentSlug) return;
+
+  let raw;
+  if (mode === 'html') {
+    const r = await fetch(`/api/posts/${encodeURIComponent(currentSlug)}/html`);
+    if (!r.ok) { alert('Could not load HTML source'); return; }
+    raw = await r.text();
+  } else {
+    const p = allPosts.find(x => x.slug === currentSlug);
+    if (!p?.md?.generated_at) { alert('Generate MD first before editing'); return; }
+    const r = await fetch(`/${cfg.output?.md_dir || 'mark-proctor'}/${currentSlug}.md?v=${Date.now()}`);
+    if (!r.ok) { alert('Could not load Markdown'); return; }
+    raw = await r.text();
+  }
+
+  editState = mode;
+  editDirty = false;
+
+  // Show edit sidebar, hide nav
+  $('nav').style.display = 'none';
+  $('edit-sidebar').style.display = 'flex';
+  $('edit-sidebar-mode').textContent = mode === 'html' ? '✎ EDITING HTML' : '✎ EDITING MD';
+  $('edit-sidebar-slug').textContent = currentSlug;
+  $('edit-sidebar-dirty').style.display = 'none';
+
+  // Middle panel: CodeMirror editor (in html-panel)
+  $('orig-frame').style.display = 'none';
+  $('html-editor').style.display = 'block';
+
+  if (mode === 'html') {
+    if (!htmlEditor) {
+      htmlEditor = CodeMirror($('html-editor'), { mode:'htmlmixed', theme:'material-darker', lineNumbers:true, lineWrapping:false, value:raw });
+    } else { htmlEditor.setValue(raw); }
+    htmlEditor.refresh();
+  } else {
+    if (!mdEditor) {
+      mdEditor = CodeMirror($('html-editor'), { mode:'markdown', theme:'material-darker', lineNumbers:true, lineWrapping:true, value:raw });
+    } else { mdEditor.setValue(raw); }
+    mdEditor.refresh();
+  }
+  const activeEditor = mode === 'html' ? htmlEditor : mdEditor;
+  setupEditorLivePreview(activeEditor, mode);
+  setupEditorScrollSync(activeEditor, mode);
+
+  // Right panel: live preview (in md-panel-body)
   $('md-wrap').style.display = 'none';
   $('md-empty').style.display = 'none';
-  $('btn-edit-md').textContent = '✎ Editing';
-  $('btn-edit-md').classList.add('editing');
-  $('md-editor').focus();
+  $('md-editor').style.display = 'none';
+  $('md-preview').style.display = 'block';
+  if (mode === 'html') updateHtmlPreview(raw);
+  else updateMdPreview(raw);
+
+  // Update header buttons
+  $('btn-edit-html').textContent = mode === 'html' ? '✎ Editing HTML' : '✎ Edit HTML';
+  $('btn-edit-html').classList.toggle('editing', mode === 'html');
+  $('btn-edit-md').textContent = mode === 'md' ? '✎ Editing' : '✎ Edit';
+  $('btn-edit-md').classList.toggle('editing', mode === 'md');
 }
 
-function cancelEdit() {
-  editMode = false;
-  $('md-editor').style.display = 'none';
-  $('md-edit-bar').style.display = 'none';
+const _livePreviewDebounced = { html: null, md: null };
+
+function updateHtmlPreview(content) {
+  const prev = $('md-preview');
+  prev.innerHTML = '';
+  const fr = document.createElement('iframe');
+  fr.style.cssText = 'width:100%;height:100%;border:none;background:#fff';
+  fr.srcdoc = content;
+  prev.appendChild(fr);
+}
+
+function updateMdPreview(content) {
+  $('md-preview').innerHTML = typeof marked !== 'undefined'
+    ? marked.parse(content)
+    : '<pre>' + content + '</pre>';
+}
+
+function setupEditorLivePreview(editor, mode) {
+  if (_livePreviewDebounced[mode]) {
+    try { editor.off('change', _livePreviewDebounced[mode]); } catch(e) {}
+  }
+  const handler = debounce(() => {
+    editDirty = true;
+    $('edit-sidebar-dirty').style.display = 'block';
+    const content = editor.getValue();
+    if (mode === 'html') updateHtmlPreview(content);
+    else updateMdPreview(content);
+  }, 300);
+  _livePreviewDebounced[mode] = handler;
+  editor.on('change', handler);
+}
+
+let _syncingEdit = false;
+
+function setupEditorScrollSync(editor, mode) {
+  const prev = $('md-preview');
+
+  // Remove previous editor scroll listener for this mode to avoid accumulation
+  if (setupEditorScrollSync._handlers) {
+    const prev2 = setupEditorScrollSync._handlers[mode];
+    if (prev2) { try { editor.off('scroll', prev2); } catch(e) {} }
+  } else {
+    setupEditorScrollSync._handlers = {};
+  }
+  const editorScrollHandler = () => {
+    if (_syncingEdit) return;
+    _syncingEdit = true;
+    const info = editor.getScrollInfo();
+    const pct = scrollPercent(info.top, info.height, info.clientHeight);
+    if (mode === 'html') {
+      const fr = prev.querySelector('iframe');
+      if (fr) {
+        try {
+          const h = fr.contentDocument?.body?.scrollHeight || 0;
+          const ch = fr.clientHeight;
+          fr.contentWindow?.scrollTo(0, scrollFromPercent(pct, h, ch));
+        } catch(e) {}
+      }
+    } else {
+      prev.scrollTop = scrollFromPercent(pct, prev.scrollHeight, prev.clientHeight);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => { _syncingEdit = false; }));
+  };
+  setupEditorScrollSync._handlers[mode] = editorScrollHandler;
+  editor.on('scroll', editorScrollHandler);
+
+  prev.removeEventListener('scroll', prev._editScrollHandler);
+  prev._editScrollHandler = () => {
+    if (_syncingEdit) return;
+    _syncingEdit = true;
+    const pct = scrollPercent(prev.scrollTop, prev.scrollHeight, prev.clientHeight);
+    const info = editor.getScrollInfo();
+    editor.scrollTo(0, scrollFromPercent(pct, info.height, info.clientHeight));
+    requestAnimationFrame(() => requestAnimationFrame(() => { _syncingEdit = false; }));
+  };
+  prev.addEventListener('scroll', prev._editScrollHandler, { passive: true });
+}
+
+function exitEditModeImmediate() {
+  if (!editState) return;
+  editState = null;
+  editDirty = false;
+  $('nav').style.display = '';
+  $('edit-sidebar').style.display = 'none';
+  $('orig-frame').style.display = '';
+  $('html-editor').style.display = 'none';
+  $('md-preview').style.display = 'none';
   $('md-wrap').style.display = '';
+  $('btn-edit-html').textContent = '✎ Edit HTML';
+  $('btn-edit-html').classList.remove('editing');
   $('btn-edit-md').textContent = '✎ Edit';
   $('btn-edit-md').classList.remove('editing');
 }
 
-async function saveEdit() {
-  if (!currentSlug || !editMode) return;
-  const content = $('md-editor').value;
-  const btn = document.querySelector('#md-edit-bar button');
+async function exitEditMode() {
+  if (!editState) return;
+  if (editDirty) {
+    const choice = await promptUnsaved();
+    if (choice === 'cancel') return;
+    if (choice === 'save') { await saveEditContent(); return; }
+  }
+  exitEditModeImmediate();
+  if (currentSlug) {
+    const p = allPosts.find(x => x.slug === currentSlug);
+    if (p) { await loadMd(p); renderPanelBadges(p); }
+  }
+}
+
+async function saveEditContent() {
+  if (!editState || !currentSlug) return;
+  const btn = $('btn-edit-save');
+  const orig = btn.textContent;
   btn.textContent = '⏳ Saving…'; btn.disabled = true;
+
+  const editor = editState === 'html' ? htmlEditor : mdEditor;
+  const content = editor.getValue();
+  const url = editState === 'html'
+    ? `/api/posts/${encodeURIComponent(currentSlug)}/save-html`
+    : `/api/posts/${encodeURIComponent(currentSlug)}/save-md`;
+  const headers = editState === 'html'
+    ? { 'Content-Type': 'text/html; charset=utf-8' }
+    : { 'Content-Type': 'text/plain; charset=utf-8' };
+
   try {
-    const r = await fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/save-md`,
-      { method: 'POST', body: content });
+    const r = await fetch(url, { method: 'POST', body: content, headers });
     if (r.ok) {
-      cancelEdit();
+      editDirty = false;
+      exitEditModeImmediate();
       await reloadPost(currentSlug);
-      const p = allPosts.find(x=>x.slug===currentSlug);
+      const p = allPosts.find(x => x.slug === currentSlug);
       if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
     } else {
       btn.textContent = '✗ Failed'; btn.disabled = false;
-      setTimeout(()=>{ btn.textContent='💾 Save'; },2000);
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
     }
   } catch(e) {
     btn.textContent = '✗ Error'; btn.disabled = false;
-    setTimeout(()=>{ btn.textContent='💾 Save'; },2000);
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
   }
+}
+
+async function discardEdit() {
+  if (!editState) return;
+  if (editDirty) {
+    const choice = await promptUnsaved();
+    if (choice === 'cancel') return;
+    if (choice === 'save') { await saveEditContent(); return; }
+  }
+  editDirty = false;
+  exitEditModeImmediate();
+  if (currentSlug) {
+    const p = allPosts.find(x => x.slug === currentSlug);
+    if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
+  }
+}
+
+function promptUnsaved() {
+  return new Promise(resolve => {
+    const modal = $('unsaved-modal');
+    modal.style.display = 'flex';
+    const cleanup = result => {
+      modal.style.display = 'none';
+      $('um-save').onclick    = null;
+      $('um-discard').onclick = null;
+      $('um-cancel').onclick  = null;
+      resolve(result);
+    };
+    $('um-save').onclick    = () => cleanup('save');
+    $('um-discard').onclick = () => cleanup('discard');
+    $('um-cancel').onclick  = () => cleanup('cancel');
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -769,16 +1012,26 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // ── Data ──────────────────────────────────────────────────────────
+async function fetchPosts(author = '') {
+  const url = author ? `/api/posts?author=${encodeURIComponent(author)}` : '/api/posts';
+  const r = await fetch(url);
+  allPosts = await r.json();
+  renderStats();
+  renderNav();
+}
+
 async function loadAll() {
   try {
-    const [cr,pr] = await Promise.all([fetch(`${API}/api/config`), fetch(`${API}/api/posts`)]);
-    cfg=await cr.json(); allPosts=await pr.json();
+    const [cr] = await Promise.all([fetch(`${API}/api/config`)]);
+    cfg=await cr.json();
+    currentAuthor = cfg.filter?.author || '';
+    await fetchPosts(currentAuthor);
   } catch(e) { return; }
   const name = cfg.project_name || '';
   $('proj-name').textContent = name;
   $('proj-name').title = name;
   $('proj-name').style.display = name ? '' : 'none';
-  renderStats(); renderNav(); renderOverview();
+  renderOverview();
 }
 async function reloadPost(slug) {
   const r = await fetch(`${API}/api/posts/${encodeURIComponent(slug)}`);
@@ -934,8 +1187,20 @@ function renderOverview() {
 async function selectPost(slug) {
   saveScrollPosition();
   clearHighlight();
-  if (editMode) cancelEdit();
-  _viewingSource = false;
+  if (editState) {
+    if (editDirty) {
+      const choice = await promptUnsaved();
+      if (choice === 'cancel') return;
+      if (choice === 'save') {
+        await saveEditContent();
+      } else {
+        editDirty = false;
+        exitEditModeImmediate();
+      }
+    } else {
+      exitEditModeImmediate();
+    }
+  }
   currentSlug=slug;
   const p=allPosts.find(x=>x.slug===slug); if(!p) return;
   document.querySelectorAll('.pi').forEach(el=>el.classList.remove('selected'));
@@ -947,7 +1212,7 @@ async function selectPost(slug) {
   syncReviewedButton(p);
   const saved=scrollMemory[slug];
   pendingHtmlScroll=saved?saved.html:0;
-  _loadHtmlPanel(slug);
+  $('orig-frame').src=`/${cfg.source?.posts_dir||''}/${slug}.html?v=${Date.now()}`;
   renderPanelBadges(p);
   await loadMd(p);
   const mdBody=$('md-panel-body');
@@ -1034,10 +1299,10 @@ function applyIframeHighlight(selector) {
   try { iDoc = iframe.contentDocument; } catch(e) { return false; }
   if (!iDoc) return false;
   // Inject/replace a <style> tag in the iframe head
-  let styleTag = iDoc.getElementById('__sparge-highlight-style__');
+  let styleTag = iDoc.getElementById('__migrator-highlight-style__');
   if (!styleTag) {
     styleTag = iDoc.createElement('style');
-    styleTag.id = '__sparge-highlight-style__';
+    styleTag.id = '__migrator-highlight-style__';
     (iDoc.head || iDoc.documentElement).appendChild(styleTag);
   }
   styleTag.textContent = `${selector} { outline: 3px solid #f85149 !important; outline-offset: 2px; scroll-margin-top: 80px; }`;
@@ -1050,7 +1315,7 @@ function clearIframeHighlight() {
   try {
     const iDoc = $('orig-frame').contentDocument;
     if (!iDoc) return;
-    const styleTag = iDoc.getElementById('__sparge-highlight-style__');
+    const styleTag = iDoc.getElementById('__migrator-highlight-style__');
     if (styleTag) styleTag.textContent = '';
   } catch(e) {}
 }
@@ -1294,21 +1559,22 @@ async function scanAll() {
   setTimeout(()=>{prog.textContent='';},5000);
 }
 
-async function runConsolidate() {
-  const btn=$('btn-consolidate'), prog=$('gen-progress');
-  btn.disabled=true; prog.textContent='⟳ Consolidating assets…';
+async function consolidateAssets() {
+  const btn = $('btn-consolidate');
+  btn.textContent = '⟳ Consolidating…'; btn.disabled = true;
   try {
-    const r=await fetch(`${API}/api/consolidate`,{method:'POST'});
+    const r = await fetch(`${API}/api/consolidate`, {method:'POST'});
+    const d = await r.json();
     if (r.ok) {
-      const d=await r.json();
-      prog.textContent=`✓ ${d.promoted} promoted to global/, ${d.updated_html} HTML files updated`;
+      btn.textContent = `✓ ${d.promoted} promoted`;
+      btn.classList.add('success');
+      setTimeout(() => { btn.textContent = '⟳ Consolidate'; btn.classList.remove('success'); btn.disabled = false; }, 3000);
     } else {
-      const e=await r.json().catch(()=>({error:'failed'}));
-      prog.textContent=`✗ ${e.error}`;
+      btn.textContent = '✗ Failed'; btn.disabled = false;
     }
-  } catch(e) { prog.textContent=`✗ Error: ${e.message}`; }
-  btn.disabled=false;
-  setTimeout(()=>{prog.textContent='';},6000);
+  } catch(e) {
+    btn.textContent = '✗ Error'; btn.disabled = false;
+  }
 }
 
 // ── Layout ────────────────────────────────────────────────────────
@@ -1391,57 +1657,27 @@ document.addEventListener('keydown',e=>{
 
 // ── Ingest moved to projects.html ─────────────────────────────────
 
-// ── Source / Cleaned panel toggle ────────────────────────────────
-let _viewingSource = false;
+// ── Author filter ─────────────────────────────────────────────────
+async function initAuthorFilter() {
+  // currentAuthor already set from cfg in loadAll()
 
-function _htmlPanelPath(slug, source) {
-  // New-schema projects: cleaned/ vs source/ (if source_dir differs from cleaned_dir)
-  // Legacy-schema: always posts_dir (no distinction)
-  if (source && cfg.data?.source_dir) {
-    return `/${cfg.data.source_dir}/${slug}.html?v=${Date.now()}`;
-  }
-  if (cfg.data?.cleaned_dir) {
-    return `/${cfg.data.cleaned_dir}/${slug}.html?v=${Date.now()}`;
-  }
-  // Legacy fallback
-  return `/${cfg.source?.posts_dir||''}/${slug}.html?v=${Date.now()}`;
-}
+  // Populate from loaded posts
+  const authors = [...new Set(allPosts.map(p => p.author).filter(Boolean))].sort();
+  const sel = document.getElementById('author-select');
+  sel.innerHTML = '<option value="">All authors</option>' +
+    authors.map(a => `<option value="${a}"${a === currentAuthor ? ' selected' : ''}>${a}</option>`).join('');
 
-function _loadHtmlPanel(slug) {
-  $('orig-frame').src = _htmlPanelPath(slug, _viewingSource);
-  _updateSourceBanner();
-}
-
-function _updateSourceBanner() {
-  const label  = $('ph-html-label');
-  const btn    = $('btn-source-view');
-  const hasNew = !!(cfg.data?.source_dir);
-  if (!hasNew) {
-    // Legacy project — no source/cleaned distinction
-    if (label) label.childNodes[0].textContent = 'HTML Archive\n';
-    if (btn)   btn.style.display = 'none';
-    return;
-  }
-  if (btn) btn.style.display = '';
-  if (_viewingSource) {
-    if (label) label.childNodes[0].textContent = 'Original Source\n';
-    if (btn)   { btn.textContent = '⊙ Cleaned'; btn.classList.add('active'); }
-    // Show banner in iframe after load (handled in iframe load event)
-  } else {
-    if (label) label.childNodes[0].textContent = 'Cleaned HTML\n';
-    if (btn)   { btn.textContent = '⊙ Source'; btn.classList.remove('active'); }
-  }
-}
-
-function toggleSourceView() {
-  if (!currentSlug) return;
-  _viewingSource = !_viewingSource;
-  _loadHtmlPanel(currentSlug);
+  // Wire change handler
+  sel.addEventListener('change', async () => {
+    currentAuthor = sel.value;
+    await fetchPosts(currentAuthor);
+  });
 }
 
 // ── Init ──────────────────────────────────────────────────────────
 setupScrollSync();
-loadAll().then(()=>{
+loadAll().then(async ()=>{
+  await initAuthorFilter();
   // Restore from hash
   const hash=location.hash.replace('#','');
   if (hash && allPosts.find(p=>p.slug===hash)) selectPost(hash);
@@ -1451,5 +1687,17 @@ loadAll().then(()=>{
 // Close diff on backdrop
 $('diff-modal').addEventListener('click',e=>{if(e.target===$('diff-modal')) closeDiffModal();});
 </script>
+
+<div id="unsaved-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:24px;max-width:360px;width:90%;display:flex;flex-direction:column;gap:16px;box-shadow:0 8px 24px #000a">
+    <div style="font-size:14px;color:#c9d1d9;font-weight:600">Unsaved changes</div>
+    <div style="font-size:13px;color:#8b949e;line-height:1.5">You have unsaved changes. What would you like to do?</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="um-cancel"  style="padding:6px 14px">Cancel</button>
+      <button id="um-discard" style="padding:6px 14px;background:#2d0f0f;border-color:#f85149;color:#f85149">Discard</button>
+      <button id="um-save"    style="padding:6px 14px" class="success">💾 Save</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

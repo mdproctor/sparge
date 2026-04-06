@@ -4,7 +4,7 @@ Tests for scan_html.py — the HTML archive scanner.
 Each test class documents the issue type it guards against and the
 LESSON that motivated the detection logic.
 
-Run: python3 -m pytest tests/test_scan_html.py -v
+Run: python3 -m pytest blog-migrator/tests/test_scan_html.py -v
 """
 import tempfile
 from pathlib import Path

@@ -10,7 +10,7 @@ Public API
   detect_platform(base_url, session) -> dict
   discover_urls(base_url, platform, session, author_filter=None) -> list[str]
   preview_post(url, session) -> dict
-  ingest_post(url, session, source_dir, cleaned_dir, assets_root) -> dict
+  ingest_post(url, session, posts_dir, serve_root) -> dict
 """
 
 import hashlib
@@ -23,12 +23,10 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
 
-from asset_store import AssetStore
-
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 USER_AGENT = (
-    'Mozilla/5.0 (compatible; Sparge/1.0; '
+    'Mozilla/5.0 (compatible; BlogMigrator/1.0; '
     '+https://github.com/mdproctor/mdproctor.github.io)'
 )
 
@@ -804,67 +802,6 @@ def _fetch_and_extract(url: str, session) -> dict:
     return result
 
 
-# ── Date extraction from URLs ─────────────────────────────────────────────────
-
-def extract_date_from_url(url: str) -> str | None:
-    """
-    Extract a YYYY-MM-DD date from a blog post URL.
-    Returns None if no recognisable date pattern is found.
-
-    Supports:
-      /2024/03/15/post-title/    → '2024-03-15'
-      /2024-03-15-post-title     → '2024-03-15'
-      /2024/03/slug              → '2024-03-01'  (day assumed 01)
-    """
-    path = urlparse(url).path
-
-    def _valid(year: int, month: int, day: int) -> bool:
-        return 2000 <= year <= 2030 and 1 <= month <= 12 and 1 <= day <= 31
-
-    # Pattern 1: /YYYY/MM/DD/slug
-    m = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', path)
-    if m:
-        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        if _valid(y, mo, d):
-            return f'{y:04d}-{mo:02d}-{d:02d}'
-
-    # Pattern 2: /YYYY/MM/DD/slug (no trailing slash — end of path)
-    m = re.search(r'/(\d{4})/(\d{2})/(\d{2})(?:/|$)', path)
-    if m:
-        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        if _valid(y, mo, d):
-            return f'{y:04d}-{mo:02d}-{d:02d}'
-
-    # Pattern 3: /YYYY-MM-DD-slug or /YYYY-MM-DD/
-    m = re.search(r'/(\d{4})-(\d{2})-(\d{2})(?:[/-]|$)', path)
-    if m:
-        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        if _valid(y, mo, d):
-            return f'{y:04d}-{mo:02d}-{d:02d}'
-
-    # Pattern 4: WordPress-style /YYYY/MM/slug (no day)
-    m = re.search(r'/(\d{4})/(\d{2})/(?!\d{2}(?:[/-]|$))', path)
-    if m:
-        y, mo = int(m.group(1)), int(m.group(2))
-        if _valid(y, mo, 1):
-            return f'{y:04d}-{mo:02d}-01'
-
-    return None
-
-
-def filter_urls_after(urls: list[str], after_date: str) -> list[str]:
-    """
-    Filter discovered URLs to only those newer than after_date (YYYY-MM-DD).
-    URLs whose date cannot be determined are included (safe default).
-    """
-    result: list[str] = []
-    for url in urls:
-        date = extract_date_from_url(url)
-        if date is None or date > after_date:
-            result.append(url)
-    return result
-
-
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def preview_post(url: str, session) -> dict:
@@ -880,127 +817,14 @@ def preview_post(url: str, session) -> dict:
     return _fetch_and_extract(url, session)
 
 
-def _rewrite_css_urls_with_store(
-    css_text: str, css_url: str, slug: str, session, store: AssetStore
-) -> str:
-    """
-    Rewrite url(...) references inside a downloaded CSS file so they point
-    to locally downloaded copies, using AssetStore for path management.
-    Returns the rewritten CSS text.
-    """
-    def replace_url(match):
-        raw = match.group(1).strip('"\'')
-        if raw.startswith('data:') or raw.startswith('#') or not raw:
-            return match.group(0)
-        abs_url = urljoin(css_url, raw)
-        local_path = store.allocate(abs_url, slug)
-        if not local_path.exists():
-            _download_asset(abs_url, local_path, session)
-            if local_path.exists():
-                store.record(abs_url, local_path)
-        web = store.web_path(abs_url)
-        return f'url("{web}")' if web else match.group(0)
-
-    return re.sub(r'url\(\s*([^)]+)\s*\)', replace_url, css_text)
-
-
-def _localise_with_store(
-    html_str: str, slug: str, session, assets_root: Path
-) -> tuple[str, int, int]:
-    """
-    Re-parse extracted HTML, download all external image/CSS assets via
-    AssetStore, rewrite src/href to local web paths, strip remaining scripts.
-
-    Returns (rewritten_html, localised_count, failed_count).
-    """
-    store = AssetStore(assets_root)
-
-    try:
-        soup = BeautifulSoup(html_str, 'lxml')
-        body = soup.find('body')
-        article = body.find() if body else soup.find()  # type: ignore[union-attr]
-        if article is None or not isinstance(article, Tag):
-            article = soup
-    except Exception:
-        return html_str, 0, 0
-
-    localised = 0
-    failed = 0
-
-    # ── Localise images ───────────────────────────────────────────────────────
-    for img in article.find_all('img'):
-        if not isinstance(img, Tag):
-            continue
-        src = img.get('src', '') or ''
-        if not src or src.startswith('data:'):
-            continue
-        if _is_tracking_pixel(img):
-            img.decompose()
-            continue
-        if not src.startswith(('http://', 'https://')):
-            continue
-        local_path = store.allocate(src, slug)
-        if not local_path.exists():
-            ok = _download_asset(src, local_path, session)
-            if ok:
-                store.record(src, local_path)
-        web = store.web_path(src)
-        if web:
-            img['src'] = web
-            localised += 1
-        else:
-            failed += 1
-
-    # ── Localise stylesheets ──────────────────────────────────────────────────
-    for link in article.find_all('link', rel=True):
-        if not isinstance(link, Tag):
-            continue
-        rels = link.get('rel', [])
-        if isinstance(rels, str):
-            rels = [rels]
-        if 'stylesheet' not in rels:
-            continue
-        href = link.get('href', '') or ''
-        if not href or not href.startswith(('http://', 'https://')):
-            continue
-        local_path = store.allocate(href, slug)
-        if not local_path.exists():
-            resp = _session_get(href, session)
-            if resp is not None and resp.status_code == 200:
-                css_text = _rewrite_css_urls_with_store(
-                    resp.text, href, slug, session, store
-                )
-                local_path.parent.mkdir(parents=True, exist_ok=True)
-                local_path.write_text(css_text, encoding='utf-8')
-                store.record(href, local_path)
-                localised += 1
-            else:
-                failed += 1
-                continue
-        else:
-            localised += 1
-        web = store.web_path(href)
-        if web:
-            link['href'] = web
-
-    # ── Remove remaining script tags ──────────────────────────────────────────
-    for script in article.find_all('script'):
-        script.decompose()
-
-    return str(article), localised, failed
-
-
-def ingest_post(
-    url: str, session, source_dir: Path, cleaned_dir: Path, assets_root: Path
-) -> dict:
+def ingest_post(url: str, session, posts_dir: Path, serve_root: Path) -> dict:
     """
     Fetch, extract, localise assets, and WRITE post to disk.
 
     Writes
     ------
-      source_dir/{slug}.html  — extracted HTML with ORIGINAL URLs (no rewriting)
-      source_dir/{slug}.json  — metadata sidecar
-      cleaned_dir/{slug}.html — rewritten HTML with local asset paths
+      posts_dir/{slug}.html  — cleaned article HTML with local asset paths
+      posts_dir/{slug}.json  — metadata sidecar
 
     Returns
     -------
@@ -1017,18 +841,83 @@ def ingest_post(
     if data.get('error'):
         return result
 
-    slug = data['slug']
-    html_str = data['html']
+    # Re-parse the cleaned article HTML for asset localisation
+    try:
+        article_soup = BeautifulSoup(data['html'], 'lxml')
+        # lxml wraps in html/body — find the top-level element
+        body = article_soup.find('body')
+        article = body.find() if body else article_soup.find()  # type: ignore[union-attr]
+        if article is None or not isinstance(article, Tag):
+            article = article_soup
+    except Exception as e:
+        result['error'] = f'Re-parse error: {e}'
+        return result
 
-    # ── Write source (original, unrewritten) ──────────────────────────────────
-    source_dir.mkdir(parents=True, exist_ok=True)
-    source_html_path = source_dir / f'{slug}.html'
-    source_json_path = source_dir / f'{slug}.json'
+    date_str = data.get('date', '')
+
+    # ── Localise images ───────────────────────────────────────────────────────
+    for img in article.find_all('img'):  # type: ignore[union-attr]
+        if not isinstance(img, Tag):
+            continue
+        src = img.get('src', '') or ''
+        if not src or src.startswith('data:'):
+            continue
+        if _is_tracking_pixel(img):
+            img.decompose()
+            continue
+        if not src.startswith('http'):
+            # Already relative/local — skip
+            continue
+        local_path, rel_url = _asset_local_path(src, serve_root, 'images', date_str)
+        ok = _download_asset(src, local_path, session)
+        if ok:
+            img['src'] = rel_url
+            result['asset_localised'] += 1
+        else:
+            result['asset_failed'] += 1
+
+    # ── Localise stylesheets ──────────────────────────────────────────────────
+    for link in article.find_all('link', rel=True):  # type: ignore[union-attr]
+        if not isinstance(link, Tag):
+            continue
+        rels = link.get('rel', [])
+        if isinstance(rels, str):
+            rels = [rels]
+        if 'stylesheet' not in rels:
+            continue
+        href = link.get('href', '') or ''
+        if not href or not href.startswith('http'):
+            continue
+        local_path, rel_url = _asset_local_path(href, serve_root, 'css', date_str)
+        if not local_path.exists():
+            resp = _session_get(href, session)
+            if resp is not None and resp.status_code == 200:
+                css_text = _rewrite_css_urls(resp.text, href, serve_root, session)
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                local_path.write_text(css_text, encoding='utf-8')
+                result['asset_localised'] += 1
+            else:
+                result['asset_failed'] += 1
+                continue
+        else:
+            result['asset_localised'] += 1
+        link['href'] = rel_url
+
+    # ── Remove remaining script tags ──────────────────────────────────────────
+    for script in article.find_all('script'):  # type: ignore[union-attr]
+        script.decompose()
+
+    # ── Write to disk ─────────────────────────────────────────────────────────
+    slug = data['slug']
+    posts_dir.mkdir(parents=True, exist_ok=True)
+
+    html_path = posts_dir / f'{slug}.html'
+    json_path = posts_dir / f'{slug}.json'
 
     try:
-        source_html_path.write_text(html_str, encoding='utf-8')
+        html_path.write_text(str(article), encoding='utf-8')
     except Exception as e:
-        result['error'] = f'Write error (source html): {e}'
+        result['error'] = f'Write error (html): {e}'
         return result
 
     sidecar = {
@@ -1040,41 +929,17 @@ def ingest_post(
         'tags':         data.get('tags', []),
         'original_url': url,
         'ingested_at':  datetime.now().isoformat(timespec='seconds'),
+        'asset_localised': result['asset_localised'],
+        'asset_failed':    result['asset_failed'],
     }
 
     try:
-        source_json_path.write_text(
+        json_path.write_text(
             json.dumps(sidecar, indent=2, ensure_ascii=False),
             encoding='utf-8',
         )
     except Exception as e:
         result['error'] = f'Write error (json): {e}'
-        return result
-
-    # ── Localise assets and produce cleaned HTML ──────────────────────────────
-    rewritten_html, localised, failed = _localise_with_store(
-        html_str, slug, session, assets_root
-    )
-    result['asset_localised'] = localised
-    result['asset_failed'] = failed
-
-    # ── Write cleaned (rewritten) HTML + sidecar copy ────────────────────────
-    # state.init_from_source() scans cleaned_dir for HTML files and reads
-    # the co-located .json sidecar for metadata (date, title, etc.).
-    # We must write the sidecar alongside the cleaned HTML so that date-based
-    # features (newest-date, append mode) work correctly.
-    cleaned_dir.mkdir(parents=True, exist_ok=True)
-    cleaned_html_path = cleaned_dir / f'{slug}.html'
-    cleaned_json_path = cleaned_dir / f'{slug}.json'
-
-    try:
-        cleaned_html_path.write_text(rewritten_html, encoding='utf-8')
-        cleaned_json_path.write_text(
-            json.dumps(sidecar, indent=2, ensure_ascii=False),
-            encoding='utf-8',
-        )
-    except Exception as e:
-        result['error'] = f'Write error (cleaned): {e}'
         return result
 
     result['wrote'] = True

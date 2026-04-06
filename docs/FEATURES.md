@@ -1,4 +1,4 @@
-# Sparge — Feature Notes for End-User Documentation
+# Blog Migrator — Feature Notes for End-User Documentation
 
 Working notes capturing key functionality and behaviours as they are built.
 Not polished prose yet — a reference for writing the real docs later.
@@ -7,7 +7,7 @@ Not polished prose yet — a reference for writing the real docs later.
 
 ## What the tool is
 
-A local web application for ingesting, cleaning, and transforming a WordPress/Blogger blog archive into
+A local web application for migrating a WordPress/Blogger blog archive to
 clean, self-contained HTML and then to Jekyll-compatible Markdown. Runs
 entirely on localhost — no cloud services required. The tool remembers the
 state of every post across sessions so you can work incrementally.
@@ -21,7 +21,7 @@ state of every post across sessions so you can work incrementally.
 - Paths in config are relative to `serve_root` except `serve_root` itself
 - Config panel accessible via ⚙ Config button (top-right of top bar)
 - Changes to config require a server restart to take effect (paths are loaded once at startup)
-- Start the server: `python3 server.py` from the repo root
+- Start the server: `python3 blog-migrator/server.py` from the repo root
 - UI opens at `http://localhost:{port}/ui/`
 
 ---
@@ -339,14 +339,14 @@ to Review mode and loads that post. Columns:
 
 ## State persistence
 
-All state lives in `sparge/state.json`. It is:
+All state lives in `blog-migrator/state.json`. It is:
 - Written atomically on every state change
 - Never deleted or overwritten between sessions — fully persistent
 - Bootstrapped on server startup from the source directory (new HTML files get
   entries; existing entries have their HTML hash refreshed)
 - Safe to edit manually if needed (valid JSON object keyed by slug)
 
-The state file is **not** committed to git (it's in the sparge working
+The state file is **not** committed to git (it's in the blog-migrator working
 directory, not the repo root). Users should back it up if they want to preserve
 review progress.
 

@@ -1,0 +1,17 @@
+{
+  "project_name": "Test Project 5652be",
+  "serve_root": "/private/var/folders/9j/3qq0yw9x01g2pxvwdvkztx740000gn/T/pytest-of-mdproctor/pytest-11/test_creates_project_with_loca0",
+  "source": {
+    "posts_dir": "posts",
+    "assets_dir": "assets"
+  },
+  "output": {
+    "md_dir": "md"
+  },
+  "filter": {
+    "author": ""
+  },
+  "server": {
+    "port": 9000
+  }
+}

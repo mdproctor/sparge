@@ -18,14 +18,7 @@ import requests
 # Make scripts/ importable (conftest.py also does this, but be explicit)
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from ingest import (
-    detect_platform,
-    discover_urls,
-    extract_date_from_url,
-    filter_urls_after,
-    ingest_post,
-    preview_post,
-)
+from ingest import detect_platform, discover_urls, ingest_post, preview_post
 
 # Import the mock blog fixtures and article metadata
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
@@ -213,208 +206,93 @@ class TestPreviewPost:
 # TestIngestPost
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _ingest(url, session, mock_blog_server=None):
-    """Ingest a URL into a temp dir. Returns (result, source_dir, cleaned_dir, assets_root)."""
-    import tempfile
-    tmp = Path(tempfile.mkdtemp())
-    source  = tmp / 'source'
-    cleaned = tmp / 'cleaned'
-    assets  = tmp / 'assets'
-    result  = ingest_post(url, session, source, cleaned, assets)
-    return result, source, cleaned, assets
-
-
 class TestIngestPost:
     @pytest.fixture(scope="class")
     def ingest_result(self, tmp_path_factory, mock_blog_server, session):
         """Run ingest_post once; share result across all tests in this class."""
-        source_dir  = tmp_path_factory.mktemp("source")
-        cleaned_dir = tmp_path_factory.mktemp("cleaned")
-        assets_root = tmp_path_factory.mktemp("assets")
+        posts_dir = tmp_path_factory.mktemp("posts")
+        serve_root = tmp_path_factory.mktemp("serve")
         url = _first_article_url(mock_blog_server)
-        result = ingest_post(url, session, source_dir, cleaned_dir, assets_root)
-        return result, source_dir, cleaned_dir, assets_root
+        result = ingest_post(url, session, posts_dir, serve_root)
+        return result, posts_dir, serve_root
 
     @pytest.fixture(scope="class")
     def article(self):
         return ARTICLES[0]
 
     def test_writes_html_file(self, ingest_result):
-        """{slug}.html must exist in both source_dir and cleaned_dir after ingest."""
-        result, source_dir, cleaned_dir, _ = ingest_result
+        """{slug}.html must exist in posts_dir after ingest."""
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        assert (source_dir / f"{slug}.html").exists(), \
-            f"source_dir/{slug}.html not found"
-        assert (cleaned_dir / f"{slug}.html").exists(), \
-            f"cleaned_dir/{slug}.html not found"
+        assert (posts_dir / f"{slug}.html").exists()
 
     def test_writes_json_sidecar(self, ingest_result):
-        """{slug}.json must exist in source_dir after ingest."""
-        result, source_dir, _, _ = ingest_result
+        """{slug}.json must exist in posts_dir after ingest."""
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        assert (source_dir / f"{slug}.json").exists()
+        assert (posts_dir / f"{slug}.json").exists()
 
     def test_sidecar_has_required_fields(self, ingest_result):
         """JSON sidecar must contain all required metadata fields."""
-        result, source_dir, _, _ = ingest_result
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
         for field in ("slug", "title", "date", "author", "original_url"):
             assert field in sidecar, f"Missing field '{field}' in sidecar"
 
     def test_sidecar_has_title(self, ingest_result, article):
         """json['title'] must match the article title."""
-        result, source_dir, _, _ = ingest_result
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
         assert sidecar["title"] == article["title"]
 
     def test_sidecar_has_date(self, ingest_result, article):
         """json['date'] must be YYYY-MM-DD and match the article date."""
-        result, source_dir, _, _ = ingest_result
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
         assert re.match(r"\d{4}-\d{2}-\d{2}$", sidecar["date"])
         assert sidecar["date"] == article["date"]
 
     def test_sidecar_has_original_url(self, ingest_result, mock_blog_server):
         """json['original_url'] must be the post URL."""
-        result, source_dir, _, _ = ingest_result
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        sidecar = json.loads((source_dir / f"{slug}.json").read_text())
+        sidecar = json.loads((posts_dir / f"{slug}.json").read_text())
         expected_url = _first_article_url(mock_blog_server)
         assert sidecar["original_url"] == expected_url
 
     def test_image_localised(self, ingest_result):
-        """assets_root must contain at least one downloaded file under posts/ or global/."""
-        _, _, _, assets_root = ingest_result
-        all_files = list(assets_root.rglob("*"))
-        downloaded = [f for f in all_files if f.is_file() and not f.name.startswith('.')]
-        assert len(downloaded) >= 1, (
-            f"No downloaded asset files found under assets_root {assets_root}; "
-            f"contents: {all_files}"
+        """serve_root must contain at least one downloaded image file."""
+        _, _, serve_root = ingest_result
+        images = list(serve_root.rglob("*.jpg"))
+        assert len(images) >= 1, (
+            f"No .jpg files found under serve_root {serve_root}; "
+            f"contents: {list(serve_root.rglob('*'))}"
         )
 
     def test_no_script_in_html(self, ingest_result):
-        """cleaned_dir HTML must contain no <script> tags."""
-        result, _, cleaned_dir, _ = ingest_result
+        """Written HTML must contain no <script> tags."""
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        html = (cleaned_dir / f"{slug}.html").read_text()
+        html = (posts_dir / f"{slug}.html").read_text()
         assert "<script" not in html.lower()
 
     def test_no_js_src(self, ingest_result):
-        """cleaned_dir HTML must contain no javascript: href values."""
-        result, _, cleaned_dir, _ = ingest_result
+        """Written HTML must contain no javascript: href values."""
+        result, posts_dir, _ = ingest_result
         slug = result["slug"]
-        html = (cleaned_dir / f"{slug}.html").read_text()
+        html = (posts_dir / f"{slug}.html").read_text()
         assert "javascript:" not in html.lower()
-
-    def test_source_has_original_urls(self, ingest_result):
-        """source_dir HTML must still contain original http:// image URLs (not rewritten)."""
-        result, source_dir, _, _ = ingest_result
-        slug = result["slug"]
-        html = (source_dir / f"{slug}.html").read_text()
-        assert "http://" in html or "https://" in html, \
-            "source HTML has no original http(s):// URLs — expected unrewritten content"
-
-    def test_cleaned_has_local_paths(self, ingest_result):
-        """cleaned_dir HTML must contain /assets/ paths (rewritten local references)."""
-        result, _, cleaned_dir, _ = ingest_result
-        slug = result["slug"]
-        html = (cleaned_dir / f"{slug}.html").read_text()
-        assert "/assets/" in html, \
-            "cleaned HTML has no /assets/ paths — expected rewritten local paths"
 
     def test_returns_slug(self, ingest_result):
         """result['slug'] must be a non-empty string."""
-        result, _, _, _ = ingest_result
+        result, _, _ = ingest_result
         assert isinstance(result["slug"], str)
         assert len(result["slug"]) > 0
 
     def test_returns_no_error(self, ingest_result):
         """result['error'] must be None on success."""
-        result, _, _, _ = ingest_result
+        result, _, _ = ingest_result
         assert result["error"] is None
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TestDateExtraction
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestDateExtraction:
-    @pytest.mark.parametrize("url,expected", [
-        # Pattern 1: /YYYY/MM/DD/slug/ (trailing slash)
-        ("https://blog.example.com/2024/03/15/my-post/", "2024-03-15"),
-        # Pattern 1: /YYYY/MM/DD/slug (no trailing slash)
-        ("https://blog.example.com/2024/03/15/my-post", "2024-03-15"),
-        # Pattern 2: slug prefix YYYY-MM-DD-title
-        ("https://blog.example.com/2023-11-05-great-article", "2023-11-05"),
-        # Pattern 2: slug prefix with trailing slash
-        ("https://blog.example.com/2023-11-05-great-article/", "2023-11-05"),
-        # Pattern 3: WordPress /YYYY/MM/slug (no day) → first of month
-        ("https://blog.example.com/2022/08/slug-no-day", "2022-08-01"),
-        # No date at all
-        ("https://blog.example.com/category/no-date-here", None),
-        # Root URL — no date
-        ("https://blog.example.com/", None),
-        # Year out of 2000–2030 range
-        ("https://blog.example.com/1999/01/15/too-old", None),
-        # Month 13 is invalid
-        ("https://blog.example.com/2024/13/15/bad-month", None),
-        # KIE-style: /YYYY/MM/slug (no day) — year in range
-        ("https://blog.kie.org/2011/05/drools-5-2-0-final-released/", "2011-05-01"),
-        # KIE-style with day
-        ("https://blog.kie.org/2011/05/30/drools-5-2-0-final-released/", "2011-05-30"),
-    ])
-    def test_extract_date_from_url(self, url, expected):
-        assert extract_date_from_url(url) == expected
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TestFilterUrlsAfter
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestFilterUrlsAfter:
-    # Realistic KIE-style URL set
-    URL_2020 = "https://blog.kie.org/2020/03/15/drools-7-36/"
-    URL_2019 = "https://blog.kie.org/2019/11/05/kogito/"
-    URL_2021 = "https://blog.kie.org/2021/01/20/optaplanner-8/"
-    URL_NODATE = "https://blog.kie.org/no-date-slug/"
-
-    def test_all_newer_than_cutoff_returned(self):
-        urls = [self.URL_2020, self.URL_2021]
-        result = filter_urls_after(urls, "2018-01-01")
-        assert result == urls
-
-    def test_all_older_than_cutoff_excluded(self):
-        urls = [self.URL_2019, self.URL_2020]
-        result = filter_urls_after(urls, "2021-12-31")
-        assert result == []
-
-    def test_mix_old_and_new(self):
-        urls = [self.URL_2019, self.URL_2020, self.URL_2021]
-        result = filter_urls_after(urls, "2019-12-31")
-        assert self.URL_2019 not in result
-        assert self.URL_2020 in result
-        assert self.URL_2021 in result
-
-    def test_no_date_url_always_included(self):
-        urls = [self.URL_2019, self.URL_NODATE]
-        # cutoff well after 2019 → 2019 post excluded, no-date always included
-        result = filter_urls_after(urls, "2021-12-31")
-        assert self.URL_NODATE in result
-        assert self.URL_2019 not in result
-
-    def test_empty_list_returns_empty(self):
-        assert filter_urls_after([], "2020-01-01") == []
-
-    def test_exact_date_match_excluded(self):
-        """URL whose date equals after_date must NOT be included (strictly after)."""
-        result = filter_urls_after([self.URL_2020], "2020-03-15")
-        assert result == []
-
-    def test_very_old_cutoff_includes_all_dated(self):
-        """after_date='2000-01-01' → all dated URLs (which are newer) are included."""
-        urls = [self.URL_2019, self.URL_2020, self.URL_2021]
-        result = filter_urls_after(urls, "2000-01-01")
-        assert result == urls

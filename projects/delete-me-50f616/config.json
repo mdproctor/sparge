@@ -1,0 +1,17 @@
+{
+  "project_name": "Delete Me 50f616",
+  "serve_root": "/private/var/folders/9j/3qq0yw9x01g2pxvwdvkztx740000gn/T/pytest-of-mdproctor/pytest-11/test_deletes_project0",
+  "source": {
+    "posts_dir": "p",
+    "assets_dir": "a"
+  },
+  "output": {
+    "md_dir": "m"
+  },
+  "filter": {
+    "author": ""
+  },
+  "server": {
+    "port": 9000
+  }
+}

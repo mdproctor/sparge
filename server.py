@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sparge — unified server.
+Blog Migrator — unified server.
 
 Serves static files from serve_root AND the UI, plus a JSON API.
 
@@ -12,6 +12,7 @@ GET  /api/config                    → current config (public fields)
 POST /api/config                    → update config fields and reload
 GET  /api/posts                     → all posts with state (JSON array)
 GET  /api/posts/{slug}              → single post state
+GET  /api/posts/{slug}/html         → raw HTML source (enriched or original)
 PATCH /api/posts/{slug}             → update flagged / user_note / reviewed
 POST /api/posts/{slug}/generate-md  → generate (or regenerate) Markdown
 POST /api/posts/{slug}/generate-md?dry=1 → dry-run: return content, no write
@@ -19,6 +20,7 @@ POST /api/posts/{slug}/validate-md  → run MD validator
 POST /api/posts/{slug}/scan-html    → scan HTML for issues
 POST /api/posts/{slug}/scan-assets  → scan image/asset localisation for this post
 POST /api/posts/{slug}/save-md      → body=md content → write directly (manual edit)
+POST /api/posts/{slug}/save-html    → body=html content → write to enriched/ copy
 POST /api/posts/{slug}/stage        → body=md content → write .md.staged, mark staged
 GET  /api/posts/{slug}/staged       → return content of .md.staged file
 POST /api/posts/{slug}/accept-staged → promote .md.staged → .md
@@ -48,11 +50,13 @@ sys.path.insert(0, str(ROOT))
 from scripts.config import cfg, set_config_path
 from scripts import state as State
 from scripts.state import stage as state_stage, accept_staged, reject_staged, set_state_file
+from scripts.sparge_home import get_projects_dir
 
 UI_DIR = ROOT / 'ui'
 
 # ── Projects management ────────────────────────────────────────────────────────
-PROJECTS_FILE = ROOT / 'projects.json'
+PROJECTS_DIR  = get_projects_dir()
+PROJECTS_FILE = PROJECTS_DIR / 'projects.json'
 _active_project_id: str | None = None
 
 
@@ -67,12 +71,12 @@ def _save_projects(projects: list[dict]):
 
 
 def _project_dir(project_id: str) -> Path:
-    return ROOT / 'projects' / project_id
+    return PROJECTS_DIR / project_id
 
 
 def _activate_project(project_id: str) -> bool:
     """Load project config + state, update all module-level path vars."""
-    global _active_project_id, POSTS_DIR, MD_DIR, SERVE_ROOT, SOURCE_DIR, CLEANED_DIR, ASSETS_ROOT
+    global _active_project_id, POSTS_DIR, MD_DIR, SERVE_ROOT, ENRICHED_DIR
     proj_dir    = _project_dir(project_id)
     config_path = proj_dir / 'config.json'
     state_path  = proj_dir / 'state.json'
@@ -80,12 +84,11 @@ def _activate_project(project_id: str) -> bool:
         return False
     set_config_path(config_path)   # mutates cfg in-place
     set_state_file(state_path)
-    SERVE_ROOT   = cfg['_root']
-    SOURCE_DIR   = cfg['_source_dir']
-    CLEANED_DIR  = cfg['_cleaned_dir']
-    ASSETS_ROOT  = cfg['_assets_dir']
-    POSTS_DIR    = cfg['_posts_dir']   # = CLEANED_DIR for new schema, original dir for legacy
-    MD_DIR       = cfg['_md_dir']
+    POSTS_DIR  = cfg['_posts_dir']
+    MD_DIR     = cfg['_md_dir']
+    SERVE_ROOT = cfg['_root']
+    ENRICHED_DIR = proj_dir / 'enriched'
+    ENRICHED_DIR.mkdir(exist_ok=True)
     _active_project_id = project_id
     State.init_from_source()
     print(f'Active project: {project_id} ({len(State.get_all())} posts)')
@@ -110,21 +113,22 @@ def _project_stats(project_id: str) -> dict:
     return stats
 
 
+# ── Auto-migrate from old location on first run ───────────────────────────────
+
 # Activate on startup — use first project in the index
 _startup_projects = _load_projects()
 if _startup_projects:
     _activate_project(_startup_projects[0]['id'])
 
-# Fallback path vars (overwritten by _activate_project on startup)
-SERVE_ROOT  = cfg.get('_root',        ROOT.parent)
-SOURCE_DIR  = cfg.get('_source_dir',  ROOT.parent / 'source')
-CLEANED_DIR = cfg.get('_cleaned_dir', ROOT.parent / 'cleaned')
-ASSETS_ROOT = cfg.get('_assets_dir',  ROOT.parent / 'assets')
-POSTS_DIR   = cfg.get('_posts_dir',   ROOT.parent / 'legacy' / 'posts')
-MD_DIR      = cfg.get('_md_dir',      ROOT.parent / 'mark-proctor')
+# Fallback path vars for when no project is active
+SERVE_ROOT   = cfg.get('_root', ROOT.parent)
+POSTS_DIR    = cfg.get('_posts_dir', ROOT.parent / 'legacy' / 'posts')
+MD_DIR       = cfg.get('_md_dir',    ROOT.parent / 'mark-proctor')
+ENRICHED_DIR: Path = PROJECTS_DIR / 'kie-mark-proctor' / 'enriched'
 
-# All tools live in our own scripts/
-sys.path.insert(0, str(ROOT / 'scripts'))
+# Pre-import MD tools from parent scripts/ if available
+_parent_scripts = ROOT.parent / 'scripts'
+sys.path.insert(0, str(_parent_scripts))
 try:
     from convert_post import convert_post
     _can_generate = True
@@ -136,6 +140,9 @@ try:
     _can_validate = True
 except ImportError:
     _can_validate = False
+
+# scan_html lives in our own scripts/
+sys.path.insert(0, str(ROOT / 'scripts'))
 try:
     from scan_html import scan_post as _scan_post
     _can_scan = True
@@ -149,11 +156,23 @@ except ImportError:
     _can_scan_assets = False
 
 try:
+    from enrich import enrich_post as _enrich_post
+    _can_enrich = True
+except ImportError:
+    _can_enrich = False
+
+try:
     import requests as _requests
     from ingest import detect_platform, discover_urls, preview_post, ingest_post
     _can_ingest = True
 except ImportError:
     _can_ingest = False
+
+try:
+    from consolidate import consolidate as _consolidate
+    _can_consolidate = True
+except ImportError:
+    _can_consolidate = False
 
 # ── Background ingest job state ────────────────────────────────────────────────
 _job: dict = {
@@ -168,7 +187,7 @@ def _ingest_worker(urls: list, author_filter: str | None):
     import requests
     session = requests.Session()
     session.headers['User-Agent'] = (
-        'Mozilla/5.0 (compatible; Sparge/1.0; +https://github.com/mdproctor)')
+        'Mozilla/5.0 (compatible; BlogMigrator/1.0; +https://github.com/mdproctor)')
     with _job_lock:
         _job.update({'running': True, 'done': 0, 'total': len(urls),
                      'errors': [], 'cancelled': False, 'log': []})
@@ -178,7 +197,7 @@ def _ingest_worker(urls: list, author_filter: str | None):
                 break
             _job['current'] = url
         try:
-            result = ingest_post(url, session, SOURCE_DIR, CLEANED_DIR, ASSETS_ROOT)
+            result = ingest_post(url, session, POSTS_DIR, SERVE_ROOT)
             with _job_lock:
                 _job['done'] += 1
                 _job['log'].append({'url': url, 'slug': result.get('slug', ''),
@@ -225,20 +244,17 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_ui(path)
         elif path == '/api/projects':
             self._api_projects_list()
-        elif path.startswith('/api/projects/'):
-            pid  = path[len('/api/projects/'):]
-            if pid.endswith('/newest-date'):
-                self._api_projects_newest_date(pid[:-len('/newest-date')])
-            else:
-                self._json(404, {'error': 'unknown project endpoint'})
         elif path == '/api/config':
             self._api_config_get()
         elif path == '/api/posts':
-            self._api_posts_list()
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+            self._api_posts_list(author=params.get('author'))
         elif path.startswith('/api/posts/'):
             rest = path[len('/api/posts/'):]
             if rest.endswith('/staged'):
                 self._api_staged_get(rest[:-len('/staged')])
+            elif rest.endswith('/html'):
+                self._api_post_html(rest[:-len('/html')])
             else:
                 self._api_post_get(rest)
         elif path == '/api/ingest/status':
@@ -259,8 +275,6 @@ class Handler(BaseHTTPRequestHandler):
             rest = path[len('/api/projects/'):]
             if rest.endswith('/activate'):
                 self._api_projects_activate(rest[:-len('/activate')])
-            elif rest.endswith('/wipe'):
-                self._api_projects_wipe(rest[:-len('/wipe')])
             elif rest.endswith('/ingest/run'):
                 proj_id = rest[:-len('/ingest/run')]
                 # Ingest into a specific project
@@ -286,17 +300,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._api_stage(rest[:-len('/stage')], body)
             elif rest.endswith('/save-md'):
                 self._api_save_md(rest[:-len('/save-md')], body)
+            elif rest.endswith('/save-html'):
+                self._api_save_html(rest[:-len('/save-html')], body)
             elif rest.endswith('/accept-staged'):
                 self._api_accept_staged(rest[:-len('/accept-staged')])
             elif rest.endswith('/reject-staged'):
                 self._api_reject_staged(rest[:-len('/reject-staged')])
             else:
                 self._json(404, {'error': 'unknown endpoint'})
-        elif path == '/api/consolidate':
-            self._api_consolidate()
         elif path.startswith('/api/ingest/'):
             action = path[len('/api/ingest/'):]
             self._api_ingest(action, body)
+        elif path == '/api/consolidate':
+            self._api_consolidate()
         else:
             self._json(404, {'error': 'unknown endpoint'})
 
@@ -374,57 +390,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {'error': f'project not found: {project_id}'}); return
         self._json(200, {'active': project_id, 'name': cfg.get('project_name', project_id)})
 
-    def _api_projects_newest_date(self, project_id: str):
-        """Return the newest post date already in this project's state."""
-        state_path = _project_dir(project_id) / 'state.json'
-        if not state_path.exists():
-            self._json(200, {'date': None, 'count': 0}); return
-        try:
-            state = json.loads(state_path.read_text())
-            dates = [
-                (v.get('date') or '')
-                for v in state.values()
-                if isinstance(v, dict) and v.get('date')
-            ]
-            newest = max(dates) if dates else None
-            self._json(200, {'date': newest, 'count': len(state)})
-        except Exception as e:
-            self._json(500, {'error': str(e)})
-
-    def _api_projects_wipe(self, project_id: str):
-        """
-        Delete all ingested data for a project (source/, cleaned/, assets/)
-        and reset its state to empty. The project config is preserved.
-        Only works on projects using the new data schema.
-        """
-        proj_dir = _project_dir(project_id)
-        config_path = proj_dir / 'config.json'
-        if not config_path.exists():
-            self._json(404, {'error': f'project not found: {project_id}'}); return
-        try:
-            proj_cfg = json.loads(config_path.read_text())
-            if 'data' not in proj_cfg:
-                self._json(400, {'error': 'Wipe only supported for new-schema projects (data: {...})'}); return
-            root = Path(proj_cfg['serve_root'])
-            d    = proj_cfg['data']
-            removed = []
-            for key in ('source_dir', 'cleaned_dir', 'assets_dir', 'md_dir'):
-                p = root / d.get(key, '')
-                if p.exists() and p != root:  # safety: never delete serve_root itself
-                    import shutil
-                    shutil.rmtree(p)
-                    removed.append(str(p))
-            # Reset state
-            state_path = proj_dir / 'state.json'
-            state_path.write_text('{}')
-            # If this is the active project, re-init
-            if project_id == _active_project_id:
-                State.init_from_source()
-            print(f'Wiped: {project_id} — removed {removed}')
-            self._json(200, {'wiped': True, 'removed': removed})
-        except Exception as e:
-            self._json(500, {'error': str(e)})
-
     def _api_config_get(self):
         public = {k: v for k, v in cfg.items() if not k.startswith('_')}
         self._json(200, public)
@@ -439,9 +404,12 @@ class Handler(BaseHTTPRequestHandler):
         save_cfg(cfg)
         self._json(200, {'saved': True})
 
-    def _api_posts_list(self):
+    def _api_posts_list(self, author: str | None = None):
         posts = State.get_all()
-        # Sort by date then slug
+        # Resolve effective author: param > config default > all
+        effective = author if author is not None else cfg.get('filter', {}).get('author', '')
+        if effective:
+            posts = [p for p in posts if p.get('author', '') == effective]
         posts.sort(key=lambda p: (p.get('date', ''), p.get('slug', '')))
         self._json(200, posts)
 
@@ -451,6 +419,40 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {'error': f'unknown slug: {slug}'})
             return
         self._json(200, post)
+
+    def _api_post_html(self, slug: str):
+        """Return raw HTML source — enriched copy if available, else original."""
+        enriched = ENRICHED_DIR / (slug + '.html')
+        original = POSTS_DIR   / (slug + '.html')
+        if enriched.exists():
+            html_path = enriched
+        elif original.exists():
+            html_path = original
+        else:
+            self._json(404, {'error': f'HTML not found: {slug}'}); return
+        try:
+            raw = html_path.read_text(encoding='utf-8', errors='replace')
+            # Pretty-print for the editor — purely cosmetic, renders identically.
+            # Preserves <pre>/<code> content verbatim. Original file untouched.
+            from bs4 import BeautifulSoup as _BS
+            # Use html.parser (not lxml) — lxml does charset sniffing on the
+            # <meta charset> tag and double-encodes non-ASCII characters (em
+            # dashes, curly quotes, etc.) when the input is already a Python str.
+            content = _BS(raw, 'html.parser').prettify()
+            # ── Garbling detection ─────────────────────────────────────────────
+            # ÃÂÃÂ is the signature of lxml double-encoding UTF-8 as Latin-1.
+            # If detected, fall back to raw to avoid serving corrupt content.
+            if 'ÃÂÃÂ' in content or ('\xc3\x82' in content):
+                print(f'WARNING: prettify produced garbled content for {slug} '
+                      f'— falling back to raw HTML. Check BS4 parser.')
+                content = raw
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8', errors='replace'))
+        except Exception as e:
+            self._json(500, {'error': str(e)})
 
     def _api_post_patch(self, slug: str, body: str):
         try:
@@ -468,7 +470,8 @@ class Handler(BaseHTTPRequestHandler):
         if not _can_generate:
             self._json(503, {'error': 'convert_post not available'})
             return
-        html_path = POSTS_DIR / (slug + '.html')
+        enriched_path = ENRICHED_DIR / (slug + '.html')
+        html_path = enriched_path if enriched_path.exists() else POSTS_DIR / (slug + '.html')
         if not html_path.exists():
             self._json(404, {'error': f'HTML not found: {slug}'})
             return
@@ -499,7 +502,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(503, {'error': 'md_validator not available'})
             return
         md_path   = MD_DIR / (slug + '.md')
-        html_path = POSTS_DIR / (slug + '.html')
+        enriched_path = ENRICHED_DIR / (slug + '.html')
+        html_path = enriched_path if enriched_path.exists() else POSTS_DIR / (slug + '.html')
         if not md_path.exists():
             self._json(404, {'error': 'MD not generated yet'})
             return
@@ -514,7 +518,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, State.get(slug))
 
     def _api_scan_html(self, slug: str):
-        """Scan a post for all issues — HTML content problems AND asset localisation."""
+        """Scan a post: enrich first, then scan the enriched HTML for issues."""
         html_path = POSTS_DIR / (slug + '.html')
         if not html_path.exists():
             self._json(404, {'error': f'HTML not found: {slug}'})
@@ -523,8 +527,33 @@ class Handler(BaseHTTPRequestHandler):
             self._json(503, {'error': 'scan_html not available'})
             return
         try:
-            # Content issues (XSS, missing images, empty embeds, WordPress chrome, etc.)
-            raw_issues = _scan_post(html_path)
+            enriched_path = ENRICHED_DIR / (slug + '.html')
+
+            # ── Step 1: Enrich first ──────────────────────────────────────────
+            if _can_enrich:
+                github_token = cfg.get('github_token', '')
+                enrich_stats = _enrich_post(
+                    html_path, enriched_path,
+                    cfg['_assets_dir'], github_token,
+                )
+                State.mark_enriched(slug, enrich_stats)
+                if enrich_stats.get('gists_failed', 0) and not github_token:
+                    print(
+                        f'WARNING: {slug} has Gist embeds but github_token is not set. '
+                        f'Add github_token to config.json for full inlining.'
+                    )
+                print(
+                    f'Enriched: {slug} — '
+                    f'{enrich_stats["youtube_replaced"]}yt '
+                    f'{enrich_stats["gists_replaced"]}gist '
+                    f'{enrich_stats["gists_failed"]}gist-fail '
+                    f'{enrich_stats["classes_normalised"]}cls '
+                    f'{enrich_stats["embeds_wrapped"]}wrap'
+                )
+
+            # ── Step 2: Scan the enriched HTML (or original if enrich unavailable) ──
+            scan_path = enriched_path if enriched_path.exists() else html_path
+            raw_issues = _scan_post(scan_path)
             issues = [
                 {'type': i['type'], 'level': i['level'],
                  'check': i['type'],
@@ -533,10 +562,10 @@ class Handler(BaseHTTPRequestHandler):
             ]
             State.set_html_issues(slug, issues)
 
-            # Asset localisation (images not yet downloaded, external src, etc.)
+            # ── Step 3: Asset scan ────────────────────────────────────────────
             if _can_scan_assets:
                 from datetime import datetime, timezone
-                asset_result = _scan_assets(html_path)
+                asset_result = _scan_assets(scan_path)
                 State.update(slug, {'assets': {
                     'total':      asset_result['total'],
                     'localised':  asset_result['localised'],
@@ -546,8 +575,7 @@ class Handler(BaseHTTPRequestHandler):
 
             errors = sum(1 for i in issues if i['level'] == 'ERROR')
             warns  = sum(1 for i in issues if i['level'] == 'WARN')
-            print(f'Scanned: {slug} — {errors}E {warns}W html, '
-                  f'{asset_result["broken"] if _can_scan_assets else "?"} asset issues')
+            print(f'Scanned: {slug} — {errors}E {warns}W html')
             self._json(200, State.get(slug))
         except Exception as e:
             self._json(500, {'error': str(e)})
@@ -574,16 +602,14 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             self._json(500, {'error': str(e)})
 
-    # ── Consolidation endpoint ────────────────────────────────────────────────────
-
-    def _api_consolidate(self):
-        """Run hash-based asset consolidation for the active project."""
+    def _api_save_html(self, slug: str, content: str):
+        """Write manually-edited HTML to the enriched copy. Never touches original."""
+        ENRICHED_DIR.mkdir(parents=True, exist_ok=True)
+        html_path = ENRICHED_DIR / (slug + '.html')
         try:
-            from consolidate import consolidate
-            report = consolidate(ASSETS_ROOT, CLEANED_DIR)
-            print(f'Consolidate: {report["promoted"]} promoted, '
-                  f'{report["updated_html"]} HTML files updated')
-            self._json(200, report)
+            html_path.write_text(content, encoding='utf-8')
+            print(f'Saved HTML (manual edit): {slug}.html → enriched/')
+            self._json(200, State.get(slug))
         except Exception as e:
             self._json(500, {'error': str(e)})
 
@@ -601,7 +627,7 @@ class Handler(BaseHTTPRequestHandler):
 
         session = requests.Session()
         session.headers['User-Agent'] = (
-            'Mozilla/5.0 (compatible; Sparge/1.0)')
+            'Mozilla/5.0 (compatible; BlogMigrator/1.0)')
 
         if action == 'detect':
             url = data.get('url', '')
@@ -657,6 +683,28 @@ class Handler(BaseHTTPRequestHandler):
 
         else:
             self._json(404, {'error': f'unknown ingest action: {action}'})
+
+    # ── Consolidate endpoint ───────────────────────────────────────────────────────
+
+    def _api_consolidate(self):
+        """Run content-hash deduplication across all post assets."""
+        if not _can_consolidate:
+            self._json(503, {'error': 'consolidate not available'})
+            return
+        if not _active_project_id:
+            self._json(400, {'error': 'no active project'})
+            return
+        try:
+            assets_root = cfg.get('_assets_dir')
+            cleaned_dir = cfg.get('_posts_dir')  # blog-migrator uses posts_dir as the cleaned HTML location
+            if not assets_root or not cleaned_dir:
+                self._json(400, {'error': 'project paths not configured'})
+                return
+            result = _consolidate(assets_root, cleaned_dir)
+            print(f'Consolidate: promoted={result["promoted"]} updated_html={result["updated_html"]}')
+            self._json(200, result)
+        except Exception as e:
+            self._json(500, {'error': str(e)})
 
     # ── Staged workflow endpoints ──────────────────────────────────────────────────
 
@@ -766,7 +814,7 @@ if __name__ == '__main__':
     total = len(State.get_all())
     port  = cfg['server']['port']
     print(f'  {total} posts tracked')
-    print(f'\nSparge running → http://localhost:{port}/ui/')
+    print(f'\nBlog Migrator running → http://localhost:{port}/ui/')
     print(f'Project: {cfg["project_name"]}')
 
     HTTPServer(('localhost', port), Handler).serve_forever()

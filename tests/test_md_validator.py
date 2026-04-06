@@ -2,7 +2,7 @@
 Test suite for md_validator.py — ported from tests/test_md_validator.py
 plus additional coverage for previously untested cross-checks.
 
-Run: python3 -m pytest tests/test_md_validator.py -v
+Run: python3 -m pytest blog-migrator/tests/test_md_validator.py -v
 """
 import tempfile
 from pathlib import Path

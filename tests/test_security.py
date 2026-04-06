@@ -1,5 +1,5 @@
 """
-Security tests for the Sparge ingest pipeline.
+Security tests for the blog-migrator ingest pipeline.
 
 Tests verify that:
 1. XSS payloads in blog content (title, body, attributes) are stripped
@@ -9,7 +9,7 @@ Tests verify that:
 5. Exfiltration via CSS (data: urls, external CSS @import) is blocked
 6. Metadata fields (title, author) are not interpreted as HTML when stored
 
-Run: python3 -m pytest tests/test_security.py -v
+Run: python3 -m pytest blog-migrator/tests/test_security.py -v
 """
 import json
 import sys
@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
 from ingest import detect_platform, discover_urls, preview_post, ingest_post
 
 SESSION = requests.Session()
-SESSION.headers['User-Agent'] = 'Sparge-Test/1.0'
+SESSION.headers['User-Agent'] = 'BlogMigrator-Test/1.0'
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -76,13 +76,12 @@ def _preview(url: str) -> dict:
 
 
 def _ingest(url: str) -> tuple[dict, Path, Path]:
-    """Ingest a URL into a temp dir. Returns (result, source_dir, cleaned_dir)."""
+    """Ingest a URL into a temp dir. Returns (result, serve_root, posts_dir)."""
     tmp = Path(tempfile.mkdtemp())
-    source  = tmp / 'source'
-    cleaned = tmp / 'cleaned'
-    assets  = tmp / 'assets'
-    result = ingest_post(url, SESSION, source, cleaned, assets)
-    return result, source, cleaned
+    posts = tmp / 'posts'
+    posts.mkdir()
+    result = ingest_post(url, SESSION, posts, tmp)
+    return result, tmp, posts
 
 
 # ── XSS in content ────────────────────────────────────────────────────────────
@@ -108,10 +107,10 @@ class TestXSSInContent:
                           '<p>Content.</p><script src="evil.js"></script>')
         srv, url = _serve_single_page(html)
         try:
-            result, source_dir, cleaned_dir = _ingest(url + '/post/')
+            result, tmp, posts = _ingest(url + '/post/')
             slug = result.get('slug', '')
             if slug:
-                written = (cleaned_dir / f'{slug}.html').read_text()
+                written = (posts / f'{slug}.html').read_text()
                 assert '<script' not in written.lower(), \
                     'Script tag survived in written HTML'
         finally:
@@ -177,10 +176,10 @@ class TestXSSInMetadata:
         html = _blog_html(xss_title, '<p>Normal content here.</p>')
         srv, url = _serve_single_page(html)
         try:
-            result, source_dir, cleaned_dir = _ingest(url + '/post/')
+            result, tmp, posts = _ingest(url + '/post/')
             slug = result.get('slug', '')
             if slug:
-                sidecar = source_dir / f'{slug}.json'
+                sidecar = posts / f'{slug}.json'
                 if sidecar.exists():
                     data = json.loads(sidecar.read_text())
                     # Title in JSON is stored as text — json.loads will return it as a string
@@ -198,10 +197,10 @@ class TestXSSInMetadata:
                           author='Alice <img src=x onerror=alert(1)>')
         srv, url = _serve_single_page(html)
         try:
-            result, source_dir, cleaned_dir = _ingest(url + '/post/')
+            result, tmp, posts = _ingest(url + '/post/')
             slug = result.get('slug', '')
             if slug:
-                sidecar = source_dir / f'{slug}.json'
+                sidecar = posts / f'{slug}.json'
                 if sidecar.exists():
                     data = json.loads(sidecar.read_text())
                     author = data.get('author', '')

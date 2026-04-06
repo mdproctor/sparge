@@ -1,10 +1,10 @@
 """
 Server API tests — test /api/projects and /api/ingest/* endpoints
-against the running Sparge server.
+against the running blog-migrator server.
 
 These tests require the server to be running on localhost:9000.
-Run: python3 server.py &
-Then: python3 -m pytest tests/test_server_api.py -v
+Run: python3 blog-migrator/server.py &
+Then: python3 -m pytest blog-migrator/tests/test_server_api.py -v
 
 Tests are automatically skipped if the server is not reachable.
 """
@@ -19,10 +19,22 @@ from pathlib import Path
 import pytest
 import requests
 
+import sys
+
 MIGRATOR_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(MIGRATOR_ROOT / 'scripts'))
+import sparge_home as _sh
 
 SERVER = 'http://localhost:9000'
 API = SERVER + '/api'
+
+
+def _cleanup_project(pid: str):
+    """Delete project from API index and remove its directory from disk."""
+    SESSION_HTTP.delete(f'{API}/projects/{pid}')
+    proj_dir = _sh.get_projects_dir() / pid
+    if proj_dir.exists():
+        shutil.rmtree(proj_dir)
 
 
 # ── Availability fixture ───────────────────────────────────────────────────────
@@ -34,7 +46,7 @@ def server():
         r = requests.get(f'{API}/projects', timeout=3)
         r.raise_for_status()
     except Exception:
-        pytest.skip('Sparge server not running on localhost:9000')
+        pytest.skip('Blog-migrator server not running on localhost:9000')
     return SESSION_HTTP
 
 
@@ -100,10 +112,7 @@ class TestProjectCreate:
         assert data['id'] in ids
 
         # Clean up — delete from index AND remove project dir on disk
-        SESSION_HTTP.delete(f"{API}/projects/{data['id']}")
-        proj_dir = MIGRATOR_ROOT / 'projects' / data['id']
-        if proj_dir.exists():
-            shutil.rmtree(proj_dir)
+        _cleanup_project(data['id'])
 
     def test_rejects_missing_name(self, server):
         r = SESSION_HTTP.post(f'{API}/projects', json={'serve_root': '/tmp'})
@@ -117,10 +126,7 @@ class TestProjectCreate:
         assert r.status_code == 200
         data = r.json()
         assert re.match(r'^[a-z0-9-]+$', data['id']), 'ID should be slug-safe'
-        SESSION_HTTP.delete(f"{API}/projects/{data['id']}")
-        proj_dir = MIGRATOR_ROOT / 'projects' / data['id']
-        if proj_dir.exists():
-            shutil.rmtree(proj_dir)
+        _cleanup_project(data['id'])
 
 
 class TestProjectDelete:
@@ -140,9 +146,7 @@ class TestProjectDelete:
         assert pid not in ids, 'Deleted project still in list'
 
         # Also remove project dir from disk
-        proj_dir = MIGRATOR_ROOT / 'projects' / pid
-        if proj_dir.exists():
-            shutil.rmtree(proj_dir)
+        _cleanup_project(pid)
 
     def test_deleting_nonexistent_is_safe(self, server):
         r = SESSION_HTTP.delete(f'{API}/projects/does-not-exist-xyz')
@@ -295,296 +299,110 @@ class TestPostsEndpoints:
         assert r.status_code == 404
 
 
-# mock_blog_server fixture is provided by conftest.py
+class TestPostHtmlEndpoint:
+    """GET /api/posts/{slug}/html returns raw HTML source."""
 
-
-class TestProjectNewestDate:
-    """GET /api/projects/{id}/newest-date returns the most recent post date."""
-
-    def test_returns_newest_date_for_project_with_posts(self, server):
-        projects = SESSION_HTTP.get(f'{API}/projects').json()
-        # Find a project with posts
-        with_posts = [p for p in projects if p['stats']['total'] > 0]
-        if not with_posts:
-            pytest.skip('No projects with posts')
-        pid = with_posts[0]['id']
-        r = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date')
+    def test_returns_html_for_known_post(self, server):
+        posts = SESSION_HTTP.get(f'{API}/posts').json()
+        if not posts:
+            pytest.skip('No posts in active project')
+        slug = posts[0]['slug']
+        r = SESSION_HTTP.get(f'{API}/posts/{slug}/html')
         assert r.status_code == 200
-        d = r.json()
-        assert 'date' in d
-        assert 'count' in d
-        assert d['count'] > 0
-        if d['date']:
-            # Date should match YYYY-MM-DD
-            import re
-            assert re.match(r'^\d{4}-\d{2}-\d{2}$', d['date']), f"Bad date format: {d['date']}"
+        assert '<' in r.text  # basic HTML sanity check
 
-    def test_returns_null_date_for_empty_project(self, server):
-        # Create a temporary empty project
-        name = f'Empty Test {uuid.uuid4().hex[:6]}'
-        created = SESSION_HTTP.post(f'{API}/projects',
-                                     json={'name': name, 'serve_root': '/tmp',
-                                           'posts_dir': 'p', 'assets_dir': 'a',
-                                           'md_dir': 'm'}).json()
-        pid = created['id']
-        try:
-            r = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date')
-            assert r.status_code == 200
-            d = r.json()
-            assert d['count'] == 0
-            assert d['date'] is None
-        finally:
-            SESSION_HTTP.delete(f'{API}/projects/{pid}')
-            proj_dir = MIGRATOR_ROOT / 'projects' / pid
-            if proj_dir.exists():
-                shutil.rmtree(proj_dir)
-
-
-class TestProjectWipe:
-    """POST /api/projects/{id}/wipe clears all data for new-schema projects."""
-
-    def _make_new_schema_project(self, tmp_path) -> tuple[str, Path]:
-        """Create a temporary new-schema project with some data files."""
-        name = f'Wipe Test {uuid.uuid4().hex[:6]}'
-        data_root = tmp_path / 'data'
-        # Create new-schema config
-        pid = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
-        proj_dir = MIGRATOR_ROOT / 'projects' / pid
-        proj_dir.mkdir(parents=True, exist_ok=True)
-        config = {
-            'project_name': name,
-            'serve_root': str(data_root),
-            'data': {
-                'source_dir':  'source',
-                'cleaned_dir': 'cleaned',
-                'assets_dir':  'assets',
-                'md_dir':      'md',
-            },
-            'filter': {'author': ''},
-            'server': {'port': 9000},
-        }
-        (proj_dir / 'config.json').write_text(json.dumps(config))
-        (proj_dir / 'state.json').write_text('{"post-a": {"slug": "post-a", "date": "2024-01-01"}}')
-        # Create some fake data directories and files
-        for d in ('source', 'cleaned', 'assets', 'md'):
-            (data_root / d).mkdir(parents=True, exist_ok=True)
-            (data_root / d / 'dummy.txt').write_text('data')
-        # Register in index
-        projects = SESSION_HTTP.get(f'{API}/projects').json()
-        projects.append({'id': pid, 'name': name, 'created_at': '2026-01-01T00:00:00'})
-        import json as _json
-        (MIGRATOR_ROOT / 'projects.json').write_text(_json.dumps(projects, indent=2))
-        return pid, data_root
-
-    def test_wipe_clears_data_directories(self, server, tmp_path):
-        pid, data_root = self._make_new_schema_project(tmp_path)
-        try:
-            assert (data_root / 'source').exists()
-            r = SESSION_HTTP.post(f'{API}/projects/{pid}/wipe')
-            assert r.status_code == 200
-            d = r.json()
-            assert d['wiped'] is True
-            # Data directories should be gone
-            assert not (data_root / 'source').exists()
-            assert not (data_root / 'cleaned').exists()
-            assert not (data_root / 'assets').exists()
-        finally:
-            SESSION_HTTP.delete(f'{API}/projects/{pid}')
-            proj_dir = MIGRATOR_ROOT / 'projects' / pid
-            if proj_dir.exists():
-                shutil.rmtree(proj_dir)
-
-    def test_wipe_resets_state_to_empty(self, server, tmp_path):
-        pid, data_root = self._make_new_schema_project(tmp_path)
-        try:
-            r = SESSION_HTTP.post(f'{API}/projects/{pid}/wipe')
-            assert r.status_code == 200
-            state_path = MIGRATOR_ROOT / 'projects' / pid / 'state.json'
-            state = json.loads(state_path.read_text())
-            assert state == {}
-        finally:
-            SESSION_HTTP.delete(f'{API}/projects/{pid}')
-            proj_dir = MIGRATOR_ROOT / 'projects' / pid
-            if proj_dir.exists():
-                shutil.rmtree(proj_dir)
-
-    def test_wipe_rejects_legacy_schema_projects(self, server, tmp_path):
-        name = f'Legacy Test {uuid.uuid4().hex[:6]}'
-        created = SESSION_HTTP.post(f'{API}/projects',
-                                     json={'name': name, 'serve_root': str(tmp_path),
-                                           'posts_dir': 'p', 'assets_dir': 'a',
-                                           'md_dir': 'm'}).json()
-        pid = created['id']
-        try:
-            r = SESSION_HTTP.post(f'{API}/projects/{pid}/wipe')
-            assert r.status_code == 400  # wipe not supported for legacy schema
-        finally:
-            SESSION_HTTP.delete(f'{API}/projects/{pid}')
-            proj_dir = MIGRATOR_ROOT / 'projects' / pid
-            if proj_dir.exists():
-                shutil.rmtree(proj_dir)
-
-    def test_wipe_nonexistent_project_returns_404(self, server):
-        r = SESSION_HTTP.post(f'{API}/projects/does-not-exist-xyz/wipe')
+    def test_returns_404_for_unknown_slug(self, server):
+        r = SESSION_HTTP.get(f'{API}/posts/this-slug-does-not-exist-xyz/html')
         assert r.status_code == 404
 
 
-class TestIngestPipelineViaApi:
-    """
-    Full ingest pipeline through the HTTP server using the mock blog.
-    Tests wipe + reimport, newest-date accuracy, and append-mode discovery.
-    Skipped if the server is not running or mock blog unavailable.
-    """
+class TestPostsAuthorFilter:
+    """GET /api/posts?author=X filters by author."""
 
-    def _create_new_schema_project(self, tmp_path, server) -> tuple[str, Path]:
-        """Create a temp project with new data schema; return (id, data_root)."""
-        name = f'Pipeline Test {uuid.uuid4().hex[:6]}'
-        data_root = tmp_path / 'data'
-        pid = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:40]
-        proj_dir = MIGRATOR_ROOT / 'projects' / pid
-        proj_dir.mkdir(parents=True, exist_ok=True)
-        config = {
-            'project_name': name,
-            'serve_root': str(data_root),
-            'data': {
-                'source_dir':  'source',
-                'cleaned_dir': 'cleaned',
-                'assets_dir':  'assets',
-                'md_dir':      'md',
-            },
-            'filter': {'author': ''},
-            'server': {'port': 9000},
+    def test_author_param_filters_posts(self, server, tmp_path):
+        """?author=X returns only posts with matching author."""
+        proj_name = f'filter-test-{uuid.uuid4().hex[:6]}'
+        payload = {
+            'name': proj_name,
+            'serve_root': str(tmp_path),
+            'posts_dir': 'posts',
+            'assets_dir': 'assets',
+            'md_dir': 'md',
         }
-        (proj_dir / 'config.json').write_text(json.dumps(config))
-        (proj_dir / 'state.json').write_text('{}')
-        projects = SESSION_HTTP.get(f'{API}/projects').json()
-        projects.append({'id': pid, 'name': name, 'created_at': '2026-01-01T00:00:00'})
-        (MIGRATOR_ROOT / 'projects.json').write_text(json.dumps(projects, indent=2))
-        return pid, data_root
+        r = SESSION_HTTP.post(f'{API}/projects', json=payload)
+        assert r.status_code == 200
+        proj_id = r.json()['id']
 
-    def _cleanup(self, pid):
-        # Re-activate the original project before removing the test one
-        # so the server's active project pointer is valid after cleanup.
-        SESSION_HTTP.post(f'{API}/projects/kie-mark-proctor/activate')
-        SESSION_HTTP.delete(f'{API}/projects/{pid}')
-        proj_dir = MIGRATOR_ROOT / 'projects' / pid
-        if proj_dir.exists():
-            shutil.rmtree(proj_dir)
+        proj_dir = _sh.get_projects_dir() / proj_id
+        if not (proj_dir / 'config.json').exists():
+            pytest.skip('Cannot locate server project dir — is the server running?')
 
-    def _run_ingest(self, pid, urls) -> dict:
-        """Activate project, run ingest, poll to completion. Returns final status."""
-        SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
-        r = SESSION_HTTP.post(f'{API}/ingest/run',
-                               headers={'Content-Type': 'application/json'},
-                               json={'urls': urls})
-        assert r.status_code == 200, f'Ingest start failed: {r.text}'
-        # Poll
-        for _ in range(120):  # up to 60 seconds
-            time.sleep(0.5)
-            status = SESSION_HTTP.get(f'{API}/ingest/status').json()
-            if not status['running']:
-                return status
-        raise TimeoutError('Ingest did not complete in 60s')
+        state = {
+            'post-alice': {'slug': 'post-alice', 'author': 'Alice', 'ingested_at': '2026-01-01'},
+            'post-bob':   {'slug': 'post-bob',   'author': 'Bob',   'ingested_at': '2026-01-01'},
+        }
+        (proj_dir / 'state.json').write_text(json.dumps(state))
 
-    def test_newest_date_after_ingest(self, server, mock_blog_server, tmp_path):
-        """After ingesting all posts, newest-date returns the most recent date."""
-        pid, _ = self._create_new_schema_project(tmp_path, server)
-        try:
-            # Discover from mock blog
-            disc = SESSION_HTTP.post(f'{API}/ingest/discover',
-                                      headers={'Content-Type': 'application/json'},
-                                      json={'url': mock_blog_server})
-            if disc.status_code == 503:
-                pytest.skip('ingest not available')
-            assert disc.status_code == 200
-            urls = disc.json().get('urls', [])
-            if not urls:
-                pytest.skip('No URLs discovered from mock blog')
+        # Activate project
+        SESSION_HTTP.post(f'{API}/projects/{proj_id}/activate')
 
-            self._run_ingest(pid, urls)
+        # Filter by Alice
+        r = SESSION_HTTP.get(f'{API}/posts?author=Alice')
+        assert r.status_code == 200
+        slugs = [p['slug'] for p in r.json()]
+        assert 'post-alice' in slugs
+        assert 'post-bob' not in slugs
 
-            # Re-activate to load state
-            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
-            r = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date')
-            assert r.status_code == 200
-            d = r.json()
-            assert d['date'] is not None, 'Newest date should be set after ingest'
-            assert d['count'] > 0
-            # Mock blog dates: 2020-01-15 → 2023-11-20
-            assert d['date'] >= '2020-01-01', f'Date too old: {d["date"]}'
-            assert d['date'] <= '2024-01-01', f'Date too new: {d["date"]}'
-        finally:
-            self._cleanup(pid)
+        # Empty author returns all
+        r = SESSION_HTTP.get(f'{API}/posts?author=')
+        assert r.status_code == 200
+        assert len(r.json()) == 2
 
-    def test_wipe_and_reimport_same_count(self, server, mock_blog_server, tmp_path):
-        """Wipe then reimport produces the same post count as the first import."""
-        pid, _ = self._create_new_schema_project(tmp_path, server)
-        try:
-            disc = SESSION_HTTP.post(f'{API}/ingest/discover',
-                                      headers={'Content-Type': 'application/json'},
-                                      json={'url': mock_blog_server})
-            if disc.status_code == 503:
-                pytest.skip('ingest not available')
-            urls = disc.json().get('urls', [])
-            if not urls:
-                pytest.skip('No URLs discovered from mock blog')
+        # Cleanup
+        _cleanup_project(proj_id)
 
-            # First import
-            self._run_ingest(pid, urls)
-            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
-            count1 = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date').json()['count']
+    def test_no_author_param_returns_all_when_config_empty(self, server):
+        """No ?author param and no config filter → all posts returned."""
+        r = SESSION_HTTP.get(f'{API}/posts')
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
 
-            # Wipe
-            wipe_r = SESSION_HTTP.post(f'{API}/projects/{pid}/wipe')
-            assert wipe_r.status_code == 200
-            assert wipe_r.json()['wiped'] is True
 
-            # Newest-date should be None after wipe
-            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
-            after_wipe = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date').json()
-            assert after_wipe['count'] == 0
-            assert after_wipe['date'] is None
+class TestSaveHtmlEndpoint:
+    """POST /api/posts/{slug}/save-html writes enriched HTML."""
 
-            # Re-import
-            self._run_ingest(pid, urls)
-            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
-            count2 = SESSION_HTTP.get(f'{API}/projects/{pid}/newest-date').json()['count']
+    def test_save_html_writes_enriched_copy(self, server, tmp_path):
+        posts = SESSION_HTTP.get(f'{API}/posts').json()
+        if not posts:
+            pytest.skip('No posts in active project')
+        slug = posts[0]['slug']
 
-            assert count2 == count1, \
-                f'Re-import count {count2} ≠ first import count {count1}'
-        finally:
-            self._cleanup(pid)
+        # Get current HTML to use as content
+        r = SESSION_HTTP.get(f'{API}/posts/{slug}/html')
+        if r.status_code != 200:
+            pytest.skip('Cannot fetch HTML for post')
+        original_html = r.text
 
-    def test_ingest_status_tracks_progress(self, server, mock_blog_server, tmp_path):
-        """Ingest status reflects running state and completion."""
-        pid, _ = self._create_new_schema_project(tmp_path, server)
-        try:
-            disc = SESSION_HTTP.post(f'{API}/ingest/discover',
-                                      headers={'Content-Type': 'application/json'},
-                                      json={'url': mock_blog_server})
-            if disc.status_code == 503:
-                pytest.skip('ingest not available')
-            urls = disc.json().get('urls', [])[:5]  # just 5 for speed
-            if not urls:
-                pytest.skip('No URLs discovered')
+        # Save with a marker appended
+        marker = '<!-- test-save-html-marker -->'
+        modified = original_html + marker
+        r = SESSION_HTTP.post(
+            f'{API}/posts/{slug}/save-html',
+            data=modified.encode('utf-8'),
+            headers={'Content-Type': 'text/html; charset=utf-8'},
+        )
+        assert r.status_code == 200
 
-            SESSION_HTTP.post(f'{API}/projects/{pid}/activate')
-            start = SESSION_HTTP.post(f'{API}/ingest/run',
-                                       headers={'Content-Type': 'application/json'},
-                                       json={'urls': urls})
-            assert start.status_code == 200
-            assert start.json()['total'] == 5
+        # Verify the marker is in the enriched copy
+        r2 = SESSION_HTTP.get(f'{API}/posts/{slug}/html')
+        assert marker in r2.text
 
-            # Poll until done and verify status structure
-            for _ in range(60):
-                time.sleep(0.5)
-                status = SESSION_HTTP.get(f'{API}/ingest/status').json()
-                assert 'running' in status
-                assert 'done' in status
-                assert 'total' in status
-                assert 'errors' in status
-                if not status['running']:
-                    assert status['done'] == 5
-                    break
-        finally:
-            self._cleanup(pid)
+        # Restore original
+        SESSION_HTTP.post(
+            f'{API}/posts/{slug}/save-html',
+            data=original_html.encode('utf-8'),
+            headers={'Content-Type': 'text/html; charset=utf-8'},
+        )
+
+
+# mock_blog_server fixture is provided by conftest.py
