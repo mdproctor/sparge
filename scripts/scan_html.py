@@ -30,15 +30,10 @@ from typing import Optional
 
 from bs4 import BeautifulSoup, Tag, NavigableString
 
-# ── Known tracking domains ─────────────────────────────────────────────────────
-TRACKING_DOMAINS = {
-    'stats.wordpress.com', 'pixel.wp.com', 'pixel.quantserve.com',
-    'b.scorecardresearch.com', 'beacon.krxd.net', 'ad.doubleclick.net',
-    'googleads.g.doubleclick.net', 'www.google-analytics.com',
-    'connect.facebook.net', 'platform.twitter.com', 'bat.bing.com',
-    'ct.pinterest.com', 'analytics.twitter.com', 'px.ads.linkedin.com',
-    'mc.yandex.ru', 'counter.yadro.ru',
-}
+try:
+    from .constants import TRACKING_DOMAINS, is_tracking_pixel as _is_tracking_pixel
+except ImportError:
+    from constants import TRACKING_DOMAINS, is_tracking_pixel as _is_tracking_pixel
 
 # ── WordPress chrome patterns ─────────────────────────────────────────────────
 CHROME_SELECTORS = [
@@ -189,10 +184,9 @@ def check_tracking_pixels(article: Tag) -> list[dict]:
         src = img.get('src', '') or ''
         w   = str(img.get('width',  '') or '')
         h   = str(img.get('height', '') or '')
-        is_tiny = (w in ('1','0') and h in ('1','0'))
-        from urllib.parse import urlparse
-        domain = urlparse(src).netloc.lower().lstrip('www.')
-        if domain in TRACKING_DOMAINS or (is_tiny and src.startswith('http')):
+        if _is_tracking_pixel(src, w, h):
+            from urllib.parse import urlparse
+            domain = urlparse(src).netloc.lower().lstrip('www.')
             issues.append(_issue(
                 'tracking_pixel', 'WARN',
                 f'Tracking pixel from {domain or "unknown"}: {src[:60]}', img
@@ -323,6 +317,40 @@ def check_wordpress_chrome(article: Tag) -> list[dict]:
     return issues
 
 
+def check_md_notation_in_text(article: Tag) -> list[dict]:
+    """
+    Inline formatting elements immediately adjacent to a non-space character
+    cause html2text to emit **text**(more — with no space before the punctuation.
+    The MD validator then compares "name (org" (from HTML plain text) against
+    "name(org" (from MD after stripping ** markers), and the phrase check fails.
+
+    LESSON: When <b>Name</b>(Org) appears in HTML, html2text discards the
+    trailing whitespace inside the ** wrapper and produces **Name**(Org). The
+    plain-text extraction of the same HTML gives "Name (Org". This mismatch
+    is a structural artefact of the formatting, not a real content loss.
+    Detecting it early lets users dismiss MD phrase-check WARNings on these posts
+    as expected false-positives rather than hunting for missing content.
+    """
+    issues = []
+    for tag in article.find_all(['strong', 'b', 'em', 'i']):
+        if not isinstance(tag, Tag):
+            continue
+        # Skip formatting inside code blocks — adjacent punctuation is expected there
+        if tag.find_parent(['pre', 'code']):
+            continue
+        sib = tag.next_sibling
+        if isinstance(sib, NavigableString) and sib and not sib[0].isspace():
+            adjacent_char = sib[0]
+            issues.append(_issue(
+                'md_notation_in_text', 'WARN',
+                f'<{tag.name}> immediately followed by {adjacent_char!r} — '
+                f'html2text produces **{tag.get_text()[:20]}**{adjacent_char} '
+                f'(no space), mismatching the HTML plain text which has a space',
+                tag
+            ))
+    return issues
+
+
 def check_missing_image_signals(article: Tag) -> list[dict]:
     """
     Paragraphs whose text signals that an image should follow, but no image does.
@@ -383,6 +411,17 @@ def scan_post(html_path: Path, posts_dir: Path | None = None) -> list[dict]:
     if not article or not isinstance(article, Tag):
         return [_issue('no_article', 'ERROR', 'No <article> or <body> element found')]
 
+    # Pre-strip systematic WordPress bylines before scanning.
+    # Format: "by Author - Month Day, Year Category+ Article"
+    # These appear in every KIE post as an unclassed <div> and are already
+    # removed by convert_post.py — reporting 580 identical issues adds noise.
+    # Genuine chrome (sidebars, related posts, comment forms) is still detected.
+    for tag in list(article.find_all(['p', 'div', 'span'])):
+        if not isinstance(tag, Tag): continue
+        text = tag.get_text(separator=' ', strip=True)
+        if len(text) < 200 and re.match(r'^by\s+[A-Z]', text, re.I):
+            tag.decompose()
+
     issues: list[dict] = []
     issues += check_data_placeholders(article)
     issues += check_noscript_remnants(article)
@@ -393,6 +432,7 @@ def scan_post(html_path: Path, posts_dir: Path | None = None) -> list[dict]:
     issues += check_unreplaced_gists(article)
     issues += check_wordpress_chrome(article)
     issues += check_missing_image_signals(article)
+    issues += check_md_notation_in_text(article)
 
     return issues
 
