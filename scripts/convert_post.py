@@ -2,7 +2,7 @@
 """Convert a single KIE archive HTML post to clean Jekyll Markdown."""
 import json, re, sys
 from pathlib import Path
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 import html2text
 
 ROOT = Path('/Users/mdproctor/mdproctor.github.io')
@@ -293,7 +293,58 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         repl = _BS(f'<p>{key}</p>', 'html.parser').find()
         pre.replace_with(repl)
 
+    # Move trailing whitespace from inside inline elements to after the closing tag.
+    # html2text strips trailing whitespace inside bold/italic markers (via an
+    # internal data.strip() on the stressed text node), so:
+    #   <b>Name </b>(Org)  →  **Name**(Org)   ← space lost
+    # By moving the space to AFTER the tag before html2text sees it:
+    #   <b>Name</b> (Org)  →  **Name** (Org)  ← space preserved
+    # This only runs when there actually IS trailing whitespace inside the tag —
+    # <b>Name</b>(Org) (no space) is left unchanged, producing **Name**(Org).
+    for tag in list(article.find_all(['b', 'strong', 'em', 'i',
+                                      'del', 's', 'strike', 'code', 'u', 'a'])):
+        if not isinstance(tag, Tag) or not tag.contents:
+            continue
+        last = tag.contents[-1]
+        if isinstance(last, NavigableString):
+            stripped = str(last).rstrip()
+            trailing = str(last)[len(stripped):]
+            if trailing:
+                last.replace_with(NavigableString(stripped))
+                sib = tag.next_sibling
+                if isinstance(sib, NavigableString):
+                    sib.replace_with(NavigableString(trailing + str(sib)))
+                else:
+                    tag.insert_after(NavigableString(trailing))
+
     # Convert to Markdown
+    # MIGRATION NOTE (Quarkus/Java): html2text has no direct Java equivalent.
+    # The closest is flexmark-java (HtmlToMarkdown) or commonmark-java.
+    # Critical flags and their effects — ALL md_validator.py cross-checks depend on these:
+    #
+    #   protect_links=True   → links rendered as [text](<url>) WITH angle brackets.
+    #                          EVERY validator regex that searches for links uses \]\(<
+    #                          (e.g. lines 559, 672, 674 in md_validator.py).  If the
+    #                          Java generator uses [text](url) without brackets, ALL
+    #                          phrase/link cross-checks will silently fail to strip links
+    #                          before comparison, producing widespread false positives.
+    #
+    #   unicode_snob=True    → preserves Unicode characters (em-dashes, curly quotes)
+    #                          rather than converting them to ASCII approximations.
+    #
+    #   body_width=0         → no line-wrapping. The MD validator regex patterns assume
+    #                          no hard line breaks mid-sentence.
+    #
+    #   wrap_links=False     → link URLs are not wrapped onto a new line. Validators
+    #                          search for phrase text that may directly precede a link.
+    #
+    #   ignore_links=False   → links are preserved (not stripped). The validator's
+    #                          cross_link_count check expects link counts to be preserved.
+    #
+    # Also note: html2text's internal `stressed` flag (set True on bold/italic open)
+    # calls data.strip() on the first text node inside the element, eating trailing
+    # spaces (see the trailing-space DOM fix above).  This is an undocumented internal
+    # behaviour — only discoverable by reading html2text/__init__.py source.
     h = html2text.HTML2Text()
     h.ignore_links = False
     h.ignore_images = False
