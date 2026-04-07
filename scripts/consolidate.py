@@ -20,7 +20,10 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from asset_store import AssetStore, file_hash
+try:
+    from .asset_store import AssetStore, file_hash  # package import (server context)
+except ImportError:
+    from asset_store import AssetStore, file_hash    # direct script execution
 
 
 def consolidate(assets_root: Path, cleaned_dir: Path) -> dict:

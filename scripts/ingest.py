@@ -43,15 +43,10 @@ JUNK_SELECTORS = [
     '.wpdiscuz-form-container', '.entry-header', '.entry-meta',
 ]
 
-# Known tracking / analytics domains (mirrors scan_html.py and scan_assets.py)
-TRACKING_DOMAINS = {
-    'stats.wordpress.com', 'pixel.wp.com', 'pixel.quantserve.com',
-    'b.scorecardresearch.com', 'beacon.krxd.net', 'ad.doubleclick.net',
-    'googleads.g.doubleclick.net', 'www.google-analytics.com',
-    'connect.facebook.net', 'platform.twitter.com', 'bat.bing.com',
-    'ct.pinterest.com', 'analytics.twitter.com', 'px.ads.linkedin.com',
-    'mc.yandex.ru', 'counter.yadro.ru',
-}
+try:
+    from .constants import TRACKING_DOMAINS, is_tracking_pixel as _is_pixel
+except ImportError:
+    from constants import TRACKING_DOMAINS, is_tracking_pixel as _is_pixel
 
 # Candidate RSS/feed paths for generic blogs
 GENERIC_FEED_PATHS = ['/feed/', '/rss.xml', '/atom.xml', '/feed.xml']
@@ -604,11 +599,9 @@ def _strip_junk(article: Tag):
         if not isinstance(img, Tag):
             continue
         src = img.get('src', '') or ''
-        w = str(img.get('width', '') or '')
-        h = str(img.get('height', '') or '')
-        is_tiny = w in ('1', '0') and h in ('1', '0')
-        domain = urlparse(src).netloc.lower().lstrip('www.')
-        if domain in TRACKING_DOMAINS or (is_tiny and src.startswith('http')):
+        w   = str(img.get('width',  '') or '')
+        h   = str(img.get('height', '') or '')
+        if _is_pixel(src, w, h):
             img.decompose()
 
 
@@ -702,11 +695,9 @@ def _rewrite_css_urls(css_text: str, css_url: str, serve_root: Path, session) ->
 
 def _is_tracking_pixel(img: Tag) -> bool:
     src = img.get('src', '') or ''
-    w = str(img.get('width', '') or '')
-    h = str(img.get('height', '') or '')
-    is_tiny = w in ('1', '0') and h in ('1', '0')
-    domain = urlparse(src).netloc.lower().lstrip('www.')
-    return domain in TRACKING_DOMAINS or (is_tiny and src.startswith('http'))
+    w   = str(img.get('width',  '') or '')
+    h   = str(img.get('height', '') or '')
+    return _is_pixel(src, w, h)
 
 
 # ── Core fetch-and-extract ────────────────────────────────────────────────────

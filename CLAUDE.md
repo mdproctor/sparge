@@ -72,3 +72,15 @@ The active project (`kie-mark-proctor`) points into the Jekyll publishing repo f
 - Do not work in `~/mdproctor.github.io/blog-migrator/` — it no longer exists
 - Do not modify HTML files in `legacy/posts/mark-proctor/` — these are the source of truth
 - Do not confuse `~/sparge-projects/` (runtime data) with `~/claude/sparge/` (application code)
+
+## Work Tracking
+
+**Issue tracking:** enabled
+**GitHub repo:** mdproctor/sparge
+**Changelog:** GitHub Releases (run `gh release create --generate-notes` at milestones)
+
+**Automatic behaviours (Claude follows these when this section is present):**
+- Before starting any significant task, check if it spans multiple concerns.
+  If it does, help break it into separate issues before beginning work.
+- When staging changes before a commit, check if they span multiple issues.
+  If they do, suggest splitting the commit using `git add -p`.
