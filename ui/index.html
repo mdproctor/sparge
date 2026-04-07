@@ -166,8 +166,13 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 
 /* ── Issue panel ── */
 #issue-panel { flex-shrink:0; border-top:1px solid #30363d; background:#0d1117;
-               display:flex; flex-direction:column; max-height:200px; }
+               display:flex; flex-direction:column; height:200px; }
 #issue-panel.hidden { display:none; }
+#issue-resize-handle { height:5px; flex-shrink:0; cursor:ns-resize; background:#161b22;
+                       display:flex; align-items:center; justify-content:center; }
+#issue-resize-handle:hover, #issue-resize-handle.dragging { background:#21262d; }
+#issue-resize-handle::after { content:''; display:block; width:32px; height:2px;
+                              background:#484f58; border-radius:1px; }
 #issue-panel-hdr { display:flex; align-items:center; gap:10px; padding:5px 14px;
                    border-bottom:1px solid #21262d; flex-shrink:0; }
 #issue-panel-hdr span { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#8b949e; flex:1; }
@@ -395,6 +400,7 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
       </div>
       <!-- Issue panel -->
       <div id="issue-panel" class="hidden">
+        <div id="issue-resize-handle" title="Drag to resize"></div>
         <div id="issue-panel-hdr">
           <span>Issues for this post</span>
           <button onclick="toggleIssues()" style="background:none;border:none;color:#8b949e;padding:2px 6px">✕</button>
@@ -512,6 +518,8 @@ let currentHighlightSelector = null, currentHighlightRow = null;
 // diffModalMode: 'generate' | 'staged'
 let diffModalMode = 'generate';
 let syncEnabled = true, syncing = false, scrollAnchors = [];
+// Expose for testing (let variables are not on window in modern JS)
+function getScrollAnchors() { return scrollAnchors; }
 const scrollMemory = {};   // slug → {md, html}
 let pendingHtmlScroll = 0;
 
@@ -526,11 +534,11 @@ function buildScrollAnchors() {
   try { iDoc = iframe.contentDocument; iWin = iframe.contentWindow; } catch(e) { return; }
   if (!iDoc || !iDoc.body) return;
   const mbr = mdBody.getBoundingClientRect();
-  const mdHds = [...document.querySelectorAll('#md-wrap h2,#md-wrap h3')]
+  const mdHds = [...document.querySelectorAll('#md-wrap h2,#md-wrap h3,#md-wrap h4')]
     .filter(el => !el.closest('.fm-card'))
     .map(el => ({ text: normHead(el.textContent), pos: el.getBoundingClientRect().top - mbr.top + mdBody.scrollTop }));
   const art = iDoc.querySelector('article') || iDoc.body;
-  const htmlHds = [...art.querySelectorAll('h2,h3')]
+  const htmlHds = [...art.querySelectorAll('h2,h3,h4')]
     .map(el => ({ text: normHead(el.textContent), pos: el.getBoundingClientRect().top + iWin.scrollY }));
   const anchors = [{md:0, html:0}];
   for (const mh of mdHds) {
@@ -1590,7 +1598,51 @@ function toggleIssues() {
   $('issue-panel').classList.toggle('hidden',!issuesOpen);
   $('btn-issues').classList.toggle('active',issuesOpen);
   if (!issuesOpen) clearHighlight();
+  // Rebuild scroll anchors after layout reflow — the issue panel changes
+  // #panels height, which shifts mdMax and htMax. Stale anchors prevent both
+  // sides from reaching the true document bottom during scroll sync.
+  requestAnimationFrame(() => buildScrollAnchors());
 }
+
+// ── Issue panel resize ─────────────────────────────────────────────
+(function() {
+  const PANEL_MIN = 80, PANEL_MAX = 700, STORE_KEY = 'sparge-issue-panel-h';
+  const panel  = document.getElementById('issue-panel');
+  const handle = document.getElementById('issue-resize-handle');
+
+  // Restore saved height
+  const saved = parseInt(localStorage.getItem(STORE_KEY), 10);
+  if (saved >= PANEL_MIN && saved <= PANEL_MAX) panel.style.height = saved + 'px';
+
+  let dragStartY = null, dragStartH = null;
+
+  handle.addEventListener('mousedown', e => {
+    dragStartY = e.clientY;
+    dragStartH = panel.getBoundingClientRect().height;
+    handle.classList.add('dragging');
+    document.body.style.cursor    = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (dragStartY === null) return;
+    const delta = dragStartY - e.clientY; // drag up → larger panel
+    const h = Math.max(PANEL_MIN, Math.min(PANEL_MAX, dragStartH + delta));
+    panel.style.height = h + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (dragStartY === null) return;
+    localStorage.setItem(STORE_KEY, parseInt(panel.style.height, 10));
+    handle.classList.remove('dragging');
+    document.body.style.cursor    = '';
+    document.body.style.userSelect = '';
+    dragStartY = null;
+    // Rebuild anchors after resize — panel height change shifts mdMax/htMax.
+    requestAnimationFrame(() => buildScrollAnchors());
+  });
+}());
 function toggleLayout() {
   layout=layout==='split'?'single':'split';
   const btn=$('btn-layout'), tb=$('tabbar'), div=$('divider'), hp=$('html-panel'), mp=$('md-panel');
