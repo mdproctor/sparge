@@ -500,6 +500,12 @@ class Handler(BaseHTTPRequestHandler):
                      'detail': i.detail, 'selector': None}
                     for i in issues
                 ])
+                if refine_md:
+                    suggestions = refine_md(content, slug, html_path)
+                    State.update(slug, {'md_suggestions': [
+                        {'check': s.check, 'level': s.level, 'detail': s.detail}
+                        for s in suggestions
+                    ]})
             print(f'Generated: {slug}.md')
             self._json(200, State.get(slug))
         except Exception as e:
@@ -515,14 +521,21 @@ class Handler(BaseHTTPRequestHandler):
         if not md_path.exists():
             self._json(404, {'error': 'MD not generated yet'})
             return
-        content = md_path.read_text(errors='replace')
-        issues  = validate_md(content, slug,
-                              html_path if html_path.exists() else None)
+        content  = md_path.read_text(errors='replace')
+        html_arg = html_path if html_path.exists() else None
+        issues   = validate_md(content, slug, html_arg)
         State.set_md_issues(slug, [
             {'check': i.check, 'level': i.level,
              'detail': i.detail, 'selector': None}
             for i in issues
         ])
+        # Also run refinement checks and store as suggestions (separate from issues)
+        if refine_md:
+            suggestions = refine_md(content, slug, html_arg)
+            State.update(slug, {'md_suggestions': [
+                {'check': s.check, 'level': s.level, 'detail': s.detail}
+                for s in suggestions
+            ]})
         self._json(200, State.get(slug))
 
     def _api_scan_html(self, slug: str):
@@ -576,7 +589,9 @@ class Handler(BaseHTTPRequestHandler):
             # ── Step 3: Asset scan ────────────────────────────────────────────
             if _can_scan_assets:
                 from datetime import datetime, timezone
-                asset_result = _scan_assets(scan_path)
+                # Pass html_path (original) so relative image paths resolve correctly
+                # when scan_path is an enriched copy outside the original posts tree.
+                asset_result = _scan_assets(scan_path, original_path=html_path)
                 State.update(slug, {'assets': {
                     'total':      asset_result['total'],
                     'localised':  asset_result['localised'],

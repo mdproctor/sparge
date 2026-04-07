@@ -11,12 +11,15 @@
     keywords: { keyword: 'rule when then end import package declare salience agenda-group ruleflow-group lock-on-active no-loop accumulate collect from exists forall not and or modify update insert retract delete global eval query function' },
     contains: [h.C_LINE_COMMENT_MODE, h.C_BLOCK_COMMENT_MODE, h.QUOTE_STRING_MODE, h.C_NUMBER_MODE]
   }));
-  marked.use({ extensions: [{ name:'code', level:'block', renderer(t) {
-    const lang = t.lang || '', code = t.text || '';
+  // Use renderer (not extensions) to override built-in code blocks.
+  // extensions:[{name:'code'}] targets custom token types only and does NOT
+  // override the built-in 'code' renderer in marked.js v9 — it is silently ignored.
+  marked.use({ renderer: { code(code, lang) {
     const language = lang && hljs.getLanguage(lang) ? lang : null;
-    const hi = language ? hljs.highlight(code,{language,ignoreIllegals:true}).value : (code ? hljs.highlightAuto(code).value : code);
+    const hi = language ? hljs.highlight(code,{language,ignoreIllegals:true}).value
+                        : (code ? hljs.highlightAuto(code).value : code);
     return `<pre><code class="hljs${language?` language-${language}`:''}">${hi}</code></pre>\n`;
-  }}]});
+  }}});
 </script>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
@@ -91,16 +94,63 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .sl { font-size:11px; color:#8b949e; }
 .sv { font-size:11px; font-weight:600; }
 .sv.g{color:#3fb950}.sv.b{color:#58a6ff}.sv.o{color:#e3b341}.sv.m{color:#484f58}
+/* Expandable stat rows + issue breakdown */
+.srow.expandable { cursor:pointer; border-radius:3px; margin-left:-4px; padding-left:4px; }
+.srow.expandable:hover { background:#1c2128; }
+.expand-arrow { font-size:13px; color:#8b949e; display:inline-block;
+                transition:transform 0.15s; flex-shrink:0; line-height:1; }
+.expand-arrow.open { transform:rotate(90deg); }
+.breakdown { margin:2px 0 3px; }
+.itr { display:flex; justify-content:space-between; align-items:center;
+       padding:2px 5px; border-radius:3px; cursor:pointer; margin-bottom:1px; }
+.itr:hover { background:#1c2128; }
+.itr.active { background:#1c2d3f; }
+.itr-label { font-size:10px; color:#8b949e; }
+.itr.active .itr-label { color:#58a6ff; }
+.itr-count { font-size:10px; font-weight:600; }
+.itr-count.err { color:#f85149; }
+.itr-count.warn { color:#e3b341; }
 #pbar { height:3px; background:#21262d; border-radius:2px; margin-top:8px; overflow:hidden; }
 #pfill { height:100%; border-radius:2px; transition:width .4s;
          background:linear-gradient(90deg,#238636 0%,#1f6feb 100%); }
-#nav-filters { padding:6px 8px; border-bottom:1px solid #30363d; flex-shrink:0; display:flex; gap:4px; }
-.fb { flex:1; background:none; border:1px solid transparent; border-radius:4px;
-      padding:3px 2px; font-size:10px; color:#8b949e; cursor:pointer; text-align:center; }
+/* Filter zone — hover-expand container (button zone only, not post list) */
+.filter-zone { border-bottom:1px solid #30363d; flex-shrink:0; padding:6px 8px; cursor:default; }
+/* Always visible: All + HTML⚠ + MD⚠ */
+.filter-always { display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; }
+/* Hidden content — revealed on hover of .filter-zone */
+.filter-hidden {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px;
+  max-height:0; overflow:hidden;
+  transition:max-height 0.18s ease, margin-top 0.18s ease;
+  margin-top:0;
+}
+.filter-zone:hover .filter-hidden { max-height:200px; margin-top:3px; }
+.select-wrap {
+  max-height:0; overflow:hidden;
+  transition:max-height 0.18s ease, margin-top 0.18s ease;
+  margin-top:0;
+}
+.filter-zone:hover .select-wrap { max-height:40px; margin-top:3px; }
+/* Expand hint — fades out on hover */
+.expand-hint { font-size:9px; color:#484f58; text-align:right; margin-top:2px;
+               letter-spacing:.04em; transition:opacity 0.15s; line-height:1; }
+.filter-zone:hover .expand-hint { opacity:0; }
+/* Scope actions row — border/padding zeroed at rest so max-height:0 fully collapses */
+.scope-row { padding-top:0; border-top:none; }
+.filter-zone:hover .scope-row { padding-top:6px; border-top:1px solid #30363d; }
+#gen-all-row { display:flex; flex-direction:row; gap:0; }
+.scope-col { flex:1; display:flex; flex-direction:column; gap:3px; }
+.scope-col + .scope-col { border-left:1px solid #30363d; padding-left:6px; margin-left:0; }
+.scope-col:first-child { padding-right:6px; }
+.scope-col-header { font-size:8px; color:#484f58; text-align:center;
+                    text-transform:uppercase; letter-spacing:.05em; padding-bottom:2px; }
+.scope-btn { background:none; border:1px solid transparent; border-radius:4px;
+             padding:3px 2px; font-size:9px; color:#8b949e; cursor:pointer; text-align:center; }
+.scope-btn:hover { background:#21262d; color:#c9d1d9; }
+.fb { background:none; border:1px solid transparent; border-radius:4px;
+      padding:3px 2px; font-size:9px; color:#8b949e; cursor:pointer; text-align:center; }
 .fb:hover { background:#21262d; color:#c9d1d9; }
 .fb.active { background:#21262d; border-color:#30363d; color:#c9d1d9; }
-#gen-all-row { padding:6px 8px; border-bottom:1px solid #30363d; flex-shrink:0; display:flex; gap:6px; align-items:center; }
-#gen-progress { font-size:10px; color:#8b949e; flex:1; }
 #post-list { flex:1; overflow-y:auto; }
 .pi { padding:7px 10px; border-bottom:1px solid #1a1f26; cursor:pointer; transition:background .1s; }
 .pi:hover { background:#1c2128; }
@@ -188,6 +238,16 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .irow.no-selector { opacity:.55; }
 .irow.highlighted.err  { background:#f8514922; outline:1px solid #f8514966; }
 .irow.highlighted.warn { background:#e3b34122; outline:1px solid #e3b34166; }
+/* MD panel — missing-content marker (red dashed line where dropped content should be) */
+.md-absent-marker { border-top:2px dashed #f85149; border-bottom:2px dashed #f85149;
+                    padding:3px 12px; margin:6px 0; background:#f8514908;
+                    font-size:10px; color:#f85149; font-style:italic; cursor:default; }
+/* MD panel highlight — same red as HTML iframe outline */
+#md-wrap .md-hl { outline:3px solid #f85149 !important; outline-offset:2px;
+                  background:#f851491a !important; border-radius:3px;
+                  scroll-margin-top:60px; }
+#md-wrap mark.md-hl { display:inline; background:#f851493a !important;
+                       outline:2px solid #f85149 !important; outline-offset:1px; }
 .no-iss { padding:6px 12px; font-size:11px; color:#484f58; font-style:italic; }
 .irow-tooltip { position:fixed; background:#21262d; border:1px solid #f85149; color:#f85149;
                 font-size:11px; padding:3px 8px; border-radius:4px; pointer-events:none;
@@ -307,30 +367,48 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
     <div id="nav-stats">
       <h3 id="proj-name">Loading…</h3>
       <div class="srow"><span class="sl">Total</span><span class="sv" id="s-total">—</span></div>
-      <div class="srow"><span class="sl">HTML issues</span><span class="sv o" id="s-html">—</span></div>
+      <div class="srow expandable" onclick="toggleBreakdown('html')" title="Show breakdown by issue type"><span class="sl">HTML issues</span><span style="display:flex;align-items:center;gap:5px"><span class="sv o" id="s-html">—</span><span class="expand-arrow" id="html-arr">▸</span></span></div>
+      <div class="breakdown" id="html-breakdown" style="display:none"></div>
       <div class="srow"><span class="sl">MD generated</span><span class="sv b" id="s-mdgen">—</span></div>
       <div class="srow"><span class="sl">MD stale</span><span class="sv o" id="s-stale">—</span></div>
-      <div class="srow"><span class="sl">MD issues</span><span class="sv o" id="s-mdiss">—</span></div>
+      <div class="srow expandable" onclick="toggleBreakdown('md')" title="Show breakdown by check type"><span class="sl">MD issues</span><span style="display:flex;align-items:center;gap:5px"><span class="sv o" id="s-mdiss">—</span><span class="expand-arrow" id="md-arr">▸</span></span></div>
+      <div class="breakdown" id="md-breakdown" style="display:none"></div>
       <div class="srow"><span class="sl">Reviewed</span><span class="sv g" id="s-rev">—</span></div>
       <div id="pbar"><div id="pfill" style="width:0%"></div></div>
     </div>
-    <div id="nav-filters">
-      <select id="author-select" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:3px 6px;font-size:12px;cursor:pointer" title="Filter by author">
-        <option value="">All authors</option>
-      </select>
-      <button class="fb active" onclick="setFilter(this,'all')">All</button>
-      <button class="fb" onclick="setFilter(this,'html-issues')">HTML⚠</button>
-      <button class="fb" onclick="setFilter(this,'md-issues')">MD⚠</button>
-      <button class="fb" onclick="setFilter(this,'stale')">Stale</button>
-      <button class="fb" onclick="setFilter(this,'staged')">📋 Staged</button>
-      <button class="fb" onclick="setFilter(this,'no-md')">No MD</button>
-    </div>
-    <div id="gen-all-row">
-      <button onclick="generateAll()" id="btn-gen-all" style="font-size:11px;padding:3px 8px" title="Generate MD for posts in current scope that don't have it yet">⚙ Gen scope</button>
-      <button onclick="scanAll()" id="btn-scan-all" style="font-size:11px;padding:3px 8px" title="Scan HTML for all posts in current scope">🔍 Scan scope</button>
-      <button onclick="validateAll()" id="btn-val-all" style="font-size:11px;padding:3px 8px" title="Validate MD for all posts in current scope that have MD">✓ Validate scope</button>
-      <button onclick="consolidateAssets()" id="btn-consolidate" style="font-size:11px;padding:3px 8px" title="De-duplicate shared assets across all posts">⟳ Consolidate</button>
-      <span id="gen-progress"></span>
+    <div class="filter-zone">
+      <!-- Always visible: All + HTML⚠ -->
+      <div class="filter-always">
+        <button class="fb active" onclick="setFilter(this,'all')" title="Show all posts">All</button>
+        <button class="fb" onclick="setFilter(this,'html-issues')" title="Posts with HTML scan issues">HTML⚠</button>
+        <button class="fb" onclick="setFilter(this,'md-issues')" title="Posts with Markdown validation issues">MD⚠</button>
+      </div>
+      <div class="expand-hint">▾ more filters</div>
+      <!-- Revealed on hover of button zone -->
+      <div class="filter-hidden">
+        <button class="fb" onclick="setFilter(this,'stale')" title="Posts whose MD is older than the source HTML">Stale</button>
+        <button class="fb" onclick="setFilter(this,'staged')" title="Posts with a staged (pending review) MD version">📋 Staged</button>
+        <button class="fb" onclick="setFilter(this,'no-md')" title="Posts that have not yet had MD generated">No MD</button>
+      </div>
+      <div class="select-wrap">
+        <select id="author-select" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:3px 6px;font-size:11px;width:100%;cursor:pointer" title="Filter by author">
+          <option value="">All authors</option>
+        </select>
+      </div>
+      <!-- Scope actions row -->
+      <div class="filter-hidden scope-row" id="gen-all-row">
+        <div class="scope-col">
+          <div class="scope-col-header">HTML</div>
+          <button onclick="scanAll()" id="btn-scan-all" class="scope-btn" title="Scan HTML for all posts in current scope">🔍 Scan</button>
+          <button onclick="consolidateAssets()" id="btn-consolidate" class="scope-btn" title="De-duplicate shared assets across all posts">⟳ Consolidate</button>
+        </div>
+        <div class="scope-col">
+          <div class="scope-col-header">Markdown</div>
+          <button onclick="generateAll()" id="btn-gen-all" class="scope-btn" title="Generate MD for all posts in scope — prompts per-file when MD already exists">⚙ Generate</button>
+          <button onclick="validateAll()" id="btn-val-all" class="scope-btn" title="Validate MD for all posts in current scope that have MD">✓ Validate</button>
+        </div>
+      </div>
+      <span id="gen-progress" style="font-size:9px;color:#8b949e;display:block;margin-top:3px;text-align:center"></span>
     </div>
     <!-- Bulk staged actions — only meaningful when filtered to Staged -->
     <div id="staged-bulk-row" style="display:none;padding:6px 8px;border-bottom:1px solid #30363d;gap:6px;align-items:center">
@@ -509,8 +587,9 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 
 <script>
 const API = '';
-let allPosts = [], currentSlug = null, currentFilter = 'all', cfg = {};
+let allPosts = [], currentSlug = null, currentFilter = 'all', currentIssueType = null, currentMdCheck = null, cfg = {};
 let currentAuthor = '';
+let htmlBreakdownOpen = false, mdBreakdownOpen = false;
 let layout = 'split', activeTab = 'orig', issuesOpen = false;
 let currentHighlightSelector = null, currentHighlightRow = null;
 
@@ -1040,7 +1119,7 @@ function promptUnsaved() {
 
 // ── Helpers ───────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 // ── Data ──────────────────────────────────────────────────────────
 async function fetchPosts(author = '') {
@@ -1085,6 +1164,122 @@ function renderStats() {
   const rev=allPosts.filter(p=>p.reviewed).length;
   $('s-rev').textContent=rev;
   $('pfill').style.width=n?(rev/n*100)+'%':'0%';
+  renderBreakdowns();
+}
+
+const HTML_ISSUE_LABELS = {
+  data_placeholder:   'Data placeholder',
+  noscript_remnant:   'Noscript remnant',
+  external_image:     'External image',
+  tracking_pixel:     'Tracking pixel',
+  missing_local_image:'Missing image',
+  empty_embed:        'Empty embed',
+};
+const MD_CHECK_LABELS = {
+  orphaned_placeholder:    'Code placeholder',
+  stray_digit_after_fence: 'Fence digit',
+  unbalanced_fences:       'Unbalanced fences',
+  empty_code_blocks:       'Empty code block',
+  missing_front_matter:    'Missing front matter',
+  unclosed_front_matter:   'Unclosed front matter',
+  missing_fm_field:        'Missing FM field',
+  bad_date_format:         'Bad date format',
+  empty_title:             'Empty title',
+  empty_body:              'Empty body',
+  wordpress_junk:          'WordPress junk',
+  html_entities_in_body:   'HTML entities',
+  relative_image_path:     'Relative image path',
+  broken_links:            'Broken links',
+  excessive_blank_lines:   'Excess blank lines',
+  prose_in_code:           'Prose in code block',
+  duplicate_paragraph:     'Duplicate paragraph',
+  excessive_line_length:   'Long line',
+  many_missing_images:     'Missing images',
+  cross_check_error:       'Cross-check error',
+};
+
+function _renderBreakdown(bd, counts, currentKey, onclickFn, labelMap) {
+  const types = Object.entries(counts).sort((a,b) => b[1].n - a[1].n);
+  if (!types.length) { bd.innerHTML = ''; return; }
+  bd.innerHTML = types.map(([key, {n, level}]) => {
+    const label  = labelMap[key] || key;
+    const cls    = level === 'ERROR' ? 'err' : 'warn';
+    const active = currentKey === key ? ' active' : '';
+    const tip    = `Filter to ${n} post${n!==1?'s':''} with '${label}' issues`;
+    return `<div class="itr${active}" data-key="${key}" onclick="${onclickFn}('${key}')" title="${tip}">` +
+           `<span class="itr-label">${label}</span>` +
+           `<span class="itr-count ${cls}">${n}</span></div>`;
+  }).join('');
+}
+
+function renderBreakdowns() {
+  // HTML breakdown
+  const hbd = $('html-breakdown');
+  if (hbd) {
+    const counts = {};
+    for (const p of allPosts) {
+      const seen = new Set();
+      for (const iss of (p.html?.issues || [])) {
+        if (!seen.has(iss.type)) {
+          seen.add(iss.type);
+          if (!counts[iss.type]) counts[iss.type] = { n: 0, level: iss.level };
+          counts[iss.type].n++;
+        }
+      }
+    }
+    _renderBreakdown(hbd, counts, currentIssueType, 'setIssueType', HTML_ISSUE_LABELS);
+  }
+  // MD breakdown
+  const mbd = $('md-breakdown');
+  if (mbd) {
+    const counts = {};
+    for (const p of allPosts) {
+      const seen = new Set();
+      for (const iss of (p.md?.issues || [])) {
+        if (!seen.has(iss.check)) {
+          seen.add(iss.check);
+          if (!counts[iss.check]) counts[iss.check] = { n: 0, level: iss.level };
+          counts[iss.check].n++;
+        }
+      }
+    }
+    _renderBreakdown(mbd, counts, currentMdCheck, 'setMdCheck', MD_CHECK_LABELS);
+  }
+}
+
+function toggleBreakdown(kind) {
+  if (kind === 'html') {
+    htmlBreakdownOpen = !htmlBreakdownOpen;
+    $('html-breakdown').style.display = htmlBreakdownOpen ? '' : 'none';
+    $('html-arr').classList.toggle('open', htmlBreakdownOpen);
+  } else {
+    mdBreakdownOpen = !mdBreakdownOpen;
+    $('md-breakdown').style.display = mdBreakdownOpen ? '' : 'none';
+    $('md-arr').classList.toggle('open', mdBreakdownOpen);
+  }
+}
+
+function setIssueType(type) {
+  currentIssueType = currentIssueType === type ? null : type;
+  if (currentIssueType) {
+    currentFilter = 'html-issues';
+    document.querySelectorAll('.fb').forEach(b => b.classList.remove('active'));
+    document.querySelector('.fb[onclick*="html-issues"]')?.classList.add('active');
+    $('staged-bulk-row').style.display = 'none';
+  }
+  renderBreakdowns();
+  renderNav();
+}
+function setMdCheck(check) {
+  currentMdCheck = currentMdCheck === check ? null : check;
+  if (currentMdCheck) {
+    currentFilter = 'md-issues';
+    document.querySelectorAll('.fb').forEach(b => b.classList.remove('active'));
+    document.querySelector('.fb[onclick*="md-issues"]')?.classList.add('active');
+    $('staged-bulk-row').style.display = 'none';
+  }
+  renderBreakdowns();
+  renderNav();
 }
 
 // ── Nav ───────────────────────────────────────────────────────────
@@ -1092,8 +1287,14 @@ function filtered() {
   return allPosts.filter(p => {
     const hi=(p.html?.issues||[]).length, mi=(p.md?.issues||[]).length;
     const gen=!!p.md?.generated_at, stale=p.md?.stale, staged=p.md?.staged;
-    if (currentFilter==='html-issues') return hi>0;
-    if (currentFilter==='md-issues')   return mi>0;
+    if (currentFilter==='html-issues') {
+      if (currentIssueType) return (p.html?.issues||[]).some(i=>i.type===currentIssueType);
+      return hi>0;
+    }
+    if (currentFilter==='md-issues') {
+      if (currentMdCheck) return (p.md?.issues||[]).some(i=>i.check===currentMdCheck);
+      return mi>0;
+    }
     if (currentFilter==='stale')       return stale && !staged;
     if (currentFilter==='staged')      return staged;
     if (currentFilter==='no-md')       return !gen;
@@ -1102,8 +1303,11 @@ function filtered() {
 }
 function setFilter(btn,f) {
   currentFilter=f;
+  currentIssueType=null;
+  currentMdCheck=null;
   document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
+  renderBreakdowns();
   // Show bulk-staged controls only when viewing the Staged filter
   const stagedRow=$('staged-bulk-row');
   if (stagedRow) stagedRow.style.display = f==='staged' ? 'flex' : 'none';
@@ -1124,7 +1328,7 @@ function renderNav() {
     else if (rev)      mb='<span class="badge b-ok">✓ Reviewed</span>';
     else               mb='<span class="badge b-blue">✓ MD</span>';
     const sel=p.slug===currentSlug?' selected':'';
-    return `<div class="pi${sel}" id="pi-${p.slug}" onclick="selectPost('${p.slug}')">
+    return `<div class="pi${sel}" id="pi-${p.slug}" data-slug="${p.slug}" onclick="selectPost('${p.slug}')">
       <div class="pi-date">${esc(p.date)}</div>
       <div class="pi-title">${esc((p.title||p.slug).replace(/- KIE Community$/,'').trim().slice(0,48))}</div>
       <div class="pi-badges">${hb}${mb}${p.flagged?'<span class="badge b-err">🚩</span>':''}</div>
@@ -1258,17 +1462,44 @@ async function selectPost(slug) {
 function renderPanelBadges(p) {
   const hi=(p.html?.issues||[]).length, mi=(p.md?.issues||[]).length;
   const hb=$('ph-html-badge'), mb=$('ph-md-badge'), ab=$('ph-assets-badge');
-  if (hi) { hb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; hb.textContent=`⚠ ${hi}`; }
-  else hb.style.display='none';
-  if (p.md?.staged) { mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; mb.textContent='📋 Staged — awaiting review'; }
-  else if (p.md?.stale) { mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; mb.textContent='↺ Stale — HTML changed'; }
-  else if (mi) { mb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; mb.textContent=`⚠ ${mi}`; }
-  else mb.style.display='none';
-  // Assets badge on the HTML panel header
+  const herrs=(p.html?.issues||[]).filter(i=>i.level==='ERROR').length;
+  const hwarns=hi-herrs;
+  if (hi) {
+    hb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    hb.textContent = herrs && hwarns ? `✕ ${herrs} · ⚠ ${hwarns}` : herrs ? `✕ ${herrs}` : `⚠ ${hwarns}`;
+    const errPart  = herrs  ? `${herrs} error${herrs!==1?'s':''}` : '';
+    const warnPart = hwarns ? `${hwarns} warning${hwarns!==1?'s':''}` : '';
+    hb.title = `HTML scan issues: ${[errPart, warnPart].filter(Boolean).join(', ')} — click Issues to see details`;
+  } else hb.style.display='none';
+  if (p.md?.staged) {
+    mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    mb.textContent='📋 Staged — awaiting review';
+    mb.title='A staged Markdown version exists and is awaiting your review';
+  } else if (p.md?.stale) {
+    mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    mb.textContent='↺ Stale — HTML changed';
+    mb.title='The HTML source has changed since MD was generated — regenerate to update';
+  } else if (mi) {
+    mb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    mb.textContent=`⚠ ${mi} MD`;
+    const merrs  = (p.md?.issues||[]).filter(i=>i.level==='ERROR').length;
+    const mwarns = mi - merrs;
+    const merrPart  = merrs  ? `${merrs} error${merrs!==1?'s':''}` : '';
+    const mwarnPart = mwarns ? `${mwarns} warning${mwarns!==1?'s':''}` : '';
+    mb.title = `Markdown validation issues: ${[merrPart, mwarnPart].filter(Boolean).join(', ')} — click Issues to see details`;
+  } else mb.style.display='none';
+  // Assets badge — clearly labelled as images, separate from HTML scan issues
   const assets=p.assets||{};
   if (assets.checked_at) {
-    if (assets.broken===0) { ab.style.cssText='display:inline;background:#12261e;color:#3fb950;border-radius:3px;padding:1px 6px;font-size:10px'; ab.textContent=`🖼 ${assets.localised}/${assets.total} ✓`; }
-    else { ab.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px'; ab.textContent=`🖼 ⚠ ${assets.broken} broken`; }
+    if (assets.broken===0) {
+      ab.style.cssText='display:inline;background:#12261e;color:#3fb950;border-radius:3px;padding:1px 6px;font-size:10px';
+      ab.textContent=`🖼 ${assets.localised}/${assets.total}`;
+      ab.title=`${assets.localised} of ${assets.total} images successfully localised`;
+    } else {
+      ab.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+      ab.textContent=`🖼 ${assets.broken} missing`;
+      ab.title=`${assets.broken} image${assets.broken!==1?'s':''} could not be localised (broken or unreachable)`;
+    }
   } else ab.style.display='none';
   // Show/hide the Review Staged button
   const stagedBtn=$('btn-staged');
@@ -1293,6 +1524,23 @@ async function loadMd(p) {
     const {fm,body}=parseFM(raw);
     const cats=Array.isArray(fm.categories)?fm.categories:[];
     wrap.innerHTML=`<div class="fm-card"><h1>${esc(fm.title||p.title||p.slug)}</h1><div class="fm-meta">${esc(fm.date||p.date||'')}${fm.author?' · '+esc(fm.author):''}</div>${cats.length?`<div class="fm-tags">${cats.map(c=>`<span class="fm-tag">${esc(c)}</span>`).join('')}</div>`:''}</div>`+marked.parse(body);
+    // Apply syntax highlighting directly — marked.use renderer override is
+    // unreliable across marked.js versions; post-processing is always correct.
+    wrap.querySelectorAll('pre code').forEach(el => {
+      const m = el.className.match(/language-(\w+)/);
+      const lang = m ? m[1] : null;
+      try {
+        if (lang && hljs.getLanguage(lang)) {
+          el.innerHTML = hljs.highlight(el.textContent, {language: lang, ignoreIllegals: true}).value;
+          el.classList.add('hljs');
+        } else if (el.textContent.trim()) {
+          const result = hljs.highlightAuto(el.textContent);
+          el.innerHTML = result.value;
+          el.classList.add('hljs');
+          if (result.language) el.classList.add(`language-${result.language}`);
+        }
+      } catch(e) { /* leave unhighlighted on error */ }
+    });
   } catch(e) { wrap.innerHTML=`<p style="color:#f85149;padding:8px 0">Could not load MD</p>`; }
 }
 function parseFM(raw) {
@@ -1308,21 +1556,40 @@ function parseFM(raw) {
 }
 function renderIssuePanel(p) {
   const hi=p.html?.issues||[], mi=p.md?.issues||[];
-  const makeRows = (issues) => issues.map(iss => {
+  const makeHtmlRows = issues => issues.map(iss => {
     const cls = iss.level==='ERROR' ? 'err' : 'warn';
     const sel = iss.selector || null;
     const extra = sel ? ' clickable' : ' no-selector';
-    const dataAttr = sel ? ` data-selector="${esc(sel)}"` : '';
-    return `<div class="irow ${cls}${extra}"${dataAttr}>[${iss.level}] ${esc(iss.check)}: ${esc(iss.detail)}</div>`;
+    const dataAttrs = ` data-check="${esc(iss.check)}" data-detail="${esc(iss.detail)}"` +
+                      (sel ? ` data-selector="${esc(sel)}"` : '');
+    return `<div class="irow ${cls}${extra}"${dataAttrs}>[${iss.level}] ${esc(iss.check)}: ${esc(iss.detail)}</div>`;
   }).join('');
-  $('html-issue-list').innerHTML = hi.length ? makeRows(hi) : '<div class="no-iss">No HTML issues recorded</div>';
-  $('md-issue-list').innerHTML   = mi.length ? makeRows(mi) : '<div class="no-iss">No MD issues recorded</div>';
-  // Attach click handlers to clickable rows
-  document.querySelectorAll('#html-issue-list .irow.clickable, #md-issue-list .irow.clickable').forEach(row => {
+  const makeMdRows = issues => issues.map(iss => {
+    const cls = iss.level==='ERROR' ? 'err' : 'warn';
+    return `<div class="irow ${cls} clickable" data-check="${esc(iss.check)}" data-detail="${esc(iss.detail)}">[${iss.level}] ${esc(iss.check)}: ${esc(iss.detail)}</div>`;
+  }).join('');
+  // Asset broken images: add one aggregate entry to the HTML issues list so the
+  // panel entry count matches what the asset badge shows (assets.broken > 0 = 1 entry).
+  // Individual broken asset paths are not stored in state — only the count.
+  const assets = p.assets || {};
+  const assetRow = (assets.checked_at && assets.broken > 0)
+    ? `<div class="irow warn no-selector" data-check="images_not_localised" data-detail="${esc(`${assets.broken} of ${assets.total} image(s) could not be localised — re-run Scan for details`)}">[WARN] images_not_localised: ${assets.broken} of ${assets.total} image(s) could not be localised</div>`
+    : '';
+  const htmlContent = makeHtmlRows(hi) + assetRow;
+  $('html-issue-list').innerHTML = htmlContent || '<div class="no-iss">No HTML issues recorded</div>';
+  $('md-issue-list').innerHTML   = mi.length ? makeMdRows(mi)   : '<div class="no-iss">No MD issues recorded</div>';
+  // HTML issue click → iframe highlight
+  document.querySelectorAll('#html-issue-list .irow.clickable').forEach(row => {
     row.addEventListener('click', () => {
-      const sel = row.dataset.selector;
       if (currentHighlightRow === row) { clearHighlight(); return; }
-      highlightIssue(sel, row);
+      highlightIssue(row.dataset.selector, row);
+    });
+  });
+  // MD issue click → md-wrap highlight
+  document.querySelectorAll('#md-issue-list .irow.clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      if (currentHighlightRow === row) { clearHighlight(); return; }
+      highlightMdIssue(row.dataset.check, row.dataset.detail, row);
     });
   });
 }
@@ -1370,6 +1637,168 @@ function clearHighlight() {
   }
   currentHighlightSelector = null;
   clearIframeHighlight();
+  clearMdHighlight();
+}
+
+// ── MD issue highlighting ──────────────────────────────────────────
+let _mdHlEl = null;  // element highlighted via class
+
+function clearMdHighlight() {
+  // Remove <mark> elements, restoring original text nodes
+  document.querySelectorAll('#md-wrap mark.md-hl').forEach(m => {
+    const p = m.parentNode;
+    if (p) { while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m); p.normalize(); }
+  });
+  // Remove class from element-type highlights
+  if (_mdHlEl) { _mdHlEl.classList.remove('md-hl'); _mdHlEl = null; }
+  // Remove missing-content markers
+  document.querySelectorAll('#md-wrap .md-absent-marker').forEach(el => el.remove());
+}
+
+function _insertMdMarker(text, nearText) {
+  const wrap = $('md-wrap');
+  if (!wrap || wrap.style.display === 'none') return;
+  const marker = document.createElement('div');
+  marker.className = 'md-absent-marker';
+  marker.title = text;
+  marker.textContent = `↕ Missing: ${text}`;
+  // Try to anchor near the context text (content that surrounds the gap in MD)
+  if (nearText) {
+    const shortText = nearText.slice(0, 25);
+    const walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue.includes(shortText)) {
+        const parent = node.parentElement;
+        if (parent && parent !== wrap) {
+          parent.insertAdjacentElement('afterend', marker);
+          marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      }
+    }
+  }
+  // Fallback: insert at start of body, after the front-matter card
+  const fmCard = wrap.querySelector('.fm-card');
+  if (fmCard) fmCard.insertAdjacentElement('afterend', marker);
+  else         wrap.prepend(marker);
+  marker.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Map check name + detail → target in the rendered #md-wrap DOM
+function _mdTarget(check, detail) {
+  switch (check) {
+    case 'missing_fm_field': case 'bad_date_format': case 'empty_title':
+    case 'missing_front_matter': case 'unclosed_front_matter':
+      return { type: 'sel', value: '.fm-card' };
+    case 'broken_links':
+      return { type: 'sel', value: 'a[href=""]' };
+    case 'relative_image_path':
+      return { type: 'sel', value: 'img[src^="../../"]' };
+    case 'empty_code_blocks': case 'prose_in_code':
+    case 'unbalanced_fences': case 'stray_digit_after_fence':
+      return { type: 'sel', value: 'pre code' };
+    case 'many_missing_images':
+      return { type: 'sel', value: 'img' };
+    case 'duplicate_paragraph': {
+      const m = detail.match(/"([^"]{8,})/);
+      return m ? { type: 'text', value: m[1].slice(0, 40) } : { type: 'top' };
+    }
+    case 'wordpress_junk': {
+      const m = detail.match(/^(.+?) in body/);
+      return m ? { type: 'text', value: m[1].trim() } : { type: 'top' };
+    }
+    case 'orphaned_placeholder': {
+      const m = detail.match(/\[['"]([^'"]+)/);
+      return { type: 'text', value: m ? m[1] : '{{' };
+    }
+    case 'html_entities_in_body':
+      return { type: 'text', value: '&' };
+    case 'empty_body':
+      return { type: 'top' };
+    // Content absent from MD — highlight the HTML source and mark where it should be in MD
+    case 'lists_dropped':
+      return { type: 'missing-with-html', htmlSel: 'ul, ol',
+               markerText: 'Lists were dropped in conversion — see HTML panel for original content' };
+    case 'content_phrase_missing': {
+      const m2 = detail.match(/"([^"]{8,})/);
+      const phrase = m2 ? m2[1].slice(0, 60) : null;
+      return { type: 'missing-with-html', htmlSel: 'p',
+               markerText: phrase ? `Absent from MD: "${phrase}"` : 'Content phrase absent from MD',
+               mdContext: phrase };
+    }
+    case 'cross_check_error':
+      return { type: 'absent', msg: 'Could not load HTML for cross-check — no location available' };
+    default:
+      return { type: 'top' };
+  }
+}
+
+function highlightMdIssue(check, detail, rowEl) {
+  clearHighlight();
+  const wrap = $('md-wrap');
+  if (!wrap || wrap.style.display === 'none') {
+    showRowTooltip(rowEl, 'MD not loaded'); return;
+  }
+  const target = _mdTarget(check, detail);
+  // Absent: content was dropped in conversion — nothing to highlight, show explanation
+  if (target.type === 'absent') {
+    showRowTooltip(rowEl, target.msg);
+    currentHighlightRow = rowEl;
+    rowEl.classList.add('highlighted');
+    return;
+  }
+  // Missing-with-html: content is in the HTML but absent from the MD.
+  // Highlight the HTML side to show what was dropped, and insert a red dashed
+  // marker in the MD panel to show where it should have appeared.
+  if (target.type === 'missing-with-html') {
+    clearHighlight();
+    if (target.htmlSel) {
+      const found = applyIframeHighlight(target.htmlSel);
+      if (found) currentHighlightSelector = target.htmlSel;
+    }
+    _insertMdMarker(target.markerText, target.mdContext || null);
+    currentHighlightRow = rowEl;
+    rowEl.classList.add('highlighted');
+    return;
+  }
+  let found = false;
+  if (target.type === 'sel') {
+    const el = wrap.querySelector(target.value);
+    if (el) {
+      el.classList.add('md-hl'); _mdHlEl = el;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      found = true;
+    }
+  } else if (target.type === 'text') {
+    found = _mdTextHighlight(wrap, target.value);
+  } else { // top
+    ($('md-panel-body') || wrap).scrollTo({ top: 0, behavior: 'smooth' });
+    found = true;
+  }
+  if (!found) { showRowTooltip(rowEl, 'Location not found in rendered MD'); return; }
+  currentHighlightRow = rowEl;
+  rowEl.classList.add('highlighted');
+}
+
+function _mdTextHighlight(wrap, term) {
+  const walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const idx = node.nodeValue.indexOf(term);
+    if (idx < 0) continue;
+    const range = document.createRange();
+    range.setStart(node, idx);
+    range.setEnd(node, idx + term.length);
+    const mark = document.createElement('mark');
+    mark.className = 'md-hl';
+    try {
+      range.surroundContents(mark);
+      mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return true;
+    } catch(e) { return false; }
+  }
+  return false;
 }
 function showRowTooltip(rowEl, msg) {
   const existing = document.querySelector('.irow-tooltip');
@@ -1400,7 +1829,9 @@ async function generateMd() {
         fetch(`${API}/api/posts/${encodeURIComponent(currentSlug)}/generate-md?dry=1`,{method:'POST'})
       ]);
       if (existingR.ok && newR.ok) {
-        const existingMd=await existingR.text(), newMd=await newR.text();
+        const existingMd=await existingR.text();
+        // dry-run returns {"content": "..."} — extract the actual MD string
+        const newMd=(await newR.json()).content ?? '';
         btn.textContent='↺ Generate'; btn.disabled=false;
         if (existingMd.trim()!==newMd.trim()) { showDiffModal(existingMd,newMd,currentSlug); return; }
         // Same content — show checkmark and skip writing
@@ -1486,28 +1917,84 @@ async function toggleFlag() {
   await reloadPost(currentSlug);
 }
 
+// ── Overwrite-conflict prompt ─────────────────────────────────────────────────
+// Shows a non-blocking modal when generateAll() encounters a post that already
+// has MD. Returns a Promise that resolves to one of four decisions so the
+// async loop can pause until the user responds.
+function _promptOverwrite(slug) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.style.cssText = [
+      'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000',
+      'display:flex;align-items:center;justify-content:center',
+    ].join(';');
+    ov.innerHTML = `
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                  padding:24px 28px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.6)">
+        <div style="font-size:14px;color:#e6edf3;font-weight:600;margin-bottom:6px">
+          MD already exists</div>
+        <div style="font-size:12px;color:#8b949e;margin-bottom:18px;word-break:break-all">
+          ${slug}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button id="_ow-one"  style="padding:8px;background:#1f6feb22;border:1px solid #1f6feb;
+            color:#58a6ff;border-radius:6px;cursor:pointer;font-size:12px">↺ Overwrite this</button>
+          <button id="_ow-skip" style="padding:8px;background:none;border:1px solid #30363d;
+            color:#8b949e;border-radius:6px;cursor:pointer;font-size:12px">⏭ Skip this</button>
+          <button id="_ow-all"  style="padding:8px;background:#238636;border:1px solid #2ea043;
+            color:#fff;border-radius:6px;cursor:pointer;font-size:12px">↺ Overwrite all</button>
+          <button id="_ow-stop" style="padding:8px;background:none;border:1px solid #30363d;
+            color:#8b949e;border-radius:6px;cursor:pointer;font-size:12px">⏹ Skip remaining</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const cleanup = decision => { ov.remove(); resolve(decision); };
+    ov.querySelector('#_ow-one' ).onclick = () => cleanup('overwrite');
+    ov.querySelector('#_ow-skip').onclick = () => cleanup('skip');
+    ov.querySelector('#_ow-all' ).onclick = () => cleanup('overwrite-all');
+    ov.querySelector('#_ow-stop').onclick = () => cleanup('skip-remaining');
+  });
+}
+
 async function generateAll() {
-  // Generates posts in the current filter scope that don't yet have MD
   const btn=$('btn-gen-all'), prog=$('gen-progress');
   btn.disabled=true; $('btn-scan-all').disabled=true;
-  const posts=filtered().filter(p=>!p.md?.generated_at);
+  // Always target every post in the current scope — previously this skipped
+  // posts that already had MD (only generating new ones), which meant "All"
+  // and "Stale" scopes did nothing when all posts had existing MD.
+  const posts = filtered();
   if (!posts.length) {
-    prog.textContent='✓ Nothing to generate in current scope';
+    prog.textContent = '✓ Nothing in current scope';
     btn.disabled=false; $('btn-scan-all').disabled=false;
-    setTimeout(()=>{prog.textContent='';},3000); return;
+    setTimeout(()=>{ prog.textContent=''; }, 3000); return;
   }
-  let done=0, failed=0;
+
+  let done=0, failed=0, skipped=0;
+  // batchDecision: null = ask each time | 'overwrite-all' | 'skip-remaining'
+  let batchDecision = null;
+
   for (const p of posts) {
-    prog.textContent=`${done}/${posts.length} — ${p.slug.slice(0,22)}…`;
+    if (batchDecision === 'skip-remaining') { skipped++; continue; }
+
+    const hasExisting = !!p.md?.generated_at;
+    if (hasExisting && batchDecision === null) {
+      const choice = await _promptOverwrite(p.slug);
+      if (choice === 'skip')           { skipped++; continue; }
+      if (choice === 'skip-remaining') { skipped++; batchDecision = 'skip-remaining'; continue; }
+      if (choice === 'overwrite-all')  { batchDecision = 'overwrite-all'; }
+      // 'overwrite' or 'overwrite-all' → fall through to generate
+    }
+
+    prog.textContent = `Generating ${done+skipped+1}/${posts.length} — ${p.slug.slice(0,22)}…`;
     try {
-      const r=await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/generate-md`,{method:'POST'});
-      if(r.ok) done++; else failed++;
+      const r = await fetch(`${API}/api/posts/${encodeURIComponent(p.slug)}/generate-md`, {method:'POST'});
+      if (r.ok) done++; else failed++;
     } catch(e) { failed++; }
   }
-  prog.textContent=`✓ ${done} generated${failed?`, ${failed} failed`:''}`;
+
+  prog.textContent = `✓ ${done} generated${skipped ? `, ${skipped} skipped` : ''}${failed ? `, ${failed} failed` : ''}`;
   btn.disabled=false; $('btn-scan-all').disabled=false; $('btn-val-all').disabled=false;
   await loadAll();
-  setTimeout(()=>{prog.textContent='';},5000);
+  setTimeout(()=>{ prog.textContent=''; }, 5000);
 }
 
 async function validateAll() {
