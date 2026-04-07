@@ -137,10 +137,11 @@ except ImportError:
     _can_generate = False
 
 try:
-    from md_validator import validate as validate_md
+    from md_validator import validate as validate_md, refine as refine_md
     _can_validate = True
 except ImportError:
     _can_validate = False
+    refine_md = None
 
 # scan_html lives in our own scripts/
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -254,6 +255,8 @@ class Handler(BaseHTTPRequestHandler):
             rest = path[len('/api/posts/'):]
             if rest.endswith('/staged'):
                 self._api_staged_get(rest[:-len('/staged')])
+            elif rest.endswith('/view'):
+                self._api_post_view(rest[:-len('/view')])
             elif rest.endswith('/html'):
                 self._api_post_html(rest[:-len('/html')])
             else:
@@ -607,6 +610,38 @@ class Handler(BaseHTTPRequestHandler):
                 ])
             print(f'Saved (manual edit): {slug}.md')
             self._json(200, State.get(slug))
+        except Exception as e:
+            self._json(500, {'error': str(e)})
+
+    def _api_post_view(self, slug: str):
+        """Serve the HTML for rendering in the iframe — enriched copy preferred.
+
+        Unlike _api_post_html (which prettifies for the editor and returns text/plain),
+        this serves the raw HTML with text/html so the browser renders it.  It checks
+        the enriched copy first so edits saved via save-html are immediately visible.
+        """
+        enriched = ENRICHED_DIR / (slug + '.html')
+        original = POSTS_DIR   / (slug + '.html')
+        if enriched.exists():
+            html_path = enriched
+        elif original.exists():
+            html_path = original
+        else:
+            self._json(404, {'error': f'HTML not found: {slug}'}); return
+        try:
+            content = html_path.read_text(encoding='utf-8', errors='replace')
+            # Strip the archive provenance header — it is metadata added during
+            # archiving, not original post content.  The viewer is meant to show
+            # what the post looked like on the original blog.
+            import re as _re
+            content = _re.sub(
+                r'<header\s[^>]*class="[^"]*archive-header[^"]*"[^>]*>.*?</header>',
+                '', content, flags=_re.DOTALL | _re.IGNORECASE)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8', errors='replace'))
         except Exception as e:
             self._json(500, {'error': str(e)})
 

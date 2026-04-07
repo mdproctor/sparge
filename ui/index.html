@@ -986,9 +986,15 @@ async function saveEditContent() {
     const r = await fetch(url, { method: 'POST', body: content, headers });
     if (r.ok) {
       editDirty = false;
+      const savedSlug = currentSlug;
+      const wasHtml = editState === 'html';
       exitEditModeImmediate();
-      await reloadPost(currentSlug);
-      const p = allPosts.find(x => x.slug === currentSlug);
+      // Force the iframe to re-fetch the enriched copy with a fresh cache-bust URL.
+      // Without this, the browser serves its cached response for the old src and
+      // the saved edit is invisible until a hard refresh.
+      if (wasHtml) $('orig-frame').src = `/api/posts/${encodeURIComponent(savedSlug)}/view?v=${Date.now()}`;
+      await reloadPost(savedSlug);
+      const p = allPosts.find(x => x.slug === savedSlug);
       if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
     } else {
       btn.textContent = '✗ Failed'; btn.disabled = false;
@@ -1237,7 +1243,11 @@ async function selectPost(slug) {
   syncReviewedButton(p);
   const saved=scrollMemory[slug];
   pendingHtmlScroll=saved?saved.html:0;
-  $('orig-frame').src=`/${cfg.source?.posts_dir||''}/${slug}.html?v=${Date.now()}`;
+  // Use /api/posts/{slug}/view so the iframe always renders the enriched copy
+  // (saved edits) when one exists, falling back to the original.  The old
+  // static path (/{posts_dir}/{slug}.html) always served the original file and
+  // never reflected edits saved via save-html.
+  $('orig-frame').src=`/api/posts/${slug}/view?v=${Date.now()}`;
   renderPanelBadges(p);
   await loadMd(p);
   const mdBody=$('md-panel-body');
