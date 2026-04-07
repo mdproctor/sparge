@@ -20,8 +20,8 @@ sys.path.insert(0, str(MIGRATOR_ROOT / 'scripts'))
 
 def _prettify(html: str) -> str:
     """Mirror the exact logic in _api_post_html."""
-    from bs4 import BeautifulSoup
-    return BeautifulSoup(html, 'lxml').prettify()
+    from html_utils import prettify_html
+    return prettify_html(html)
 
 
 class TestPrettifyUnit:
@@ -115,6 +115,53 @@ class TestPrettifyUnit:
         assert '<a' in result
         assert 'href="x"' in result
         assert 'Link' in result
+
+    def test_adjacent_inline_shown_on_same_line(self):
+        """<b>text</b>(more) — closing </b> and ( must appear on the same line.
+
+        BeautifulSoup prettify() normally puts every element on its own line,
+        making <b>Name</b>(Org) appear as:
+            <b>
+             Name
+            </b>
+            (Org)
+        This hides the fact that </b> and ( are adjacent in the original HTML,
+        which is exactly the pattern that causes the md_notation_in_text warning.
+        The prettifier must collapse adjacent inline elements so users can see it.
+        """
+        html = '<html><body><p><b>Bob Kowalski</b>(Imperial College London)</p></body></html>'
+        result = _prettify(html)
+        lines = result.splitlines()
+        assert any('</b>' in line and '(Imperial' in line for line in lines), (
+            'Closing </b> and immediately-following ( must be on the same line. '
+            'Prettify hides this adjacency — the fix must collapse inline elements. '
+            'Got:\n' + result
+        )
+
+    def test_spaced_inline_not_collapsed(self):
+        """<b>text</b> (more) — when a real space exists, keep it on a separate line.
+
+        If there IS a space between </b> and the following content in the original
+        HTML, the prettifier should not collapse them — showing them on different
+        lines makes the space presence implicit and correct.
+        """
+        html = '<html><body><p><b>Bob Kowalski</b> (Imperial College London)</p></body></html>'
+        result = _prettify(html)
+        lines = result.splitlines()
+        assert not any('</b>' in line and '(Imperial' in line for line in lines), (
+            'When <b>text</b> has a real space before (, they must stay on separate lines. '
+            'Got:\n' + result
+        )
+
+    def test_strong_adjacent_to_colon(self):
+        """<strong>Section</strong>: description — colon treated same as open-paren."""
+        html = '<html><body><p><strong>Keynotes</strong>: Bob Kowalski</p></body></html>'
+        result = _prettify(html)
+        lines = result.splitlines()
+        assert any('</strong>' in line and ': Bob' in line for line in lines), (
+            'Closing </strong> and immediately-following : must be on the same line. '
+            'Got:\n' + result
+        )
 
     def test_non_ascii_characters_not_double_encoded(self):
         """Em dashes, curly quotes, and other non-ASCII must survive prettify intact.
