@@ -19,13 +19,23 @@ JUNK_SELECTORS = [
 META_PATTERNS = [
     re.compile(r'^by\s', re.I),
     re.compile(r'Post Comment', re.I),
-    re.compile(r'addtoany|linkedin|twitter|facebook|reddit|tumblr', re.I),
     re.compile(r'View all posts', re.I),
     re.compile(r'mailto:'),
     re.compile(r'^\[?\s*Rules?\s*\]?\s*\[?\s*Article', re.I),
 ]
 
+# Social platform names are matched only when the element looks like a sharing
+# widget — either short text (a widget label) OR the hrefs contain a sharing URL.
+# Long paragraphs that merely *mention* Twitter/Facebook as a topic must not
+# be stripped (e.g. "I've setup a twitter account to send updates").
+_SOCIAL_PLATFORM_RE = re.compile(r'addtoany|linkedin|twitter|facebook|reddit|tumblr', re.I)
+_SOCIAL_SHARE_URL_RE = re.compile(
+    r'twitter\.com/intent|facebook\.com/sharer|linkedin\.com/share'
+    r'|reddit\.com/submit|plus\.google\.com/share|t\.co/', re.I
+)
+
 JUNK_LINES = [
+    re.compile(r'^\[\]\(<https?://'),      # empty link [](<url>) — DocBook navigation artifact
     re.compile(r'^\[\]\(<https://www\.addtoany'),
     re.compile(r'^\[Post Comment\]'),
     re.compile(r'^## Author\s*$'),
@@ -42,7 +52,7 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
     sidecar = json_path if json_path is not None else html_path.with_suffix('.json')
     meta = json.loads(sidecar.read_text())
     soup = BeautifulSoup(html_path.read_text(errors='replace'), 'html.parser')
-    article = soup.find('article')
+    article = soup.find('article') or soup.find('body')
     if not article:
         return None
 
@@ -56,6 +66,25 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
     for c in article.find_all(string=lambda t: isinstance(t, Comment)):
         c.extract()
 
+    # Unwrap <blockquote> elements used as indentation wrappers (not semantic quotes).
+    # Old blog HTML uses <blockquote> for visual indent — the entire book description,
+    # feature lists, chapter summaries, etc. are wrapped in <blockquote> purely for
+    # the indentation effect.  html2text converts this to "> content" — the ">"
+    # blockquote prefix appears throughout the MD as visual noise.
+    #
+    # Detection: indentation blockquotes have NO class attribute and NO <cite> child
+    # (semantic blockquotes quoting a person use <cite> for attribution).
+    # We also skip our own missing-image placeholder blockquotes.
+    for bq in list(article.find_all('blockquote')):
+        if not isinstance(bq, Tag): continue
+        if 'missing-image' in ' '.join(bq.get('class', [])):
+            continue
+        if bq.get('class'):          # styled blockquote — keep
+            continue
+        if bq.find('cite'):          # has attribution — semantic quote, keep
+            continue
+        bq.unwrap()                  # plain indentation wrapper — remove the box
+
     # Remove [class*="wpDiscuz"] and [class*="author"] manually
     for tag in list(article.find_all(True)):
         if not isinstance(tag, Tag): continue
@@ -63,11 +92,23 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         if any(k in classes.lower() for k in ('wpdiscuz', 'addtoany')):
             tag.decompose()
 
-    # Remove author avatar links
+    # Remove author avatar links (wrapped in search_authors/<a> element)
     for a in list(article.find_all('a', href=re.compile(r'search_authors|/author/'))):
         img = a.find('img')
         if img:
             a.decompose()
+
+    # Remove bare author portrait images — appear inline inside content divs as
+    # CMS template chrome.  The CMS inserts the author's profile photo alongside
+    # real content; we detect it by matching the img alt text against the author name.
+    # This is universal: any CMS that embeds author portraits with the author's name
+    # as alt text will have these stripped correctly.
+    author_name = (meta.get('author', '') or '').strip().lower()
+    if author_name:
+        for img in list(article.find_all('img')):
+            alt = (img.get('alt', '') or '').strip().lower()
+            if alt == author_name:
+                img.decompose()
 
     # Remove h2 "Author" and everything after it
     for h in list(article.find_all(['h2', 'h3'])):
@@ -96,6 +137,17 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         if len(text_nospace) < 500 and any(p.search(combined) for p in META_PATTERNS):
             tag.decompose()
             continue
+        # Social platform names: only strip when the element is clearly a sharing widget.
+        # Two signals: (1) a known sharing URL in the hrefs, or (2) very short text with
+        # a platform name and NO external links (a bare label like "Share on Twitter").
+        # Profile links (twitter.com/username) and content paragraphs that mention social
+        # platforms as a topic must NOT be stripped.
+        if _SOCIAL_PLATFORM_RE.search(combined):
+            is_sharing_url  = _SOCIAL_SHARE_URL_RE.search(hrefs)
+            is_bare_label   = len(text_nospace) < 50 and not hrefs
+            if is_sharing_url or is_bare_label:
+                tag.decompose()
+                continue
         # Catch "by Author - Date Category" pattern
         if re.match(r'^by\b', text) and len(text_nospace) < 300:
             tag.decompose()
@@ -260,7 +312,77 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         placeholder = BeautifulSoup(placeholder_html, 'html.parser').find()
         p.insert_after(placeholder)
 
-    # ── Write placeholders back to the archive HTML so both views show them ──────
+    # ── Strip navigation <a href> links from inside heading elements ───────────
+    # DocBook/CMS HTML often makes heading text a link back to the blog URL:
+    #   <h4><a href="http://blog.athico.com/">Section Name</a></h4>
+    # html2text converts this to: #### [Section Name](<url>)
+    # The link carries no useful information and pollutes the MD output.
+    # Unwrapping these <a> elements inside headings gives clean heading text.
+    for hd in article.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        for a in hd.find_all('a'):
+            a.unwrap()
+
+    # ── Unwrap navigation-only <a href> links that wrap block or inline content ──
+    # CMS/DocBook platforms often wrap every section or paragraph in <a href="blog-url">
+    # for navigation purposes.  These produce markdown link artifacts:
+    #   "[text](<url>)"  or  "[](<url>)"
+    #
+    # Detection strategy — generic, no domain hardcoding:
+    #   1. Block-level wrappers: <a> whose direct Tag children are all block elements.
+    #      These are NEVER real content links (real links are inline).
+    #   2. Repeated-href links: any href appearing 5+ times in the article is a
+    #      navigation template, not a real external link.  Real content links rarely
+    #      repeat that many times; nav templates do (e.g. 119× blog.athico.com).
+    from collections import Counter
+    href_counts = Counter(
+        a.get('href', '') for a in article.find_all('a')
+        if (a.get('href', '') or '').startswith('http')
+    )
+    nav_hrefs = {href for href, count in href_counts.items() if count >= 5}
+
+    block_tags = {'div', 'pre', 'table', 'p', 'ul', 'ol',
+                  'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+    for a in list(article.find_all('a')):
+        if not isinstance(a, Tag): continue
+        href = a.get('href', '')
+        children = [c for c in a.children if isinstance(c, Tag)]
+        if children and all(c.name in block_tags for c in children):
+            # Block-level wrapper — always a navigation/template artifact
+            a.unwrap()
+        elif 'linkurl=' in href or 'link_url=' in href:
+            # Social sharing widget — any platform (addtoany, sharethis, buffer…)
+            # embeds the target URL as a ?linkurl= query parameter.
+            # Remove the entire element: the label text (Facebook, Twitter…)
+            # has no value without the link.
+            a.decompose()
+        elif 'send_to_friend' in href or 'sendtofriend' in href.lower():
+            # Email-marketing "Forward this message to a friend" links from
+            # newsletter platforms (vresp.com, mailchimp, etc.).  These appear in
+            # blog posts that were originally distributed as email newsletters —
+            # the link is template chrome with no value in an archived context.
+            parent = a.parent
+            a.decompose()
+            # Remove the containing <p> if it is now empty
+            if isinstance(parent, Tag) and not parent.get_text(strip=True):
+                parent.decompose()
+        elif href in nav_hrefs:
+            # Repeated-href link — navigation template, not a real content link
+            if a.get_text(strip=True):
+                a.unwrap()
+            else:
+                a.decompose()
+
+    # ── Write the cleaned HTML back to the archive file ───────────────────────
+    # This is done AFTER all content-preserving transforms (placeholder insertion,
+    # heading-link unwrap, nav-link removal) but BEFORE the markdown-only transforms
+    # (code-block placeholder substitution, inline trailing-space reordering).
+    # Writing before code extraction is critical: the @@CODEBLOCK_nnn@@ strings are
+    # temporary markdown artefacts and must never appear in the archive HTML.
+    #
+    # MIGRATION NOTE (Quarkus/Java): This write uses html_path which may be either
+    # the enriched copy (sparge-projects/.../enriched/{slug}.html) or the original
+    # archive file (legacy/posts/{author}/{slug}.html), depending on which exists.
+    # In Java, use the same resolution logic: enriched copy takes priority.
     updated_html = str(soup)
     if not updated_html.startswith('<!DOCTYPE'):
         updated_html = '<!DOCTYPE html>\n' + updated_html
@@ -286,6 +408,13 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         classes = target.get('class', [])
         lang = next((c.replace('language-', '') for c in classes if c.startswith('language-')), None)
         code_text = target.get_text()
+        # Normalise non-breaking spaces (\xa0) introduced by html2text inside code.
+        # They break syntax highlighters (tokenisers treat \xa0 as non-identifier chars).
+        code_text = code_text.replace('\xa0', ' ')
+        # Remap language tags that are obviously wrong for their content.
+        # DocBook XSLT sometimes assigns 'sql' as a default to Java programlistings.
+        if lang == 'sql' and re.search(r'\b(class|import|public|void|new|return|throws|interface|extends|implements)\b', code_text):
+            lang = 'java'
         # Zero-padded key with @@ delimiters — no key is a substring of another
         key = f'@@CODEBLOCK_{len(code_blocks):03d}@@'
         code_blocks[key] = (lang or '', code_text)
@@ -359,7 +488,15 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
     # Keys are @@CODEBLOCK_nnn@@ — fixed width, delimited — safe to replace in any order.
     orphans = []
     for key, (lang, code_text) in code_blocks.items():
-        fence = f'```{lang}\n{code_text.strip()}\n```'
+        # Use a fence longer than any backtick run inside the code so embedded
+        # backtick sequences can never close the fence prematurely.
+        max_run = max((len(m) for m in re.findall(r'`+', code_text)), default=0)
+        fence_len = max(3, max_run + 1)
+        fence_mark = '`' * fence_len
+        # Surround with blank lines so the fence is always block-level, even when
+        # html2text rendered the placeholder inline (e.g. inside a DocBook-style
+        # [Example N. title @@KEY@@] wrapper).  The re.sub below normalises excess \n.
+        fence = f'\n\n{fence_mark}{lang}\n{code_text.strip()}\n{fence_mark}\n\n'
         if key not in body:
             orphans.append(key)  # placeholder got dropped during html2text conversion
         body = body.replace(key, fence)
@@ -373,6 +510,15 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
     lines = []
     for line in body.splitlines():
         if any(p.match(line.strip()) for p in JUNK_LINES):
+            continue
+        # Convert lines of pure '=' used as visual separators to proper HR.
+        # IMPORTANT: both '===' and '---' after text create setext headings in Markdown.
+        # A blank line BEFORE '---' is required to make it an unambiguous <hr>.
+        # We append an empty line first, then '---', ensuring the preceding text
+        # ends its paragraph before the horizontal rule begins.
+        if re.match(r'^={4,}\s*$', line.strip()):
+            lines.append('')   # blank line prevents setext heading interpretation
+            lines.append('---')
             continue
         lines.append(line)
     body = '\n'.join(lines)
