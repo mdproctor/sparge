@@ -193,6 +193,234 @@ class TestUnsavedStateTracking:
             data=original.encode('utf-8'),
             headers={'Content-Type': 'text/html; charset=utf-8'},
         )
+
+
+# ── Playwright: full edit → save → visible in viewer cycle ───────────────────
+
+APP_URL = SERVER + '/ui/index.html'
+
+# Use the empty-body Twitter post — its article is blank so edits are unambiguous
+EDIT_SLUG   = '2008-10-15-drools-boot-camp-in-texas-is-now-being-twittered'
+EDIT_MARKER = 'sparge-edit-flow-playwright-marker'
+EDIT_HTML   = (
+    f'<p>At the request of others I\'ve setup a twitter account. {EDIT_MARKER}</p>'
+    f'<p><a href="http://twitter.com/markproctor">http://twitter.com/markproctor</a></p>'
+)
+
+
+@pytest.fixture(scope='module')
+def edit_page(server):
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        pytest.skip('playwright not installed')
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        pg = browser.new_page(viewport={'width': 1400, 'height': 900})
+        pg.goto(APP_URL, wait_until='networkidle')
+        pg.wait_for_selector('.pi', timeout=15000)
+        pg.locator(f'[data-slug="{EDIT_SLUG}"]').click()
+        pg.wait_for_function(
+            f"() => document.getElementById('orig-frame')?.src?.includes('{EDIT_SLUG}')",
+            timeout=8000)
+        pg.wait_for_timeout(600)
+        yield pg
+        browser.close()
+
+
+class TestEditSaveImmediatelyVisible:
+    """After clicking Save in the HTML editor, the rendered iframe must update
+    immediately — without the user having to click the post again or refresh.
+
+    Bug: saveEditContent() calls exitEditModeImmediate() which makes the iframe
+    visible again, but never updates iframe.src.  The iframe re-shows the same
+    URL it had before edit mode was entered — the browser serves the cached
+    response, so the edit is invisible until a hard refresh.
+
+    Fix: after a successful HTML save, set iframe.src to the /view endpoint
+    with a fresh cache-bust timestamp so the browser re-fetches the enriched copy.
+    """
+
+    def test_ui_save_updates_iframe_without_reclick(self, edit_page, server):
+        """Save via the editor Save button — iframe must update with no re-click."""
+        pg = edit_page
+        ui_marker = 'sparge-ui-iframe-refresh-test'
+
+        # Navigate to the Twitter post
+        pg.locator(f'[data-slug="{EDIT_SLUG}"]').scroll_into_view_if_needed()
+        pg.locator(f'[data-slug="{EDIT_SLUG}"]').click()
+        pg.wait_for_function(
+            f"() => document.getElementById('orig-frame')?.src?.includes('{EDIT_SLUG}')",
+            timeout=8000)
+        pg.wait_for_timeout(800)
+
+        # Enter HTML edit mode
+        pg.locator('#btn-edit-html').click()
+        pg.wait_for_selector('#html-editor', state='visible', timeout=5000)
+        pg.wait_for_timeout(500)
+
+        # Inject test content via the CodeMirror API (faster than keyboard input)
+        current = pg.evaluate("() => htmlEditor ? htmlEditor.getValue() : ''")
+        insert_before = '</body>' if '</body>' in current else '</html>'
+        new_content = current.replace(
+            insert_before,
+            f'<p>{ui_marker}</p>\n{insert_before}',
+            1,
+        )
+        pg.evaluate("(c) => htmlEditor && htmlEditor.setValue(c)", new_content)
+        pg.wait_for_timeout(200)
+
+        # Capture the iframe src BEFORE saving (so we can detect whether it changes)
+        src_before = pg.evaluate("() => document.getElementById('orig-frame').src")
+
+        # Click Save — on success, exitEditModeImmediate() hides the editor
+        pg.locator('#btn-edit-save').click()
+        pg.wait_for_selector('#html-editor', state='hidden', timeout=10000)
+        pg.wait_for_timeout(600)
+
+        # The iframe src MUST change after a successful HTML save.
+        # Without an updated src (new cache-bust timestamp), real browsers serve
+        # the cached version of the old URL and the edit appears invisible.
+        # Headless Playwright may re-fetch regardless, so checking the src change
+        # is the reliable proxy for the real-browser behaviour.
+        src_after = pg.evaluate("() => document.getElementById('orig-frame').src")
+
+        assert src_after != src_before, (
+            f'iframe.src was not updated after saving HTML. '
+            f'saveEditContent() calls exitEditModeImmediate() which makes the iframe '
+            f'visible again but never changes its src — real browsers serve the cached '
+            f'response so the edit remains invisible until a hard refresh. '
+            f'Fix: after exitEditModeImmediate() in saveEditContent(), set '
+            f'$("orig-frame").src = `/api/posts/${{currentSlug}}/view?v=${{Date.now()}}`. '
+            f'src before: {src_before!r}'
+        )
+
+        # Cleanup
+        clean = new_content.replace(f'<p>{ui_marker}</p>\n', '')
+        SESSION.post(
+            f'{API}/posts/{EDIT_SLUG}/save-html',
+            data=clean.encode('utf-8'),
+            headers={'Content-Type': 'text/html; charset=utf-8'},
+        )
+
+
+class TestEditSaveVisibleInViewer:
+    """Saving edited HTML must be visible in the rendered iframe.
+
+    Bug: after save, the iframe reloads with the static file URL
+    (/{posts_dir}/{slug}.html) which points to the ORIGINAL file on disk.
+    The enriched copy (containing the edit) lives at a different path and
+    is never served at that URL — so the viewer never shows the saved change.
+
+    Fix: serve a /api/posts/{slug}/view endpoint that prefers the enriched copy,
+    and point the iframe src there instead of the static original path.
+    """
+
+    def test_edit_saved_html_visible_in_iframe(self, edit_page, server):
+        """After saving HTML via the API, the rendered iframe must show the change."""
+        pg = edit_page
+
+        # Save the edit via API (same call the UI save button makes).
+        # Insert before </body> — works whether the enriched copy has <article>
+        # or not (user edits may strip the article wrapper).
+        original_html = SESSION.get(f'{API}/posts/{EDIT_SLUG}/html').text
+        insert_before = '</body>' if '</body>' in original_html else '</html>'
+        new_html = original_html.replace(insert_before, f'{EDIT_HTML}\n{insert_before}', 1)
+        assert EDIT_MARKER in new_html, 'Could not inject test marker into HTML'
+        r = SESSION.post(
+            f'{API}/posts/{EDIT_SLUG}/save-html',
+            data=new_html.encode('utf-8'),
+            headers={'Content-Type': 'text/html; charset=utf-8'},
+        )
+        assert r.status_code == 200, f'Save failed: {r.status_code}'
+
+        # Navigate to the post — simulates what happens after the UI save button
+        # calls reloadPost(), which re-selects the post and reloads the iframe
+        pg.locator(f'[data-slug="{EDIT_SLUG}"]').scroll_into_view_if_needed()
+        pg.locator(f'[data-slug="{EDIT_SLUG}"]').click()
+        pg.wait_for_function(
+            f"() => document.getElementById('orig-frame')?.src?.includes('{EDIT_SLUG}')",
+            timeout=8000)
+        pg.wait_for_timeout(1000)  # let iframe load
+
+        # The iframe must render the saved content
+        iframe_text = pg.evaluate("""() => {
+            try {
+                return document.getElementById('orig-frame').contentDocument.body.innerText;
+            } catch(e) { return ''; }
+        }""")
+
+        assert EDIT_MARKER in iframe_text, (
+            f'Saved HTML edit not visible in the rendered iframe. '
+            f'The iframe src points to the original file on disk '
+            f'(/{{}}/posts_dir/{{}}/slug.html) which is never modified — '
+            f'edits go to the enriched copy at a different path. '
+            f'Fix: add GET /api/posts/{{slug}}/view endpoint that prefers the '
+            f'enriched copy, and use that URL for the iframe src. '
+            f'iframe body: {iframe_text[:300]!r}'
+        )
+
+    def test_cleanup_edit(self, edit_page, server):
+        """Remove the test edit so it does not affect other tests."""
+        current = SESSION.get(f'{API}/posts/{EDIT_SLUG}/html').text
+        clean = current.replace(f'{EDIT_HTML}\n', '').replace(EDIT_HTML, '').replace(EDIT_MARKER, '')
+        SESSION.post(
+            f'{API}/posts/{EDIT_SLUG}/save-html',
+            data=clean.encode('utf-8'),
+            headers={'Content-Type': 'text/html; charset=utf-8'},
+        )
+        assert EDIT_MARKER not in SESSION.get(f'{API}/posts/{EDIT_SLUG}/html').text
+
+
+# ── Editor switch tests ───────────────────────────────────────────────────────
+# Use a post that has MD already generated so both editors can be opened.
+
+SWITCH_SLUG = '2006-05-31-what-is-a-rule-engine'
+
+
+@pytest.fixture(scope='module')
+def switch_page(edit_page, server):
+    """Browser page for editor switch tests.
+
+    Reuses the existing Playwright browser from edit_page to avoid creating a
+    second sync_playwright() context in the same session (asyncio conflict).
+    """
+    ctx = edit_page.context.browser.new_context(viewport={'width': 1400, 'height': 900})
+    pg = ctx.new_page()
+    pg.goto(APP_URL, wait_until='networkidle')
+    pg.wait_for_selector('.pi', timeout=15000)
+    yield pg
+    ctx.close()
+
+
+def _current_edit_mode(pg):
+    """Return the current editState from the page JS ('html', 'md', or None)."""
+    return pg.evaluate("() => typeof editState !== 'undefined' ? editState : null")
+
+
+def _sidebar_mode_text(pg):
+    """Return the edit sidebar mode label text."""
+    return pg.evaluate(
+        "() => document.getElementById('edit-sidebar-mode')?.textContent || ''"
+    )
+
+
+def _first_visible_cm_mode(pg):
+    """Return the CodeMirror mode name of the first VISIBLE editor in #html-editor.
+
+    This is what the user actually sees — checks only editors not hidden by
+    display:none (the fix hides the inactive editor with display:none).
+    Returns 'htmlmixed', 'markdown', or 'none'.
+    """
+    return pg.evaluate("""() => {
+        const editors = [...document.querySelectorAll('#html-editor .CodeMirror')]
+            .filter(el => getComputedStyle(el).display !== 'none');
+        if (!editors.length) return 'none';
+        const cm = editors[0].CodeMirror;
+        return cm ? cm.getMode().name : 'none';
+    }""")
+
+
 class TestEditorSwitch:
     """Opening one editor then clicking the other must switch — not stay on the first.
 
