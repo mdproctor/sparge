@@ -30,23 +30,116 @@ class Issue:
         return f'[{self.level}] {self.check}: {self.detail}'
 
 
+def _load_article(html_path: Path):
+    """Parse HTML and return the article element ready for cross-validation.
+
+    Applies the same chrome-stripping as convert_post.py so the HTML the
+    validator checks against matches what the converter actually saw.  Without
+    this, headings/sections that the converter intentionally removes (author bio,
+    share widgets, bylines) appear in the HTML but not the MD, generating false
+    positives for every cross-check that compares the two.
+
+    COHERENCE REQUIREMENT: Every time a new strip is added to convert_post.py,
+    an equivalent strip must be added here.  Mismatches are the leading cause
+    of false-positive MD warnings.  Known gaps as of 2026-04-07:
+      - JUNK_SELECTORS (.jp-relatedposts, .entry-header, etc.) — not mirrored
+      - addtoany/wpDiscuz class-based removal — not mirrored
+      - Byline length guard (converter: < 500 chars; validator: < 200 chars)
+    These are left as-is because the affected elements rarely contain
+    paragraph text that cross-checks would sample.  If false positives appear
+    on specific posts, check convert_post.py for a strip that is missing here.
+
+    MIGRATION NOTE (Quarkus/Java): this function must be re-implemented using
+    the same Jsoup selector logic as convert_post.py.  The key invariant is
+    that both functions process the HTML with identical chrome-removal so the
+    validator's HTML matches the converter's HTML.  Use constants.py
+    JUNK_SELECTORS_CONVERTER for the selector list.
+    """
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
+    article = soup.find('article') or soup.find('body')
+    if not article:
+        return None
+    # Strip scripts/styles/noscripts
+    for t in article.find_all(['script', 'style', 'noscript']):
+        t.decompose()
+    # Strip known chrome sections — same headings convert_post.py removes.
+    # "Author", "Related Posts", "Feedback", "Share" are blog template headings,
+    # not content.  The converter strips them and everything after; the validator
+    # must do the same or it will flag them as missing in the MD.
+    _CHROME_HEADINGS = {'author', 'related posts', 'feedback', 'share', 'about'}
+    for h in list(article.find_all(['h2', 'h3'])):
+        if h.get_text(strip=True).lower() in _CHROME_HEADINGS:
+            for sib in list(h.find_next_siblings()):
+                sib.decompose()
+            h.decompose()
+            break  # only the first occurrence triggers section removal
+    # Strip bylines — same as scan_html.py pre-processing
+    for tag in list(article.find_all(['p', 'div', 'span'])):
+        text = tag.get_text(separator=' ', strip=True)
+        if len(text) < 200 and re.match(r'^by\s+[A-Z]', text, re.I):
+            tag.decompose()
+    # Decompose any <p> that contains ==== separator strings.
+    # HTML posts use "Supported by\n====...\nW3C" — sections separated by an
+    # ASCII visual rule inside a single <p> via <br/> elements.  The converter
+    # splits these into separate MD sections (each with a blank+--- HR), so the
+    # merged HTML text "supported by w3c" is never a phrase in the MD.  Removing
+    # the whole paragraph avoids the false positives; its content is still
+    # indirectly covered by cross_word_count and cross_link_count.
+    for p in list(article.find_all('p')):
+        for s in p.strings:
+            if re.match(r'^={4,}\s*$', s):
+                p.decompose()
+                break
+    # Strip email-marketing "Forward this message to a friend" links — same
+    # as convert_post.py's send_to_friend detection.  These are newsletter
+    # template chrome; the converter removes them, so the validator must too.
+    from bs4 import Tag as _Tag
+    for a in list(article.find_all('a', href=True)):
+        href = a.get('href', '')
+        if 'send_to_friend' in href or 'sendtofriend' in href.lower():
+            parent = a.parent
+            a.decompose()
+            if isinstance(parent, _Tag) and not parent.get_text(strip=True):
+                parent.decompose()
+    return article
+
+
 def validate(md: str, slug: str = '', html_path: Optional[Path] = None) -> List[Issue]:
+    """Run CONTENT FIXING checks: detect losses/defects compared to the HTML source."""
     issues = []
     for fn in MD_CHECKS:
         issues.extend(fn(md, slug))
     if html_path and html_path.exists():
         try:
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
-            article = soup.find('article') or soup.find('body')
+            article = _load_article(html_path)
             if article:
-                # Strip scripts/noscripts from article for all cross-checks
-                for t in article.find_all(['script', 'style', 'noscript']): t.decompose()
                 for fn in CROSS_CHECKS:
                     issues.extend(fn(md, slug, article))
         except Exception as e:
             issues.append(Issue('WARN', 'cross_check_error', f'Could not load HTML: {e}'))
     return issues
+
+
+def refine(md: str, slug: str = '', html_path: Optional[Path] = None) -> List[Issue]:
+    """Run CONTENT REFINEMENT checks: identify quality improvements for a future pass.
+
+    These checks detect characteristics present in BOTH the HTML source and the MD —
+    the conversion was faithful, but the original content could be improved.
+    Stored as 'suggestions' in state (not 'issues') and surfaced in a separate UI view.
+    """
+    suggestions = []
+    for fn in MD_REFINEMENT_CHECKS:
+        suggestions.extend(fn(md, slug))
+    if html_path and html_path.exists():
+        try:
+            article = _load_article(html_path)
+            if article:
+                for fn in CROSS_REFINEMENT_CHECKS:
+                    suggestions.extend(fn(md, slug, article))
+        except Exception:
+            pass  # refinement failures are silent — not critical path
+    return suggestions
 
 
 def _body(md):
@@ -56,7 +149,18 @@ def _body(md):
 
 
 def _article_words(article):
-    return re.sub(r'\s+', ' ', article.get_text()).strip().split()
+    """Count prose words in an article, excluding <pre>/<code> content.
+
+    Mirrors the MD word count which strips fenced code blocks — both sides
+    must exclude code content for the comparison to be fair.  Technical posts
+    with large <pre> blocks would otherwise appear to have 'lost' content
+    that is actually present in the MD as properly fenced code.
+    """
+    import copy as _copy
+    article_copy = _copy.copy(article)
+    for el in article_copy.find_all(['pre', 'code']):
+        el.decompose()
+    return re.sub(r'\s+', ' ', article_copy.get_text()).strip().split()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -80,10 +184,26 @@ def chk_stray_digit_after_fence(md, slug):
 
 
 def chk_balanced_fences(md, slug):
-    """Odd number of ``` = unclosed block = rest of doc renders as code."""
-    fences = re.findall(r'^```', _body(md), re.MULTILINE)
-    if len(fences) % 2 != 0:
-        return [Issue('ERROR', 'unbalanced_fences', f'Odd fence count ({len(fences)}) — block unclosed')]
+    """Detect unclosed fenced code blocks using a length-aware state machine.
+
+    A naive '^```' prefix regex counts content lines that start with backticks
+    (e.g. nested ``` inside a 4-backtick fence) as fence delimiters, producing
+    false positives. The correct rule (CommonMark): a closing fence must use at
+    least as many backticks as the opening fence.
+    """
+    in_fence = 0  # length of current opening fence; 0 = outside a fence
+    for line in _body(md).splitlines():
+        m = re.match(r'^(`{3,})', line)
+        if m:
+            run = len(m.group(1))
+            if in_fence == 0:
+                in_fence = run          # opening fence (info string allowed after backticks)
+            elif run >= in_fence and re.fullmatch(r'`+\s*', line):
+                in_fence = 0            # valid closing fence: only backticks + optional space
+            # else: shorter run, or has non-space content after backticks (e.g. ```])
+            #       — treat as content inside the current fence
+    if in_fence != 0:
+        return [Issue('ERROR', 'unbalanced_fences', 'Code fence opened but never closed')]
     return []
 
 
@@ -177,17 +297,28 @@ def chk_no_triple_blanks(md, slug):
 
 
 def chk_prose_in_code(md, slug):
-    """Multiple English sentences inside a code block = text/code boundary wrong."""
+    """Multiple English sentences inside a code block = text/code boundary wrong.
+
+    False-positive filter: exclude regex matches that contain code operators
+    (= ; ( ) < >) — these appear in Java method chains, XML attributes, and
+    comment+code spans, but never in real English sentences.
+    """
+    _CODE_CHARS = re.compile(r'[=;()<>{}]')
     for block in re.findall(r'```\w*\n(.*?)```', md, re.DOTALL):
-        sentences = re.findall(r'[A-Z][^.!?]{25,}[.!?]', block)
+        raw = re.findall(r'[A-Z][^.!?]{25,}[.!?]', block)
+        sentences = [s for s in raw if not _CODE_CHARS.search(s)]
         if len(sentences) >= 3:
             return [Issue('WARN', 'prose_in_code',
                           f'Code block has {len(sentences)} English sentences — possible misplaced prose')]
     return []
 
 
-def chk_duplicate_paragraphs(md, slug):
-    """Same paragraph appearing twice = double-processing bug.
+def cross_duplicate_paragraphs(md, slug, article):
+    """Same paragraph appearing twice in the MD = possible double-processing bug.
+
+    Cross-checks against the HTML: if the paragraph appears the same number of
+    times in the HTML as in the MD, the repetition is faithful to the source
+    (the author wrote it twice) — not a conversion error.
 
     LESSON: Use full content hash as key. Prefix matching causes false positives
     when two different code blocks share a long common header (e.g. Spring XML
@@ -196,11 +327,23 @@ def chk_duplicate_paragraphs(md, slug):
     """
     body = _body(md)
     paras = [p.strip() for p in body.split('\n\n') if len(p.strip()) > 80]
-    seen = {}
+    seen: dict = {}
+    # Strip all non-alphanumeric characters for HTML comparison — markdown list
+    # markers (  * , - ), code fences, and whitespace differences between the
+    # MD (formatted) and HTML (plain text) would otherwise cause false positives.
+    # We compare only the character sequence, not the formatting.
+    html_alnum = re.sub(r'[^a-z0-9]', '', (article.get_text() if article else '').lower())
     for p in paras:
         if p in seen:
-            return [Issue('ERROR', 'duplicate_paragraph',
-                          f'Paragraph repeated: "{p[:50]}..."')]
+            # Only report if the duplication is NOT in the source HTML.
+            # If the author wrote the same block twice (e.g. the same JVM flags
+            # for WildFly and Tomcat sections), the HTML also has it twice and it
+            # is faithful to the source — not a conversion error.
+            p_alnum = re.sub(r'[^a-z0-9]', '', p.lower())[:30]
+            if html_alnum.count(p_alnum) < 2:
+                return [Issue('ERROR', 'duplicate_paragraph',
+                              f'Paragraph repeated: "{p[:50]}..."')]
+            # else: duplicate exists in HTML too — faithful to source, skip
         seen[p] = True
     return []
 
@@ -257,18 +400,19 @@ def cross_code_content_integrity(md, slug, article):
     """Full code block content must match — not just first line. Detects truncation/mangling."""
     from bs4 import Tag
     issues = []
+    # Normalise MD once: replace non-breaking spaces so \xa0 in HTML matches spaces in MD
+    md_norm = md.replace('\xa0', ' ')
     for pre in article.find_all('pre'):
         if not isinstance(pre, Tag): continue
         code_el = pre.find('code')
-        code_text = (code_el or pre).get_text().strip()
+        code_text = (code_el or pre).get_text().strip().replace('\xa0', ' ')
         if len(code_text) < 15: continue
-        # Check first AND last distinctive token
         first = next((l.strip() for l in code_text.splitlines() if l.strip()), '')[:40]
         last = next((l.strip() for l in reversed(code_text.splitlines()) if l.strip()), '')[-30:]
-        if first and first[:25] not in md:
+        if first and first[:25] not in md_norm:
             issues.append(Issue('ERROR', 'code_content_missing',
                                 f'Code start not in MD: "{first[:40]}"'))
-        elif last and len(last) > 5 and last not in md:
+        elif last and len(last) > 5 and last not in md_norm:
             issues.append(Issue('WARN', 'code_content_truncated',
                                 f'Code end not in MD: "...{last}"'))
         if len(issues) >= 2: break
@@ -305,15 +449,30 @@ def cross_word_count(md, slug, article):
 
 
 def cross_heading_match(md, slug, article):
-    """h2/h3 text from HTML should appear in MD. Missing headings = section dropped."""
+    """h2/h3 text from HTML should appear in MD. Missing headings = section dropped.
+
+    Skips headings that match the post's front matter title — WordPress and similar
+    CMS platforms insert the post title as both an h1/h2 in the article body AND
+    as the page title.  In the MD it lives in the 'title:' front matter field, not
+    in the body.  Flagging it as 'missing' is a false positive.
+    """
     from bs4 import Tag
     issues = []
-    body = _body(md).lower()
+    # Normalise body whitespace so headings split by <br/> ("Conference\non") still match.
+    body = re.sub(r'\s+', ' ', _body(md)).lower()
+    # Extract title from front matter to skip duplicate title headings
+    fm_title = ''
+    fm_m = re.search(r'^title:\s*["\']?(.+?)["\']?\s*$', md, re.MULTILINE | re.IGNORECASE)
+    if fm_m:
+        fm_title = fm_m.group(1).strip().lower()
     for h in article.find_all(['h2', 'h3']):
         if not isinstance(h, Tag): continue
-        text = h.get_text(strip=True)
+        # separator=' ' prevents <br/> from merging adjacent words into one token
+        text = re.sub(r'\s+', ' ', h.get_text(separator=' ', strip=True))
         if len(text) < 5 or len(text) > 120: continue
-        # Allow for minor formatting differences
+        # Skip headings matching the post title — it's in the front matter, not body
+        if fm_title and text.lower()[:len(fm_title)] == fm_title[:len(text)]:
+            continue
         first_words = ' '.join(text.lower().split()[:4])
         if first_words and first_words not in body:
             issues.append(Issue('WARN', 'heading_missing',
@@ -328,7 +487,12 @@ def cross_list_preservation(md, slug, article):
     html_lists = len([t for t in article.find_all(['ul','ol']) if isinstance(t, Tag)
                       and len(t.find_all('li')) > 1])
     if html_lists == 0: return []
-    md_list_items = len(re.findall(r'^[-*]\s|^\d+\.\s', _body(md), re.MULTILINE))
+    # Allow optional leading whitespace or blockquote markers — html2text indents
+    # list items from nested structures ("  * item") and prefixes blockquoted lists
+    # with ">" ("> * item" when <blockquote><ul> is used as an indent wrapper).
+    # Bug fix: the original r'^\s*[-*]\s|\s*^\d+\.\s' had a broken second alternative —
+    # \s*^ is invalid in MULTILINE (^ must begin the alternative, not follow \s*).
+    md_list_items = len(re.findall(r'^[>\s]*[-*]\s|^[>\s]*\d+\.', _body(md), re.MULTILINE))
     if md_list_items == 0:
         return [Issue('WARN', 'lists_dropped',
                       f'HTML has {html_lists} list(s) but MD has no list items')]
@@ -336,13 +500,28 @@ def cross_list_preservation(md, slug, article):
 
 
 def cross_link_count(md, slug, article):
-    """External link count should be in same ballpark. Massive drop = links stripped."""
+    """External link count should be in same ballpark. Massive drop = links stripped.
+
+    Counts unique destinations only, excluding social sharing widgets.
+    Social sharing widgets (addtoany, sharethis, buffer, etc.) generate unique hrefs
+    per post by encoding the post URL as a query parameter (?linkurl=https%3A...).
+    These are blog chrome — not content links — and must be excluded from the count.
+    The ?linkurl= pattern is a universal signature across all sharing widget platforms.
+    """
     from bs4 import Tag
-    html_links = [a for a in article.find_all('a', href=True)
-                  if isinstance(a, Tag) and (a['href'] or '').startswith('http')]
-    html_count = len(html_links)
-    # html2text may produce ](<https://...>) with angle brackets — match both forms
-    md_count = len(re.findall(r'\]\(<?\s*https?://', _body(md)))
+    html_hrefs = set(
+        a['href'] for a in article.find_all('a', href=True)
+        if isinstance(a, Tag)
+        and (a.get('href') or '').startswith('http')
+        and 'linkurl=' not in (a.get('href') or '')   # sharing widget: encodes target URL
+        and 'link_url=' not in (a.get('href') or '')  # variant spelling
+    )
+    html_count = len(html_hrefs)
+    # Count both Markdown-style links [text](<url>) AND bare <http://...> autolinks.
+    # html2text renders plain URLs in HTML as <http://...> autolinks — the original
+    # regex only matched [text](<url>) format, causing links_dropped false positives
+    # when the MD uses autolink format for bare URLs.
+    md_count = len(re.findall(r'(?:\]\(<?\s*https?://|<https?://)', _body(md)))
     if html_count > 5 and md_count < html_count * 0.3:
         return [Issue('WARN', 'links_dropped',
                       f'HTML has {html_count} external links, MD has {md_count} — possible loss')]
@@ -350,28 +529,100 @@ def cross_link_count(md, slug, article):
 
 
 def cross_table_acknowledged(md, slug, article):
-    """HTML <table> should produce a Markdown table or at minimum table content."""
+    """HTML <table> should produce a Markdown table or at minimum table content.
+
+    html2text renders tables with content BEFORE the first pipe:
+      'Company:| [JDM Systems](<url>)  \\n---|---'
+    so the regex must detect pipes mid-line, not just at line-start.
+    Text comparison uses separator=' ' and a 4-word phrase to avoid word-merge
+    mismatches from inline links wrapping individual table cell values.
+    """
     from bs4 import Tag
     tables = [t for t in article.find_all('table') if isinstance(t, Tag)]
     if not tables: return []
-    md_has_table = bool(re.search(r'^\|.+\|', _body(md), re.MULTILINE))
-    md_has_table_text = any(t.get_text(strip=True)[:20] in _body(md) for t in tables)
-    if not md_has_table and not md_has_table_text:
+    body = _body(md)
+    # Match lines with 2+ pipe characters (covers both |col|col| and col|col| formats)
+    md_has_table = bool(re.search(r'.+\|.+\|', body))
+    # Also check for the '---|---' separator line that html2text always produces
+    md_has_separator = bool(re.search(r'^-+\|-', body, re.MULTILINE))
+    if md_has_table or md_has_separator:
+        return []
+    # Fall back to text content check with proper normalisation.
+    # Strip inline links and bold/italic markers so the table text phrase can be
+    # found even when the MD wraps the content in formatting.
+    body_plain = re.sub(r'\[\s*([^\]]+?)\s*\]\(<[^>]+>\)', r'\1', body)  # [text](<url>)→text
+    body_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', body_plain)
+    body_lower = re.sub(r'\s+', ' ', body_plain).replace('\xa0', ' ').lower()
+    # Only check tables with substantial content (> 20 chars).  Single-cell
+    # layout wrappers (e.g. a "PRESS RELEASE" header table) have no meaningful
+    # Markdown equivalent and should not trigger table_dropped.
+    significant = [t for t in tables if len(t.get_text(strip=True)) > 20]
+    if not significant:
+        return []  # all tables are trivial layout elements — nothing to check
+    md_has_table_text = any(
+        ' '.join(t.get_text(separator=' ', strip=True).replace('\xa0', ' ').split()[:4]).lower()
+        in body_lower
+        for t in significant
+    )
+    if not md_has_table_text:
         return [Issue('WARN', 'table_dropped',
                       f'{len(tables)} HTML table(s) have no representation in MD')]
     return []
 
 
 def cross_last_section_present(md, slug, article):
-    """Last paragraph of HTML should appear in MD — checks for truncation at the end."""
+    """Last paragraph of HTML should appear in MD — checks for truncation at the end.
+
+    Two fixes vs the naive implementation:
+    1. separator=' ' in get_text(): prevents word-merge when inline links are
+       adjacent to text — 'Peter Lin<a>has</a>' → 'Peter Lin has' not 'Linhas'.
+    2. Search entire MD body, not just the tail: html2text may reorder elements
+       (e.g. <span>heading</span><br/>text gets placed earlier in output than
+       HTML source order implies). The paragraph is still in the MD — not lost.
+    """
     from bs4 import Tag
     paras = [p for p in article.find_all('p') if isinstance(p, Tag)]
-    # Walk backwards to find last substantial paragraph
+    # Strip inline links from MD body so hyperlinked terms still match
+    # Pad link text with spaces so adjacent text never merges: "Registration:[link]" → "Registration: link "
+    # Handle optional title attribute: [text](<url> "title") or [text](<url>)
+    md_plain = re.sub(r'\[\s*([^\]]+?)\s*\]\(<[^>]+>[^)]*\)', lambda m: ' ' + m.group(1).strip() + ' ', _body(md))
+    md_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', md_plain)  # strip bold/italic markers; space preserves adjacent spacing (e.g. **Name**(text) → "Name (text")
+    # Normalise all whitespace to single spaces so <br/>-split content ('DBM  \nSo far')
+    # matches as a continuous phrase when searching for 'dbm so far'
+    body_raw = re.sub(r'\s+', ' ', md_plain).replace('\xa0', ' ').lower()
+    # Normalise punctuation spacing: remove spaces before commas/colons that
+    # get_text(separator=' ') inserts between inline elements and following punct.
+    body = re.sub(r'\s+([,;:!?.])', r'\1', body_raw)  # also normalise space before period
     for p in reversed(paras):
-        text = p.get_text(strip=True)
+        # Skip paragraphs containing images — the MD interleaves image links
+        # between caption text, so the plain-text phrase never appears as a
+        # continuous substring regardless of whether the content is present.
+        if p.find('img'):
+            continue
+        # separator=' ' avoids word-merge from adjacent inline elements
+        text = p.get_text(separator=' ', strip=True).replace('\xa0', ' ')
         if len(text) > 60:
-            first_words = ' '.join(text.split()[:6]).lower()
-            if first_words and first_words not in _body(md).lower():
+            # For URL-only paragraphs, use the first non-URL word or domain only —
+            # URLs render differently in MD (as <http://...> or [text](<url>))
+            words = text.split()
+            if words and re.match(r'https?://', words[0]):
+                # Use first 2 words but extract just domain from URL
+                domain = re.sub(r'^https?://([^/]+).*', r'\1', words[0]).lower()
+                first_words = domain
+            else:
+                first_words = re.sub(r'\s+([,;:!?.])', r'\1',  # incl. period
+                                     ' '.join(words[:6]).lower())
+                # Strip '*' — HTML get_text() keeps literal '*' (e.g. inline list
+                # markers "* item1 * item2", footnote "[* Note:]"). After removal,
+                # renormalise whitespace so "enhancements  slimmed" → single space.
+                first_words = re.sub(r'\*+', ' ', first_words)
+                first_words = re.sub(r'\s+', ' ', first_words).strip()
+                # Strip bare URLs — they render as <http://...> or [text](<url>)
+                # in MD (format differs from HTML plain text).  The remaining words
+                # are sufficient to confirm the paragraph is present.
+                first_words = re.sub(r'\bhttps?(?:://\S*)?', '', first_words)
+                first_words = re.sub(r'\s+', ' ', first_words).strip().rstrip(' ()')
+            if first_words and first_words not in body:
                 return [Issue('WARN', 'truncated_at_end',
                               f'Last HTML paragraph not in MD: "{text[:60]}"')]
             break
@@ -409,13 +660,18 @@ def cross_youtube_count(md, slug, article):
 
 
 def cross_technical_terms(md, slug, article):
-    """Key KIE/Drools technical terms from HTML must appear in MD body."""
+    """Key technical terms from HTML must appear somewhere in the MD.
+
+    Searches the full MD (front matter + body) not just the body — terms that
+    appear in the post title are correctly placed in the 'title:' front matter
+    field and are not missing from the document.
+    """
     html_text = article.get_text().lower()
-    body = _body(md).lower()
+    md_full = md.lower()  # includes front matter title, not just body
     TERMS = ['drools', 'jbpm', 'kie', 'optaplanner', 'kogito', 'guvnor', 'rete']
     present_in_html = [t for t in TERMS if t in html_text]
     if not present_in_html: return []
-    missing_in_md = [t for t in present_in_html if t not in body]
+    missing_in_md = [t for t in present_in_html if t not in md_full]
     if missing_in_md:
         return [Issue('WARN', 'technical_terms_missing',
                       f'Technical term(s) in HTML but not MD: {missing_in_md}')]
@@ -436,23 +692,63 @@ def cross_blockquote_preserved(md, slug, article):
 
 
 def cross_key_phrase_sample(md, slug, article):
-    """Sample HTML paragraphs — key phrases must appear in MD body."""
+    """Sample HTML paragraphs — key content must appear in MD body.
+
+    Uses a raw substring of the HTML text (not reconstructed from extracted words)
+    to avoid false positives where the phrase-extraction joins stripped words into
+    a sequence that never appears literally in the MD even though the content is there.
+    Also normalises \xa0 to space for comparison.
+    """
     from bs4 import Tag
-    body = _body(md).lower()
-    STOP = {'which','these','their','there','about','would','could','should',
-            'where','when','have','from','that','this','with','been','also',
-            'more','some','into','than','such','over','after','before'}
+    # Strip markdown inline links [text](<url>) and [text](<url> "title") → " text "
+    # (padded with spaces to prevent word-merge when a link is adjacent to text with
+    # no space: "Taylor,[Smart Enough](<url>)" → "Taylor, Smart Enough").
+    # The [^)]* after > handles the optional title attribute that html2text emits
+    # when protect_links=True and the original link had a title attribute.
+    # MIGRATION NOTE: html2text protect_links=True emits [text](<url> "title") format.
+    md_plain = re.sub(
+        r'\[\s*([^\]]+?)\s*\]\(<[^>]+>[^)]*\)',
+        lambda m: ' ' + m.group(1).strip() + ' ',
+        _body(md))
+    md_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', md_plain)  # strip bold/italic markers
+    body_raw = re.sub(r'\s+', ' ', md_plain).replace('\xa0', ' ').lower()
+    # Normalise punctuation spacing — get_text(separator=' ') inserts spaces
+    # between inline elements and following punctuation ("Fest , hosted"), but
+    # the MD link-stripping leaves no space ("Fest, hosted").
+    # Also normalise space before period ("v4.0.3 . this" → "v4.0.3. this").
+    body_raw = re.sub(r'\s*>\s*', ' ', body_raw)  # > path separator → space
+    body = re.sub(r'\s+([,;:!?.])', r'\1', body_raw)
     issues = []
     checked = 0
     for p in article.find_all('p'):
         if not isinstance(p, Tag): continue
-        text = p.get_text(strip=True)
+        # Skip paragraphs containing images — the MD interleaves image links
+        # between caption text, breaking any continuous phrase match.
+        if p.find('img'):
+            continue
+        # Skip paragraphs containing inline <code> elements — code content
+        # (rule syntax, expressions, identifiers) appears in code blocks or
+        # pre-formatted sections in the MD with different quoting/spacing.
+        if p.find('code'):
+            continue
+        text = p.get_text(separator=' ', strip=True).replace('\xa0', ' ')
         if len(text) < 80 or len(text) > 600: continue
-        words = [w for w in re.sub(r'[^\w\s]','',text.lower()).split()
-                 if len(w) > 5 and w not in STOP]
-        if len(words) < 5: continue
-        phrase = ' '.join(words[1:5])  # skip first word (often a link)
-        if phrase and phrase not in body:
+        first_space = text.find(' ')
+        start = first_space + 1 if first_space >= 0 else 0
+        # Normalise the phrase to match how the MD body is normalised:
+        # - collapse whitespace and normalise punctuation spacing (incl. period)
+        # - strip * (inline list markers become proper list items in MD)
+        # - strip _ (underscores appear in body as spaces after bold/path stripping)
+        # - strip URLs — full and partial (phrase boundary may cut mid-URL leaving
+        #   bare "http" or "htt" that never appears in the body's stripped links)
+        phrase = re.sub(r'\s+([,;:!?.])', r'\1',
+                        re.sub(r'\s+', ' ', text[start:start + 35])).lower().strip()
+        phrase = re.sub(r'\*+', ' ', phrase)                      # * list markers → space
+        phrase = re.sub(r'_+', ' ', phrase)                       # _ (path/italic) → space
+        phrase = re.sub(r'\b(?:https?|htt?)[:/]*\S*', '', phrase) # strip full & partial URLs
+        phrase = re.sub(r'\s*>\s*', ' ', phrase)                  # > path sep → space
+        phrase = re.sub(r'\s+', ' ', phrase).strip()              # renormalise after removals
+        if phrase and len(phrase) > 20 and phrase not in body:
             issues.append(Issue('WARN', 'content_phrase_missing',
                                 f'HTML para phrase not in MD: "{text[:60]}..."'))
         checked += 1
@@ -473,6 +769,18 @@ def cross_chrome_leakage(md, slug, article):
 
 
 # ── Registries ────────────────────────────────────────────────────────────────
+#
+# Two separate check sets:
+#
+# MD_CHECKS / CROSS_CHECKS — CONTENT FIXING
+#   Detect things that were LOST or BROKEN compared to the HTML source.
+#   "HTML has it, MD doesn't" → conversion defect → fix now.
+#
+# REFINEMENT_CHECKS / CROSS_REFINEMENT_CHECKS — CONTENT REFINEMENT
+#   Detect quality characteristics that exist in BOTH the HTML and MD
+#   (faithful conversion, but original content could be improved).
+#   "HTML also has this" → not a conversion bug → improve later via refine pipeline.
+
 MD_CHECKS = [
     chk_orphaned_placeholders,
     chk_stray_digit_after_fence,
@@ -485,17 +793,16 @@ MD_CHECKS = [
     chk_local_image_paths,
     chk_broken_md_links,
     chk_no_triple_blanks,
-    chk_prose_in_code,
-    chk_duplicate_paragraphs,
     chk_excessive_line_length,
     chk_many_missing_images,
     chk_code_fence_language,
+    # chk_prose_in_code removed → REFINEMENT: author put prose in <pre> in source HTML
 ]
 
 CROSS_CHECKS = [
+    cross_duplicate_paragraphs,
     cross_code_block_count,
     cross_code_content_integrity,
-    cross_language_tags,
     cross_word_count,
     cross_heading_match,
     cross_list_preservation,
@@ -503,11 +810,27 @@ CROSS_CHECKS = [
     cross_table_acknowledged,
     cross_last_section_present,
     cross_image_count,
-    cross_youtube_count,
     cross_technical_terms,
     cross_blockquote_preserved,
     cross_key_phrase_sample,
     cross_chrome_leakage,
+    # cross_language_tags removed → REFINEMENT: HTML code had no/wrong tag; conversion faithful
+    # cross_youtube_count removed → REFINEMENT: YouTube embeds handled separately in refine pipeline
+]
+
+# ── Refinement registries ─────────────────────────────────────────────────────
+# Checks that identify content quality improvements applicable to BOTH HTML and
+# MD.  The conversion was faithful — the original source has the same characteristic.
+# These are stored in state.suggestions (not state.issues) and surfaced in a
+# future "Content Refinement" UI view, not in the current issue panel.
+
+MD_REFINEMENT_CHECKS = [
+    chk_prose_in_code,       # prose in <pre>: original author put narrative in code blocks
+]
+
+CROSS_REFINEMENT_CHECKS = [
+    cross_language_tags,     # missing/wrong lang tag: HTML code had no language annotation
+    cross_youtube_count,     # YouTube embeds: need separate enrichment/embed strategy
 ]
 
 
