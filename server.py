@@ -434,15 +434,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = html_path.read_text(encoding='utf-8', errors='replace')
             # Pretty-print for the editor — purely cosmetic, renders identically.
-            # Preserves <pre>/<code> content verbatim. Original file untouched.
-            from bs4 import BeautifulSoup as _BS
-            # Use html.parser (not lxml) — lxml does charset sniffing on the
-            # <meta charset> tag and double-encodes non-ASCII characters (em
-            # dashes, curly quotes, etc.) when the input is already a Python str.
-            content = _BS(raw, 'html.parser').prettify()
+            # Uses html_utils.prettify_html() which:
+            #   • uses html.parser (not lxml) to avoid double-encoding non-ASCII
+            #   • collapses inline elements to single lines so adjacent-to-punct
+            #     patterns (e.g. <b>Name</b>(Org)) are visible in the source view
+            from html_utils import prettify_html as _prettify_html
+            content = _prettify_html(raw)
             # ── Garbling detection ─────────────────────────────────────────────
             # ÃÂÃÂ is the signature of lxml double-encoding UTF-8 as Latin-1.
-            # If detected, fall back to raw to avoid serving corrupt content.
+            # prettify_html() already guards against this, but double-check here.
             if 'ÃÂÃÂ' in content or ('\xc3\x82' in content):
                 print(f'WARNING: prettify produced garbled content for {slug} '
                       f'— falling back to raw HTML. Check BS4 parser.')
