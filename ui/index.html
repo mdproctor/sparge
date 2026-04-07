@@ -774,12 +774,18 @@ function debounce(fn, ms) {
 
 async function toggleEditMode() {
   if (!currentSlug) return;
-  editState === 'md' ? await exitEditMode() : enterEditMode('md');
+  if (editState === 'md') { await exitEditMode(); return; }
+  // If the HTML editor is open, exit it cleanly before switching to MD.
+  if (editState === 'html') exitEditModeImmediate();
+  await enterEditMode('md');
 }
 
 async function toggleHtmlEditMode() {
   if (!currentSlug) return;
-  editState === 'html' ? await exitEditMode() : enterEditMode('html');
+  if (editState === 'html') { await exitEditMode(); return; }
+  // If the MD editor is open, exit it cleanly before switching to HTML.
+  if (editState === 'md') exitEditModeImmediate();
+  await enterEditMode('html');
 }
 
 async function enterEditMode(mode) {
@@ -812,15 +818,26 @@ async function enterEditMode(mode) {
   $('orig-frame').style.display = 'none';
   $('html-editor').style.display = 'block';
 
+  // Hide the other editor's CodeMirror wrapper before showing the active one.
+  // Both editors share #html-editor as their container — without this, the first
+  // editor created stays visually on top even after switching modes.
   if (mode === 'html') {
+    if (mdEditor) mdEditor.getWrapperElement().style.display = 'none';
     if (!htmlEditor) {
       htmlEditor = CodeMirror($('html-editor'), { mode:'htmlmixed', theme:'material-darker', lineNumbers:true, lineWrapping:false, value:raw });
-    } else { htmlEditor.setValue(raw); }
+    } else {
+      htmlEditor.setValue(raw);
+      htmlEditor.getWrapperElement().style.display = '';
+    }
     htmlEditor.refresh();
   } else {
+    if (htmlEditor) htmlEditor.getWrapperElement().style.display = 'none';
     if (!mdEditor) {
       mdEditor = CodeMirror($('html-editor'), { mode:'markdown', theme:'material-darker', lineNumbers:true, lineWrapping:true, value:raw });
-    } else { mdEditor.setValue(raw); }
+    } else {
+      mdEditor.setValue(raw);
+      mdEditor.getWrapperElement().style.display = '';
+    }
     mdEditor.refresh();
   }
   const activeEditor = mode === 'html' ? htmlEditor : mdEditor;
