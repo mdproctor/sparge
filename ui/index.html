@@ -1479,7 +1479,7 @@ async function selectPost(slug) {
   document.querySelectorAll('.pi').forEach(el=>el.classList.remove('selected'));
   const navEl=$(`pi-${slug}`);
   if (navEl) { navEl.classList.add('selected'); navEl.scrollIntoView({block:'nearest'}); }
-  $('post-crumb').innerHTML=`<strong>${esc((p.title||slug).replace(/- KIE Community$/,'').trim())}</strong><span style="margin-left:6px">${esc(p.date)}${p.author?' · '+esc(p.author):''}</span>`;
+  $('post-crumb').innerHTML=`<strong>${esc((p.title||slug).replace(/- KIE Community$/,'').trim())}</strong><span class="crumb-date">${esc(p.date)}${p.author?' · '+esc(p.author):''}</span>`;
   $('btn-flag').textContent = p.flagged ? '🚩 Flagged' : '🚩 Flag';
   $('btn-flag').className   = p.flagged ? 'warn' : '';
   syncReviewedButton(p);
