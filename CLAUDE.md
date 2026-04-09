@@ -26,7 +26,7 @@ cd ~/claude/sparge
 python3 -m pytest tests/ -q
 ```
 
-326 passing, 43 skipped (integration tests skip without running server), 2 pre-existing failures.
+437 passing, 433 skipped (integration tests skip without running server), 4 pre-existing failures (in `test_md_validator.py` — `TestDuplicateParagraphs`, `TestLanguageTags`, `TestYoutubeLinkCount`, `TestTableAcknowledged`).
 
 ## Key directories — this repo
 
