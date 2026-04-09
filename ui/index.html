@@ -175,7 +175,7 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 .scope-col { flex:1; display:flex; flex-direction:column; gap:3px; }
 .scope-col + .scope-col { border-left:1px solid var(--border); padding-left:6px; margin-left:0; }
 .scope-col:first-child { padding-right:6px; }
-.scope-col-header { font-size:8px; color:#484f58; text-align:center;
+.scope-col-header { font-size:8px; color:var(--muted); text-align:center;
                     text-transform:uppercase; letter-spacing:.05em; padding-bottom:2px; }
 .scope-btn { background:none; border:1px solid transparent; border-radius:2px;
              padding:3px 2px; font-size:9px; color:var(--muted); cursor:pointer; text-align:center; }
@@ -427,14 +427,14 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
 <div id="topbar">
   <a href="/ui/projects.html" id="logo" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px" title="All projects">
     <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#1f6feb"/>
-      <path d="M24,0 C24,0 18,11 18,16 A6,6 0 0,0 30,16 C30,11 24,0 24,0Z" fill="#1f6feb" opacity=".85"/>
-      <path d="M38,1 C38,1 32,13 32,18 A6,6 0 0,0 44,18 C44,13 38,1 38,1Z" fill="#1f6feb" opacity=".7"/>
-      <rect x="1" y="27" width="46" height="3.5" rx="1.75" fill="#e3b341"/>
-      <rect x="1" y="33" width="46" height="3.5" rx="1.75" fill="#e3b341" opacity=".65"/>
-      <rect x="1" y="39" width="46" height="3.5" rx="1.75" fill="#e3b341" opacity=".35"/>
+      <path d="M10,1 C10,1 4,13 4,18 A6,6 0 0,0 16,18 C16,13 10,1 10,1Z" fill="#4a6a8a"/>
+      <path d="M24,0 C24,0 18,11 18,16 A6,6 0 0,0 30,16 C30,11 24,0 24,0Z" fill="#4a6a8a" opacity=".85"/>
+      <path d="M38,1 C38,1 32,13 32,18 A6,6 0 0,0 44,18 C44,13 38,1 38,1Z" fill="#4a6a8a" opacity=".7"/>
+      <rect x="1" y="27" width="46" height="3.5" rx="1.75" fill="#c87020"/>
+      <rect x="1" y="33" width="46" height="3.5" rx="1.75" fill="#c87020" opacity=".65"/>
+      <rect x="1" y="39" width="46" height="3.5" rx="1.75" fill="#c87020" opacity=".35"/>
     </svg>
-    <span style="font-weight:700;font-size:14px;color:var(--ink)">Sp<em style="color:#e3b341;font-style:normal">a</em>rge</span>
+    <span style="font-weight:700;font-size:14px;color:var(--ink)">Sp<em>a</em>rge</span>
   </a>
   <div id="project-name" style="font-size:12px;color:var(--muted);padding:0 12px;border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;max-width:200px;text-overflow:ellipsis"></div>
   <div class="ttab active" id="tab-review" onclick="setTab('review')">📄 Review</div>
@@ -451,10 +451,10 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
     <div id="edit-sidebar-dirty">● Unsaved changes</div>
     <div class="edit-sidebar-divider"></div>
     <button id="btn-edit-save" onclick="saveEditContent()" class="success" style="padding:7px">💾 Save</button>
-    <button id="btn-edit-discard" onclick="discardEdit()" style="background:#2d0f0f;border-color:#f85149;color:#f85149;padding:7px">✕ Discard changes</button>
+    <button id="btn-edit-discard" onclick="discardEdit()" style="background:#f4e0e0;border-color:var(--error);color:var(--error);padding:7px">✕ Discard changes</button>
     <div style="margin-top:auto">
       <button onclick="exitEditMode()" style="width:100%;padding:7px">← Back to review</button>
-      <div style="font-size:10px;color:#484f58;margin-top:6px;text-align:center">Prompts if unsaved changes</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">Prompts if unsaved changes</div>
     </div>
     <div class="edit-sidebar-divider"></div>
     <div style="display:flex; align-items:center; justify-content:space-between; margin-top:auto; padding-top:4px;">
@@ -512,8 +512,8 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
     </div>
     <!-- Bulk staged actions — only meaningful when filtered to Staged -->
     <div id="staged-bulk-row" style="display:none;padding:6px 8px;border-bottom:1px solid var(--border);gap:6px;align-items:center">
-      <button onclick="bulkAcceptStaged()" style="font-size:11px;padding:3px 8px;background:#1a3a1f;border-color:#238636;color:#3fb950" title="Accept all staged versions in current scope">✓ Accept all staged</button>
-      <button onclick="bulkRejectStaged()" style="font-size:11px;padding:3px 8px;background:#2d0f0f;border-color:#f85149;color:#f85149" title="Reject all staged versions in current scope">✕ Reject all staged</button>
+      <button onclick="bulkAcceptStaged()" style="font-size:11px;padding:3px 8px;background:var(--approve-bg);border-color:var(--approve);color:var(--approve)" title="Accept all staged versions in current scope">✓ Accept all staged</button>
+      <button onclick="bulkRejectStaged()" style="font-size:11px;padding:3px 8px;background:#f4e0e0;border-color:var(--error);color:var(--error)" title="Reject all staged versions in current scope">✕ Reject all staged</button>
     </div>
     <div id="post-list"></div>
   </div>
@@ -528,7 +528,7 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
         <div class="sep"></div>
         <button onclick="scanPost()" id="btn-scan" title="Scan this post for all issues — content, assets, and chrome">🔍 Scan</button>
         <button class="success" onclick="generateMd()" id="btn-gen" title="Generate or regenerate Markdown">↺ Generate MD</button>
-        <button onclick="reviewStagedDiff()" id="btn-staged" style="display:none;background:#1f1a00;border-color:#9e6a03;color:#e3b341" title="A staged version exists — review the diff">📋 Review Staged</button>
+        <button onclick="reviewStagedDiff()" id="btn-staged" style="display:none;background:#f4e8e0;border-color:var(--warn);color:var(--warn)" title="A staged version exists — review the diff">📋 Review Staged</button>
         <button onclick="validateMd()" id="btn-val" title="Run validation checks">✓ Validate MD</button>
         <button onclick="toggleReviewed()" id="btn-reviewed" title="Mark this post as reviewed">✓ Reviewed</button>
         <button onclick="toggleFlag()" id="btn-flag" title="Flag for manual review">🚩 Flag</button>
@@ -641,12 +641,12 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
       <span id="diff-ftr-note"></span>
       <div id="diff-btns-generate" style="display:flex;gap:8px">
         <button id="btn-keep" onclick="closeDiffModal()">Keep Existing</button>
-        <button id="btn-stage" onclick="stageForReview()" style="background:#1f1a00;border-color:#9e6a03;color:#e3b341">📋 Stage for Review</button>
+        <button id="btn-stage" onclick="stageForReview()" style="background:#f4e8e0;border-color:var(--warn);color:var(--warn)">📋 Stage for Review</button>
         <button id="btn-replace" onclick="replaceWithNew()">Replace with New</button>
       </div>
       <div id="diff-btns-staged" style="display:none;gap:8px">
-        <button id="btn-reject-staged" onclick="rejectStaged()" style="background:#2d0f0f;border-color:#f85149;color:#f85149">✕ Reject Staged</button>
-        <button id="btn-accept-staged" onclick="acceptStaged()" style="background:#1a3a1f;border-color:#238636;color:#3fb950">✓ Accept Staged</button>
+        <button id="btn-reject-staged" onclick="rejectStaged()" style="background:#f4e0e0;border-color:var(--error);color:var(--error)">✕ Reject Staged</button>
+        <button id="btn-accept-staged" onclick="acceptStaged()" style="background:var(--approve-bg);border-color:var(--approve);color:var(--approve)">✓ Accept Staged</button>
       </div>
     </div>
   </div>
@@ -851,7 +851,7 @@ function showDiffModal(existingMd, newMd, slug, mode='generate') {
   const diff=computeDiff(existingMd,newMd);
   const added=diff.filter(d=>d.t==='+').length, deled=diff.filter(d=>d.t==='-').length;
   const lbl=mode==='staged'?'Staged vs current':slug;
-  $('diff-stats').innerHTML=`<span class="add">+${added} line${added!==1?'s':''}</span> &nbsp; <span class="del">-${deled} line${deled!==1?'s':''}</span> &nbsp; <span style="color:#484f58">${lbl}</span>`;
+  $('diff-stats').innerHTML=`<span class="add">+${added} line${added!==1?'s':''}</span> &nbsp; <span class="del">-${deled} line${deled!==1?'s':''}</span> &nbsp; <span style="color:var(--muted)">${lbl}</span>`;
   // Column labels
   const [lblL,lblR]=document.querySelectorAll('#diff-col-labels .dcl');
   if (mode==='staged') {
@@ -1467,11 +1467,11 @@ function renderOverview() {
   const chip = (bg, color, border, text) =>
     `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${bg};color:${color};border:1px solid ${border};white-space:nowrap">${text}</span>`;
 
-  const GREY   = (t) => chip('#1c2128','#484f58','#30363d', t);
-  const GREEN  = (t) => chip('#12261e','#3fb950','#238636', t);
-  const BLUE   = (t) => chip('#0d1f3a','#58a6ff','#1f6feb', t);
-  const ORANGE = (t) => chip('#2d1f0f','#e3b341','#9e6a03', t);
-  const RED    = (t) => chip('#2d0f0f','#f85149','#f85149', t);
+  const GREY   = (t) => chip('var(--chrome)','var(--muted)','var(--border)', t);
+  const GREEN  = (t) => chip('var(--approve-bg)','var(--approve)','var(--approve)', t);
+  const BLUE   = (t) => chip('var(--accent-tint)','var(--accent)','var(--accent)', t);
+  const ORANGE = (t) => chip('#f4e8e0','var(--warn)','var(--warn)', t);
+  const RED    = (t) => chip('#f4e0e0','var(--error)','var(--error)', t);
 
   $('overview-body').innerHTML = allPosts.map(p => {
     const html     = p.html   || {};
@@ -1528,8 +1528,8 @@ function renderOverview() {
       `<td style="padding:6px 12px;font-size:12px;white-space:nowrap" ${title?`title="${title}"`:''}>${content}</td>`;
 
     return `<tr onclick="selectPost('${p.slug}');setTab('review')"
-               style="border-bottom:1px solid #1a1f26;cursor:pointer"
-               onmouseover="this.style.background='#161b22'" onmouseout="this.style.background=''">
+               style="border-bottom:1px solid var(--border-light);cursor:pointer"
+               onmouseover="this.style.background='var(--chrome)'" onmouseout="this.style.background=''">
       ${td(`<span style="color:var(--muted)">${esc(p.date)}</span>`)}
       ${td(`<span style="color:var(--sepia)">${esc((p.title||p.slug).replace(/- KIE Community$/,'').trim().slice(0,55))}</span>`)}
       ${td(htmlCell, html.checked_at ? `Checked ${html.checked_at?.slice(0,10)||''}` : 'Not yet scanned')}
@@ -1588,22 +1588,22 @@ function renderPanelBadges(p) {
   const herrs=(p.html?.issues||[]).filter(i=>i.level==='ERROR').length;
   const hwarns=hi-herrs;
   if (hi) {
-    hb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    hb.style.cssText='display:inline;background:#f4e8e0;color:var(--warn);border-radius:3px;padding:1px 6px;font-size:10px';
     hb.textContent = herrs && hwarns ? `✕ ${herrs} · ⚠ ${hwarns}` : herrs ? `✕ ${herrs}` : `⚠ ${hwarns}`;
     const errPart  = herrs  ? `${herrs} error${herrs!==1?'s':''}` : '';
     const warnPart = hwarns ? `${hwarns} warning${hwarns!==1?'s':''}` : '';
     hb.title = `HTML scan issues: ${[errPart, warnPart].filter(Boolean).join(', ')} — click Issues to see details`;
   } else hb.style.display='none';
   if (p.md?.staged) {
-    mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    mb.style.cssText='display:inline;background:#f4e8e0;color:var(--warn);border-radius:3px;padding:1px 6px;font-size:10px';
     mb.textContent='📋 Staged — awaiting review';
     mb.title='A staged Markdown version exists and is awaiting your review';
   } else if (p.md?.stale) {
-    mb.style.cssText='display:inline;background:#1f1a00;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    mb.style.cssText='display:inline;background:#f4e8e0;color:var(--warn);border-radius:3px;padding:1px 6px;font-size:10px';
     mb.textContent='↺ Stale — HTML changed';
     mb.title='The HTML source has changed since MD was generated — regenerate to update';
   } else if (mi) {
-    mb.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+    mb.style.cssText='display:inline;background:#f4e8e0;color:var(--warn);border-radius:3px;padding:1px 6px;font-size:10px';
     mb.textContent=`⚠ ${mi} MD`;
     const merrs  = (p.md?.issues||[]).filter(i=>i.level==='ERROR').length;
     const mwarns = mi - merrs;
@@ -1615,11 +1615,11 @@ function renderPanelBadges(p) {
   const assets=p.assets||{};
   if (assets.checked_at) {
     if (assets.broken===0) {
-      ab.style.cssText='display:inline;background:#12261e;color:#3fb950;border-radius:3px;padding:1px 6px;font-size:10px';
+      ab.style.cssText='display:inline;background:var(--approve-bg);color:var(--approve);border-radius:3px;padding:1px 6px;font-size:10px';
       ab.textContent=`🖼 ${assets.localised}/${assets.total}`;
       ab.title=`${assets.localised} of ${assets.total} images successfully localised`;
     } else {
-      ab.style.cssText='display:inline;background:#2d1f0f;color:#e3b341;border-radius:3px;padding:1px 6px;font-size:10px';
+      ab.style.cssText='display:inline;background:#f4e8e0;color:var(--warn);border-radius:3px;padding:1px 6px;font-size:10px';
       ab.textContent=`🖼 ${assets.broken} missing`;
       ab.title=`${assets.broken} image${assets.broken!==1?'s':''} could not be localised (broken or unreachable)`;
     }
@@ -1664,7 +1664,7 @@ async function loadMd(p) {
         }
       } catch(e) { /* leave unhighlighted on error */ }
     });
-  } catch(e) { wrap.innerHTML=`<p style="color:#f85149;padding:8px 0">Could not load MD</p>`; }
+  } catch(e) { wrap.innerHTML=`<p style="color:var(--error);padding:8px 0">Could not load MD</p>`; }
 }
 function parseFM(raw) {
   const fm={}, m=raw.match(/^---\n([\s\S]+?)\n---\n\n?([\s\S]*)$/);
@@ -1730,7 +1730,7 @@ function applyIframeHighlight(selector) {
     styleTag.id = '__migrator-highlight-style__';
     (iDoc.head || iDoc.documentElement).appendChild(styleTag);
   }
-  styleTag.textContent = `${selector} { outline: 3px solid #f85149 !important; outline-offset: 2px; scroll-margin-top: 80px; }`;
+  styleTag.textContent = `${selector} { outline: 3px solid var(--error) !important; outline-offset: 2px; scroll-margin-top: 80px; }`;
   // Scroll to the element
   const el = iDoc.querySelector(selector);
   if (el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); return true; }
@@ -2059,12 +2059,12 @@ function _promptOverwrite(slug) {
         <div style="font-size:12px;color:var(--muted);margin-bottom:18px;word-break:break-all">
           ${slug}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button id="_ow-one"  style="padding:8px;background:#1f6feb22;border:1px solid #1f6feb;
-            color:#58a6ff;border-radius:6px;cursor:pointer;font-size:12px">↺ Overwrite this</button>
+          <button id="_ow-one"  style="padding:8px;background:var(--accent-tint);border:1px solid var(--accent);
+            color:var(--accent);border-radius:2px;cursor:pointer;font-size:12px">↺ Overwrite this</button>
           <button id="_ow-skip" style="padding:8px;background:none;border:1px solid var(--border);
             color:var(--muted);border-radius:6px;cursor:pointer;font-size:12px">⏭ Skip this</button>
-          <button id="_ow-all"  style="padding:8px;background:#238636;border:1px solid #2ea043;
-            color:#fff;border-radius:6px;cursor:pointer;font-size:12px">↺ Overwrite all</button>
+          <button id="_ow-all"  style="padding:8px;background:var(--approve-bg);border:1px solid var(--approve);
+            color:var(--approve);border-radius:2px;cursor:pointer;font-size:12px">↺ Overwrite all</button>
           <button id="_ow-stop" style="padding:8px;background:none;border:1px solid var(--border);
             color:var(--muted);border-radius:6px;cursor:pointer;font-size:12px">⏹ Skip remaining</button>
         </div>
@@ -2385,7 +2385,7 @@ $('diff-modal').addEventListener('click',e=>{if(e.target===$('diff-modal')) clos
     <div style="font-size:13px;color:var(--muted);line-height:1.5">You have unsaved changes. What would you like to do?</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="um-cancel"  style="padding:6px 14px">Cancel</button>
-      <button id="um-discard" style="padding:6px 14px;background:#2d0f0f;border-color:#f85149;color:#f85149">Discard</button>
+      <button id="um-discard" style="padding:6px 14px;background:#f4e0e0;border-color:var(--error);color:var(--error)">Discard</button>
       <button id="um-save"    style="padding:6px 14px" class="success">💾 Save</button>
     </div>
   </div>
