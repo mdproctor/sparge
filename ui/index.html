@@ -54,30 +54,39 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .ttab:hover { color:var(--ink); }
 .ttab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
 
-/* Post crumb lives in the post action bar */
-#post-crumb { flex:1; min-width:0; font-size:13px; color:var(--muted);
-              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-#post-crumb strong { color:var(--ink); font-weight:600; }
+/* Button styles */
+button { background:var(--chrome); color:var(--sepia); border:1px solid var(--border);
+         border-radius:2px; padding:5px 12px; cursor:pointer; font-size:11px;
+         display:flex; align-items:center; gap:5px; white-space:nowrap; transition:all .15s; }
+button:hover { background:var(--bg); border-color:var(--muted); color:var(--ink); }
+button:disabled { opacity:.35; cursor:default; }
+button.active { background:var(--accent); border-color:var(--accent); color:var(--bg); }
+button.success { background:var(--approve-bg); border-color:var(--approve); color:var(--approve); }
+button.success:hover { background:var(--approve); color:var(--bg); }
+button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 
-/* MD edit button active state */
-#btn-edit-md.editing { background:#1f6feb22; border-color:#1f6feb; color:#58a6ff; }
-
-/* ── Post action bar ── everything scoped to the current document */
+/* Post action bar — everything scoped to the current document */
 #post-action-bar {
-  flex-shrink: 0; background: var(--chrome); border-bottom: 1px solid var(--border);
-  padding: 5px 14px; display: flex; align-items: center; gap: 6px;
+  flex-shrink:0; background:var(--chrome); border-bottom:1px solid var(--border);
+  padding:5px 14px; display:flex; align-items:center; gap:6px;
 }
 /* Pin all buttons — only the crumb absorbs space changes */
 #post-action-bar > *:not(#post-crumb) { flex-shrink: 0; }
-button { background:#21262d; color:var(--sepia); border:1px solid var(--border);
-         border-radius:6px; padding:5px 12px; cursor:pointer; font-size:12px;
-         display:flex; align-items:center; gap:5px; white-space:nowrap; transition:all .15s; }
-button:hover { background:var(--border); border-color:var(--muted); }
-button:disabled { opacity:.35; cursor:default; }
-button.active { background:#1f6feb; border-color:#1f6feb; color:#fff; }
-button.success { background:#1a3a1f; border-color:#238636; color:#3fb950; }
-button.success:hover { background:#238636; color:#fff; }
-button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
+
+/* Post crumb lives in the post action bar */
+#post-crumb { flex:1; min-width:0; font-size:11px; color:var(--muted);
+              display:flex; align-items:center; gap:5px;
+              overflow:hidden; white-space:nowrap; }
+#post-crumb strong { color:var(--ink); font-weight:600; }
+#post-crumb .crumb-date { color:var(--muted); margin-left:6px;
+                           font-family:'SFMono-Regular',Consolas,monospace; font-size:9px; }
+.crumb-copy { cursor:pointer; font-size:11px; color:var(--muted); flex-shrink:0; user-select:none; }
+.crumb-copy:hover { color:var(--ink); }
+
+/* MD edit button active state */
+#btn-edit-md.editing { background:var(--accent-tint); border-color:var(--accent); color:var(--accent); }
+
+/* Separator */
 .sep { width:1px; height:22px; background:var(--border); flex-shrink:0; }
 .gl { font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
       font-family:'SFMono-Regular',Consolas,monospace; }
