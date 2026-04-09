@@ -117,7 +117,7 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .sv.m { color:var(--muted) }
 /* Expandable stat rows + issue breakdown */
 .srow.expandable { cursor:pointer; border-radius:3px; margin-left:-4px; padding-left:4px; }
-.srow.expandable:hover { background:#1c2128; }
+.srow.expandable:hover { background:var(--bg); }
 .expand-arrow { font-size:13px; color:var(--muted); display:inline-block;
                 transition:transform 0.15s; flex-shrink:0; line-height:1; }
 .expand-arrow.open { transform:rotate(90deg); }
@@ -153,7 +153,7 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 }
 .filter-zone:hover .select-wrap { max-height:40px; margin-top:3px; }
 /* Expand hint — fades out on hover */
-.expand-hint { font-size:9px; color:#484f58; text-align:right; margin-top:2px;
+.expand-hint { font-size:9px; color:var(--muted); text-align:right; margin-top:2px;
                letter-spacing:.04em; transition:opacity 0.15s; line-height:1; }
 .filter-zone:hover .expand-hint { opacity:0; }
 /* Scope actions row — border/padding zeroed at rest so max-height:0 fully collapses */
