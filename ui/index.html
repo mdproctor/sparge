@@ -216,11 +216,10 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 /* Tab bar (single-page mode) */
 #tabbar { flex-shrink:0; background:var(--chrome); border-bottom:1px solid var(--border);
           padding:0 16px; display:none; }
-#tabbar.visible { display:flex; }
 .tab { padding:8px 20px; font-size:13px; cursor:pointer;
        border-bottom:2px solid transparent; color:var(--muted); transition:all .15s; }
-.tab:hover { color:var(--sepia); }
-.tab.active { color:#f78166; border-bottom-color:#f78166; font-weight:600; }
+.tab:hover { color:var(--ink); }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
 
 #panels { flex:1; display:flex; overflow:hidden; min-height:0; }
 #divider { width:4px; background:var(--border); cursor:col-resize; flex-shrink:0; }
@@ -308,60 +307,62 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 }
 
 /* ── Diff modal ── */
-#diff-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
+#diff-modal { display:none; position:fixed; inset:0; background:rgba(42,34,24,.65);
               z-index:1000; align-items:center; justify-content:center; }
 #diff-modal.open { display:flex; }
-#diff-box { background:var(--chrome); border:1px solid var(--border); border-radius:10px;
+#diff-box { background:var(--chrome); border:1px solid var(--border); border-radius:4px;
             width:90vw; height:82vh; display:flex; flex-direction:column;
-            box-shadow:0 8px 32px rgba(0,0,0,.6); }
+            box-shadow:0 8px 32px rgba(42,34,24,.3); }
 #diff-hdr { flex-shrink:0; padding:12px 20px; border-bottom:1px solid var(--border);
             display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 #diff-hdr h3 { font-size:15px; color:var(--ink); margin-bottom:3px; }
-#diff-stats .add{color:#3fb950} #diff-stats .del{color:#f85149}
+#diff-stats .add { color:var(--approve) }
+#diff-stats .del { color:var(--error) }
 #diff-stats { font-size:12px; color:var(--muted); }
 #diff-close { background:none; border:none; color:var(--muted); cursor:pointer;
               font-size:18px; line-height:1; padding:2px 6px; flex-shrink:0; }
 #diff-close:hover { color:var(--ink); }
 #diff-body { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
 #diff-col-labels { display:flex; flex-shrink:0; border-bottom:1px solid var(--border); }
-.dcl { flex:1; padding:4px 12px; font-size:10px; text-transform:uppercase;
-       letter-spacing:.06em; color:var(--muted); }
+.dcl { flex:1; padding:4px 12px; font-size:9px; text-transform:uppercase;
+       letter-spacing:.06em; color:var(--muted); font-family:'SFMono-Regular',Consolas,monospace; }
 .dcl+.dcl { border-left:1px solid var(--border); }
 #diff-cols { display:flex; flex:1; overflow:hidden; min-height:0; }
 #diff-left-wrap,#diff-right-wrap { flex:1; overflow:auto; min-width:0;
   font-family:'SFMono-Regular',Consolas,monospace; font-size:12px; line-height:1.6; }
 #diff-right-wrap { border-left:1px solid var(--border); }
 .dr { padding:1px 12px; white-space:pre-wrap; word-break:break-word; min-height:1.6em; }
-.dr.add   { background:#0d2b0d; color:#3fb950; }
-.dr.del   { background:#2d0d0d; color:#f85149; }
-.dr.ctx   { color:#484f58; }
-.dr.empty { background:#0a0a0a; }
-.dr.skip  { color:#484f58; background:var(--bg); font-style:italic;
-            border-top:1px solid #21262d; border-bottom:1px solid #21262d; }
+.dr.add   { background:var(--approve-bg); color:var(--approve); }
+.dr.del   { background:#f4e0e0; color:var(--error); }
+.dr.ctx   { color:var(--muted); }
+.dr.empty { background:var(--bg); }
+.dr.skip  { color:var(--muted); background:var(--bg); font-style:italic;
+            border-top:1px solid var(--border-light); border-bottom:1px solid var(--border-light); }
 #diff-ftr { flex-shrink:0; padding:12px 20px; border-top:1px solid var(--border);
             display:flex; justify-content:flex-end; align-items:center; gap:10px; }
 #diff-ftr span { flex:1; font-size:12px; color:var(--muted); }
-#btn-keep    { background:#21262d; color:var(--sepia); }
-#btn-keep:hover { background:var(--border); }
-#btn-replace { background:#1a3a1f; color:#3fb950; border-color:#238636; }
-#btn-replace:hover { background:#238636; color:#fff; }
+#btn-keep    { background:var(--chrome); color:var(--sepia); border:1px solid var(--border); }
+#btn-keep:hover { background:var(--bg); }
+#btn-replace { background:var(--approve-bg); color:var(--approve); border-color:var(--approve); }
+#btn-replace:hover { background:var(--approve); color:var(--bg); }
 
 /* ── Config overlay ── */
-#cfg-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7);
+#cfg-overlay { display:none; position:fixed; inset:0; background:rgba(42,34,24,.5);
                z-index:100; justify-content:flex-end; }
 #cfg-overlay.open { display:flex; }
-#cfg-panel { background:var(--chrome); border-left:1px solid var(--border); width:380px;
+#cfg-panel { background:var(--chrome); border-left:2px solid var(--ink); width:380px;
              height:100%; overflow-y:auto; padding:24px;
-             box-shadow:-8px 0 32px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+             box-shadow:-8px 0 32px rgba(42,34,24,.2); display:flex; flex-direction:column; }
 #cfg-panel h2 { font-size:15px; color:var(--ink); margin-bottom:18px; }
 .cfg-sec { margin-bottom:18px; }
-.cfg-sec h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:10px; }
+.cfg-sec h3 { font-size:9px; text-transform:uppercase; letter-spacing:.08em;
+              color:var(--muted); margin-bottom:10px; font-family:'SFMono-Regular',Consolas,monospace; }
 .cfg-f { margin-bottom:10px; }
 .cfg-f label { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
-.cfg-f input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px;
-               padding:7px 10px; color:var(--sepia); font-size:12px; font-family:monospace; }
-.cfg-f input:focus { outline:none; border-color:#1f6feb; }
-.cfg-note { font-size:10px; color:#484f58; margin-top:3px; }
+.cfg-f input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:2px;
+               padding:7px 10px; color:var(--ink); font-size:12px; font-family:monospace; }
+.cfg-f input:focus { outline:none; border-color:var(--accent); }
+.cfg-note { font-size:10px; color:var(--muted); margin-top:3px; }
 #cfg-ftr { margin-top:auto; padding-top:16px; border-top:1px solid var(--border); display:flex; gap:8px; }
 </style>
 <!-- CodeMirror 5 — syntax-highlighted editors -->
