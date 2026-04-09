@@ -18,19 +18,11 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup, Tag
 
 try:
-    from .config import cfg   # imported as scripts.scan_assets (package)
+    from .config import cfg       # imported as scripts.scan_assets (package)
+    from .constants import is_tracking_pixel as _is_pixel
 except ImportError:
-    from config import cfg    # imported as top-level module by server
-
-# ── Known tracking domains (mirrors scan_html.py) ─────────────────────────────
-TRACKING_DOMAINS = {
-    'stats.wordpress.com', 'pixel.wp.com', 'pixel.quantserve.com',
-    'b.scorecardresearch.com', 'beacon.krxd.net', 'ad.doubleclick.net',
-    'googleads.g.doubleclick.net', 'www.google-analytics.com',
-    'connect.facebook.net', 'platform.twitter.com', 'bat.bing.com',
-    'ct.pinterest.com', 'analytics.twitter.com', 'px.ads.linkedin.com',
-    'mc.yandex.ru', 'counter.yadro.ru',
-}
+    from config import cfg        # imported as top-level module by server
+    from constants import is_tracking_pixel as _is_pixel
 
 
 def _is_tracking_pixel(img: Tag) -> bool:
@@ -38,19 +30,23 @@ def _is_tracking_pixel(img: Tag) -> bool:
     src = img.get('src', '') or ''
     w   = str(img.get('width',  '') or '')
     h   = str(img.get('height', '') or '')
-    is_tiny = (w in ('1', '0') and h in ('1', '0'))
-    domain = urlparse(src).netloc.lower().lstrip('www.')
-    return domain in TRACKING_DOMAINS or (is_tiny and src.startswith('http'))
+    return _is_pixel(src, w, h)
 
 
-def scan_assets(html_path: Path) -> dict:
+def scan_assets(html_path: Path, original_path: Path | None = None) -> dict:
     """
     Scan a single archived HTML post for image/asset references.
 
     Parameters
     ----------
     html_path : Path
-        Absolute path to the HTML post file.
+        Absolute path to the HTML file to scan (may be the enriched copy).
+    original_path : Path | None
+        Absolute path to the ORIGINAL source HTML in the posts directory.
+        When html_path is an enriched copy outside the original posts tree,
+        relative image paths like '../../assets/...' must be resolved from
+        original_path.parent (not html_path.parent) to find the actual files.
+        If None, falls back to html_path.parent for relative path resolution.
 
     Returns
     -------
@@ -62,6 +58,8 @@ def scan_assets(html_path: Path) -> dict:
       external      — list of external URLs not yet localised
     """
     serve_root: Path = cfg['_root']
+    # Base directory for resolving relative paths (e.g. ../../assets/...)
+    relative_base: Path = (original_path or html_path).parent
 
     try:
         soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
@@ -101,8 +99,11 @@ def scan_assets(html_path: Path) -> dict:
             if not abs_path.exists():
                 missing_local.append(src)
         elif src:
-            # Relative path (e.g. ../../assets/...) — resolve from post directory
-            abs_path = (html_path.parent / src).resolve()
+            # Relative path (e.g. ../../assets/...) — resolve from the ORIGINAL
+            # post directory, not from html_path.parent.  When scanning an enriched
+            # copy outside the posts tree, relative_base ensures the path resolves
+            # to where the assets actually live.
+            abs_path = (relative_base / src).resolve()
             if not abs_path.exists():
                 missing_local.append(src)
 
@@ -124,7 +125,7 @@ def scan_assets(html_path: Path) -> dict:
         if src.startswith('/'):
             abs_path = serve_root / src.lstrip('/')
         else:
-            abs_path = (html_path.parent / src).resolve()
+            abs_path = (relative_base / src).resolve()
         if abs_path.exists():
             localised += 1
 

@@ -20,6 +20,7 @@ from scan_html import (
     check_unreplaced_gists,
     check_wordpress_chrome,
     check_missing_image_signals,
+    check_md_notation_in_text,
 )
 from bs4 import BeautifulSoup
 
@@ -337,6 +338,98 @@ class TestMissingImageSignals:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# md_notation_in_text
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestMdNotationInText:
+    """LESSON: Inline formatting elements immediately adjacent to a non-space
+    character cause html2text to emit **text**(more — no space before the
+    punctuation. The MD validator's plain-text phrase from the HTML has a space
+    there ("text (more"), so the comparison fails.
+
+    Detecting this in the HTML scan flags the post as "formatting-complex" so
+    that MD phrase-check WARNings on it are understood to be structural artefacts
+    rather than real content losses.
+
+    Pattern that fires:  <b>Name </b>(Affiliation)
+    html2text output:    **Name**(Affiliation)      ← trailing space inside ** eaten
+    HTML plain text:     Name (Affiliation          ← space preserved
+    """
+
+    def test_b_adjacent_to_open_paren_detected(self):
+        """<b>text</b>(more triggers the check."""
+        art = article('<p><b>Bob Kowalski</b>(Imperial College London): talk title</p>')
+        issues = check_md_notation_in_text(art)
+        assert has_type(issues, 'md_notation_in_text'), (
+            '<b>text</b>(text) not detected. '
+            'html2text produces **text**(text) with no space before "(", '
+            'which mismatches the HTML plain text "text (text". '
+            'Fix: add check_md_notation_in_text() to scan_html.py.'
+        )
+
+    def test_strong_adjacent_to_colon_detected(self):
+        """<strong>text</strong>: also triggers — colon is non-space."""
+        art = article('<p><strong>Section</strong>: description here</p>')
+        issues = check_md_notation_in_text(art)
+        assert has_type(issues, 'md_notation_in_text')
+
+    def test_em_adjacent_to_comma_detected(self):
+        """<em>text</em>, trailing comma also triggers."""
+        art = article('<p>See <em>section A</em>, which explains this.</p>')
+        issues = check_md_notation_in_text(art)
+        assert has_type(issues, 'md_notation_in_text')
+
+    def test_space_after_closing_tag_not_flagged(self):
+        """<b>text</b> word — space before next word is fine; html2text keeps it."""
+        art = article('<p><b>Bob Kowalski</b> presented the keynote.</p>')
+        assert is_clean(check_md_notation_in_text(art), 'md_notation_in_text')
+
+    def test_formatting_at_end_of_element_not_flagged(self):
+        """<b>text</b> at end of paragraph with no following sibling is fine."""
+        art = article('<p>See <b>the appendix</b></p>')
+        assert is_clean(check_md_notation_in_text(art), 'md_notation_in_text')
+
+    def test_code_blocks_excluded(self):
+        """Formatting inside <pre>/<code> is expected; must not flag."""
+        art = article('<pre><code><b>bold</b>(call) in code</code></pre>')
+        assert is_clean(check_md_notation_in_text(art), 'md_notation_in_text')
+
+    def test_level_is_warn(self):
+        """Should be a WARN — informational, not blocking."""
+        art = article('<p><b>Name</b>(Org): title</p>')
+        issues = check_md_notation_in_text(art)
+        assert has_level(issues, 'md_notation_in_text', 'WARN')
+
+    def test_detail_names_the_adjacent_character(self):
+        """Detail should show the character immediately after the closing tag."""
+        art = article('<p><b>Name</b>(Org): title</p>')
+        issues = check_md_notation_in_text(art)
+        notation = [i for i in issues if i['type'] == 'md_notation_in_text']
+        assert notation
+        assert '(' in notation[0]['detail'], (
+            f'Detail should name the adjacent character. Got: {notation[0]["detail"]!r}'
+        )
+
+    def test_selector_points_to_formatting_element(self):
+        """Issue selector targets the <b>/<strong> element for highlighting."""
+        art = article('<p><b>Name</b>(Org): title</p>')
+        issues = check_md_notation_in_text(art)
+        notation = [i for i in issues if i['type'] == 'md_notation_in_text']
+        assert notation and notation[0]['selector'] is not None
+
+    def test_scan_post_includes_check(self, tmp_path):
+        """scan_post() must run check_md_notation_in_text."""
+        html = '<html><body><article><p><b>Name</b>(Org): title here</p></article></body></html>'
+        p = tmp_path / 'post.html'
+        p.write_text(html)
+        issues = scan_post(p)
+        assert has_type(issues, 'md_notation_in_text'), (
+            'check_md_notation_in_text not called from scan_post(). '
+            'Add it to the issues pipeline in scan_post().'
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # scan_post integration
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -511,3 +604,84 @@ class TestMissingLocalImagesWithPostsDir:
         issues_good = scan_post(enriched_file, posts_dir=posts_dir)
         missing_good = [i for i in issues_good if i['type'] == 'missing_local_image']
         assert len(missing_good) == 0
+
+
+class TestWordpressChromByline:
+    """The scan must NOT report wordpress_chrome for the systematic
+    'by Author - Date Category Article' byline pattern.
+
+    This byline appears in all 580 KIE posts as a classless <div>.
+    convert_post.py already strips it during conversion — flagging it in
+    every scan clutters the issue panel with false-positives that need
+    no human action.
+
+    The scanner should still detect genuine chrome leakage (sidebars,
+    related-posts widgets, comment forms) that the converter may miss.
+    """
+
+    def _make_html(self, article_body: str) -> str:
+        return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"/></head>
+<body><article>{article_body}</article></body></html>"""
+
+    def _scan(self, html: str, tmp_path) -> list:
+        from scan_html import scan_post
+        hp = tmp_path / 'post.html'
+        hp.write_text(html, encoding='utf-8')
+        return scan_post(hp)
+
+    def test_byline_div_not_reported(self, tmp_path):
+        """'by Author - Date Category Article' in a short unclassed <div>
+        must NOT produce a wordpress_chrome issue.
+
+        FAILS before fix (scan currently reports it).
+        PASSES after pre-stripping bylines in scan_post().
+        """
+        html = self._make_html("""
+            <div>by Mark Proctor - May 12, 2007 Rules Article</div>
+            <h1>The Real Title</h1>
+            <p>Actual post content here.</p>
+        """)
+        issues = self._scan(html, tmp_path)
+        bylines = [i for i in issues
+                   if i['type'] == 'wordpress_chrome'
+                   and 'Rules Article' in i.get('detail', '')]
+        assert not bylines, (
+            f'Byline metadata "by Author - Date Category Article" must not be '
+            f'reported as wordpress_chrome — convert_post.py already strips it, '
+            f'so it is noise not a real issue.\n'
+            f'Issues found: {[i["detail"] for i in bylines]}')
+
+    def test_various_byline_formats_not_reported(self, tmp_path):
+        """Different date/category formats must all be suppressed."""
+        for byline in [
+            "by Mark Proctor - October 31, 2013 Tools Article",
+            "by Mark Proctor - January 1, 2007 Process Rules Article",
+            "by Mark Proctor - June 6, 2007 Rules Article",
+        ]:
+            html = self._make_html(f"<div>{byline}</div><p>Content.</p>")
+            issues = self._scan(html, tmp_path)
+            chrome = [i for i in issues if i['type'] == 'wordpress_chrome']
+            assert not chrome, (
+                f'Byline {byline!r} must not be reported. '
+                f'Got: {[i["detail"] for i in chrome]}')
+
+    def test_genuine_chrome_still_detected(self, tmp_path):
+        """Real chrome leakage (sidebar widgets, related posts) must still be caught."""
+        html = self._make_html("""
+            <div>by Mark Proctor - May 2007 Rules Article</div>
+            <p>Content here.</p>
+            <div>You might also like</div>
+            <div>Leave a Reply</div>
+        """)
+        issues = self._scan(html, tmp_path)
+        chrome_types = {i['type'] for i in issues}
+        # byline removed, but sidebar/comment chrome still caught
+        bylines = [i for i in issues
+                   if i['type'] == 'wordpress_chrome' and 'Rules Article' in i.get('detail','')]
+        other_chrome = [i for i in issues
+                        if i['type'] == 'wordpress_chrome' and 'Rules Article' not in i.get('detail','')]
+        assert not bylines, 'Byline must still be suppressed even alongside other chrome'
+        assert other_chrome, (
+            'Genuine chrome (sidebar widgets, comment forms) must still be detected '
+            'even after byline suppression')

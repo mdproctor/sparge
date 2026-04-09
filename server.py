@@ -137,10 +137,11 @@ except ImportError:
     _can_generate = False
 
 try:
-    from md_validator import validate as validate_md
+    from md_validator import validate as validate_md, refine as refine_md
     _can_validate = True
 except ImportError:
     _can_validate = False
+    refine_md = None
 
 # scan_html lives in our own scripts/
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -254,6 +255,8 @@ class Handler(BaseHTTPRequestHandler):
             rest = path[len('/api/posts/'):]
             if rest.endswith('/staged'):
                 self._api_staged_get(rest[:-len('/staged')])
+            elif rest.endswith('/view'):
+                self._api_post_view(rest[:-len('/view')])
             elif rest.endswith('/html'):
                 self._api_post_html(rest[:-len('/html')])
             else:
@@ -434,15 +437,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw = html_path.read_text(encoding='utf-8', errors='replace')
             # Pretty-print for the editor — purely cosmetic, renders identically.
-            # Preserves <pre>/<code> content verbatim. Original file untouched.
-            from bs4 import BeautifulSoup as _BS
-            # Use html.parser (not lxml) — lxml does charset sniffing on the
-            # <meta charset> tag and double-encodes non-ASCII characters (em
-            # dashes, curly quotes, etc.) when the input is already a Python str.
-            content = _BS(raw, 'html.parser').prettify()
+            # Uses html_utils.prettify_html() which:
+            #   • uses html.parser (not lxml) to avoid double-encoding non-ASCII
+            #   • collapses inline elements to single lines so adjacent-to-punct
+            #     patterns (e.g. <b>Name</b>(Org)) are visible in the source view
+            from html_utils import prettify_html as _prettify_html
+            content = _prettify_html(raw)
             # ── Garbling detection ─────────────────────────────────────────────
             # ÃÂÃÂ is the signature of lxml double-encoding UTF-8 as Latin-1.
-            # If detected, fall back to raw to avoid serving corrupt content.
+            # prettify_html() already guards against this, but double-check here.
             if 'ÃÂÃÂ' in content or ('\xc3\x82' in content):
                 print(f'WARNING: prettify produced garbled content for {slug} '
                       f'— falling back to raw HTML. Check BS4 parser.')
@@ -497,6 +500,12 @@ class Handler(BaseHTTPRequestHandler):
                      'detail': i.detail, 'selector': None}
                     for i in issues
                 ])
+                if refine_md:
+                    suggestions = refine_md(content, slug, html_path)
+                    State.update(slug, {'md_suggestions': [
+                        {'check': s.check, 'level': s.level, 'detail': s.detail}
+                        for s in suggestions
+                    ]})
             print(f'Generated: {slug}.md')
             self._json(200, State.get(slug))
         except Exception as e:
@@ -512,14 +521,21 @@ class Handler(BaseHTTPRequestHandler):
         if not md_path.exists():
             self._json(404, {'error': 'MD not generated yet'})
             return
-        content = md_path.read_text(errors='replace')
-        issues  = validate_md(content, slug,
-                              html_path if html_path.exists() else None)
+        content  = md_path.read_text(errors='replace')
+        html_arg = html_path if html_path.exists() else None
+        issues   = validate_md(content, slug, html_arg)
         State.set_md_issues(slug, [
             {'check': i.check, 'level': i.level,
              'detail': i.detail, 'selector': None}
             for i in issues
         ])
+        # Also run refinement checks and store as suggestions (separate from issues)
+        if refine_md:
+            suggestions = refine_md(content, slug, html_arg)
+            State.update(slug, {'md_suggestions': [
+                {'check': s.check, 'level': s.level, 'detail': s.detail}
+                for s in suggestions
+            ]})
         self._json(200, State.get(slug))
 
     def _api_scan_html(self, slug: str):
@@ -573,7 +589,9 @@ class Handler(BaseHTTPRequestHandler):
             # ── Step 3: Asset scan ────────────────────────────────────────────
             if _can_scan_assets:
                 from datetime import datetime, timezone
-                asset_result = _scan_assets(scan_path)
+                # Pass html_path (original) so relative image paths resolve correctly
+                # when scan_path is an enriched copy outside the original posts tree.
+                asset_result = _scan_assets(scan_path, original_path=html_path)
                 State.update(slug, {'assets': {
                     'total':      asset_result['total'],
                     'localised':  asset_result['localised'],
@@ -607,6 +625,38 @@ class Handler(BaseHTTPRequestHandler):
                 ])
             print(f'Saved (manual edit): {slug}.md')
             self._json(200, State.get(slug))
+        except Exception as e:
+            self._json(500, {'error': str(e)})
+
+    def _api_post_view(self, slug: str):
+        """Serve the HTML for rendering in the iframe — enriched copy preferred.
+
+        Unlike _api_post_html (which prettifies for the editor and returns text/plain),
+        this serves the raw HTML with text/html so the browser renders it.  It checks
+        the enriched copy first so edits saved via save-html are immediately visible.
+        """
+        enriched = ENRICHED_DIR / (slug + '.html')
+        original = POSTS_DIR   / (slug + '.html')
+        if enriched.exists():
+            html_path = enriched
+        elif original.exists():
+            html_path = original
+        else:
+            self._json(404, {'error': f'HTML not found: {slug}'}); return
+        try:
+            content = html_path.read_text(encoding='utf-8', errors='replace')
+            # Strip the archive provenance header — it is metadata added during
+            # archiving, not original post content.  The viewer is meant to show
+            # what the post looked like on the original blog.
+            import re as _re
+            content = _re.sub(
+                r'<header\s[^>]*class="[^"]*archive-header[^"]*"[^>]*>.*?</header>',
+                '', content, flags=_re.DOTALL | _re.IGNORECASE)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(content.encode('utf-8', errors='replace'))
         except Exception as e:
             self._json(500, {'error': str(e)})
 

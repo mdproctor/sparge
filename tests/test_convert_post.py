@@ -520,3 +520,241 @@ class TestGenerateMdEndpoint:
         if md_file.exists():
             content = md_file.read_text(encoding='utf-8')
             assert_not_garbled(content, 'md_file_on_disk')
+
+
+# ── ASCII decorator separator stripping ───────────────────────────────────────
+#
+# Some blog posts use lines of '===' or '---' as visual separators inside <p>
+# elements separated by <br/> tags. These create Markdown setext headings:
+#   '===' after text → H1 heading  (setext heading underline)
+#   '---' after text → H2 heading  (setext heading underline)
+#
+# Fix: convert '===...' lines to blank line + '---' so the '---' is treated
+# as an <hr> (horizontal rule) not a setext heading underline.
+# The blank line is essential — it terminates the preceding paragraph so '---'
+# starts a new block, rendering as <hr> not as a heading marker.
+
+EQ_SEPARATOR_HTML = '''\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>EQ Test</title></head>
+<body><article>
+<h1>Test Post</h1>
+<p>RuleML 2011@BRF – Conference Announcement<br/>===================================================================<br/>Last day for regular price: 29th October.</p>
+<p>Supported by<br/>===================================================================<br/>W3C, OMG, OASIS</p>
+<p>Real content here.</p>
+</article></body></html>'''
+
+
+def _eq_post(tmp_path):
+    hp = tmp_path / 'eq-test.html'
+    hp.write_text(EQ_SEPARATOR_HTML, encoding='utf-8')
+    (tmp_path / 'eq-test.json').write_text(json.dumps(MINIMAL_SIDECAR))
+    return hp
+
+
+class TestAsciiSeparatorStripping:
+    """'===' visual separator lines must become proper <hr> elements, not headings.
+
+    Both '===' (H1) and '---' (H2) after text create setext headings in Markdown.
+    The fix: insert a blank line before '---' to terminate the preceding paragraph,
+    making '---' an unambiguous horizontal rule rather than a heading marker.
+    """
+
+    def _body(self, result):
+        idx = result.find('\n---\n')
+        return result[idx + 5:] if idx >= 0 else result
+
+    def test_eq_lines_converted_not_left_as_is(self, tmp_path):
+        """'===' lines must not appear in MD — they'd create setext H1 headings."""
+        from convert_post import convert_post
+        import re
+        body = self._body(convert_post(_eq_post(tmp_path)))
+        eq_lines = re.findall(r'^={4,}\s*$', body, re.MULTILINE)
+        assert not eq_lines, (
+            f'{len(eq_lines)} "===" lines in MD — these create setext H1 headings. '
+            f'Fix: convert to blank line + "---" in convert_post.py cleanup.')
+
+    def test_no_setext_headings_created_from_separators(self, tmp_path):
+        """Converting '===' to '---' WITHOUT a preceding blank line creates H2 headings.
+        The blank line before '---' is essential for it to render as <hr>.
+        """
+        from convert_post import convert_post
+        import re
+        body = self._body(convert_post(_eq_post(tmp_path)))
+        # Setext H2: a non-empty line immediately followed by '---' (no blank between)
+        setext_h2 = re.findall(r'^[^\n]+\n-{3,}\s*$', body, re.MULTILINE)
+        assert not setext_h2, (
+            f'Setext H2 headings created by "---" without preceding blank line: '
+            f'{setext_h2[:2]}. Fix: prepend blank line before "---".')
+
+    def test_content_around_separators_preserved(self, tmp_path):
+        """Content before and after separators must be preserved."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_eq_post(tmp_path)))
+        assert 'Last day for regular price' in body
+        assert 'W3C, OMG, OASIS' in body
+        assert 'Real content here' in body
+
+
+# ── Inline formatting adjacent to punctuation ─────────────────────────────────
+#
+# html2text strips trailing whitespace from inside bold/italic markers, so:
+#   <b>Name </b>(Org)  →  **Name**(Org)   ← no space before (
+#
+# The missing space is a typographic error and also caused validator phrase-check
+# false positives (HTML plain text has "Name (Org" but stripped MD has "Name(Org").
+# Fix: after html2text conversion, insert a space between closing ** and (.
+
+_BOLD_ADJACENT_HTML = '''\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>Adj Test</title></head>
+<body><article>
+<h1>Keynote Speakers</h1>
+<p><b>Bob Kowalski </b>(Imperial College London): Logic and AI</p>
+<p><strong>Elena Baralis </strong>(Politecnico di Torino): Opening the Black Box</p>
+<p>Normal sentence with <b>bold words</b> in the middle.</p>
+<p><em>italic </em>(parenthetical remark)</p>
+<p>Deleted: <del>old text </del>(replacement)</p>
+<p>Strikethrough s: <s>struck </s>(clarification)</p>
+<p>Strikethrough strike: <strike>struck </strike>(clarification)</p>
+<p>Code: <code>expr </code>(explanation)</p>
+<p>Underline: <u>term </u>(definition)</p>
+<p>Link: <a href="http://example.com">read more </a>(optional)</p>
+<p>No space: <b>adjacent</b>(parenthetical) in original.</p>
+</article></body></html>'''
+
+
+def _adj_post(tmp_path):
+    hp = tmp_path / 'adj-test.html'
+    hp.write_text(_BOLD_ADJACENT_HTML, encoding='utf-8')
+    (tmp_path / 'adj-test.json').write_text(json.dumps(MINIMAL_SIDECAR))
+    return hp
+
+
+class TestInlineFormatAdjacentToPunct:
+    """Closing bold/italic markers must preserve trailing whitespace from the HTML.
+
+    html2text strips trailing whitespace inside bold/italic markers:
+      <b>Name </b>(Org)  →  **Name**(Org)   ← space lost, ( runs into **
+      <b>Name</b>(Org)   →  **Name**(Org)   ← correctly no space
+
+    The correct fix is a BeautifulSoup pre-processing step BEFORE html2text:
+    move trailing whitespace from inside the tag to after the closing tag.
+      <b>Name </b>(Org)  →  <b>Name</b> (Org)  →  **Name** (Org)  ✓
+      <b>Name</b>(Org)   →  <b>Name</b>(Org)   →  **Name**(Org)   ✓ (unchanged)
+
+    A post-processing regex on the MD output (re.sub r'(\*+)\(' r'\1 (') is wrong:
+    it adds a space before ALL (  even when the original had none.
+    """
+
+    def _body(self, result):
+        idx = result.find('\n---\n')
+        return result[idx + 5:] if idx >= 0 else result
+
+    def test_bold_adjacent_paren_gets_space(self, tmp_path):
+        """<b>Name </b>(Org) must become **Name** (Org) not **Name**(Org)."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert '** (' in body or '**(' not in body, (
+            'Bold marker immediately followed by "(" — space must be inserted. '
+            'html2text strips trailing whitespace inside ** so '
+            '<b>Name </b>(Org) → **Name**(Org). '
+            'Fix: re.sub(r\'(\\*+)\\(\', r\'\\1 (\', md) in convert_post.py.'
+        )
+
+    def test_strong_adjacent_paren_gets_space(self, tmp_path):
+        """<strong>Name </strong>(Org) must also get the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert 'Baralis** (' in body or 'Baralis**(' not in body, (
+            '<strong>Name </strong>(Org) still produces **Name**(Org) without space.'
+        )
+
+    def test_italic_adjacent_paren_gets_space(self, tmp_path):
+        """<em>text </em>(remark) must become *text* (remark)."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert '* (' in body or '*(' not in body, (
+            '<em>text </em>(remark) still produces *text*(remark) without space.'
+        )
+
+    def test_bold_mid_sentence_unchanged(self, tmp_path):
+        """Bold in the middle of a sentence must not be changed."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert 'bold words' in body, 'Bold words in mid-sentence must be preserved'
+
+    def test_del_adjacent_paren_gets_space(self, tmp_path):
+        """<del>text </del>(more) must preserve the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert 'old text~~(' not in body, (
+            '<del>old text </del>(replacement) still loses the space — '
+            '~~old text~~( in output.'
+        )
+
+    def test_s_adjacent_paren_gets_space(self, tmp_path):
+        """<s>text </s>(more) must preserve the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert 'struck~~(' not in body, (
+            '<s>struck </s>(clarification) still loses the space — '
+            '~~struck~~( in output.'
+        )
+
+    def test_strike_adjacent_paren_gets_space(self, tmp_path):
+        """<strike>text </strike>(more) must preserve the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        # strike produces the same ~~ output as s/del — both share the same test content
+        # so we check generically that no ~~ marker directly abuts (
+        assert '~~(' not in body, (
+            '<strike>struck </strike>(clarification) still loses the space.'
+        )
+
+    def test_code_adjacent_paren_gets_space(self, tmp_path):
+        """<code>expr </code>(explanation) must preserve the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert '`(' not in body, (
+            '<code>expr </code>(explanation) still loses the space — '
+            '`expr`(explanation) in output.'
+        )
+
+    def test_u_adjacent_paren_gets_space(self, tmp_path):
+        """<u>term </u>(definition) must preserve the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        # html2text renders <u> as italic (_term_)
+        assert 'term_(' not in body, (
+            '<u>term </u>(definition) still loses the space — '
+            '_term_( in output.'
+        )
+
+    def test_a_adjacent_paren_gets_space(self, tmp_path):
+        """<a href="...">text </a>(more) must preserve the space."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        # html2text renders as [text](url) — ( should not run into )
+        assert '>)(optional)' not in body and '](optional)' not in body, (
+            '<a>read more </a>(optional) still loses the space — '
+            'link)(optional) or link](optional) in output.'
+        )
+
+    def test_no_space_when_none_in_original(self, tmp_path):
+        """<b>adjacent</b>(parenthetical) — no space in HTML, none must be added.
+
+        This is the key test that distinguishes the correct pre-processing approach
+        from the incorrect post-processing regex.  The regex blindly adds a space
+        before every **(  even when the original HTML had none.  The pre-processing
+        approach only moves a space that actually existed inside the tag.
+        """
+        from convert_post import convert_post
+        body = self._body(convert_post(_adj_post(tmp_path)))
+        assert 'adjacent**(parenthetical)' in body or 'adjacent** (parenthetical)' not in body, (
+            'No space existed between </b> and ( in original HTML — none should be '
+            'added. A post-processing regex adds space unconditionally; the correct '
+            'fix moves trailing whitespace from inside the tag to after it BEFORE '
+            'html2text, so only real spaces are preserved. '
+            f'Body: {body!r}'
+        )
