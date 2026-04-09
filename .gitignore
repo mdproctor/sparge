@@ -7,6 +7,10 @@ __pycache__/
 # Staged MD diffs (transient, not source)
 *.md.staged
 
+# Bundled Python runtime (downloaded at build time by scripts/fetch-python.js)
+resources/python/
+resources/_tmp/
+
 # Editor / OS
 .DS_Store
 *.swp
