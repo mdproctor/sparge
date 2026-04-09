@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "test:unit": "jest --selectProjects unit",
-    "test:integration": "jest --selectProjects integration",
+    "test:integration": "jest --selectProjects integration --forceExit",
     "test:e2e": "playwright test",
     "test": "jest",
     "postinstall": "node scripts/fetch-python.js",

@@ -10,7 +10,6 @@ module.exports = {
       displayName: 'integration',
       testMatch: ['<rootDir>/electron-tests/integration/**/*.test.js'],
       testEnvironment: 'node',
-      testTimeout: 30000,
     },
   ],
 };
