@@ -456,6 +456,11 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
       <button onclick="exitEditMode()" style="width:100%;padding:7px">← Back to review</button>
       <div style="font-size:10px;color:#484f58;margin-top:6px;text-align:center">Prompts if unsaved changes</div>
     </div>
+    <div class="edit-sidebar-divider"></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:auto; padding-top:4px;">
+      <span style="font-size:8px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-family:'SFMono-Regular',Consolas,monospace;">Editor</span>
+      <button id="btn-editor-theme" onclick="toggleEditorTheme()" title="Toggle editor theme" style="padding:3px 8px; font-size:10px;">☀ Light</button>
+    </div>
   </div>
   <!-- Nav -->
   <div id="nav">
@@ -927,6 +932,28 @@ async function replaceWithNew() {
   if (p) { await loadMd(p); renderPanelBadges(p); renderIssuePanel(p); }
 }
 
+// ── Editor theme toggle ──────────────────────────────────────────────────────
+const EDITOR_THEME_KEY = 'sparge.editor.theme';
+
+function getEditorTheme() {
+  return localStorage.getItem(EDITOR_THEME_KEY) || 'light';
+}
+
+function applyEditorTheme(theme) {
+  document.body.setAttribute('data-editor-theme', theme);
+  const btn = $('btn-editor-theme');
+  if (btn) btn.textContent = theme === 'light' ? '☀ Light' : '☾ Dark';
+  const cmTheme = theme === 'light' ? 'default' : 'material-darker';
+  if (htmlEditor) htmlEditor.setOption('theme', cmTheme);
+  if (mdEditor)   mdEditor.setOption('theme', cmTheme);
+}
+
+function toggleEditorTheme() {
+  const next = getEditorTheme() === 'light' ? 'dark' : 'light';
+  localStorage.setItem(EDITOR_THEME_KEY, next);
+  applyEditorTheme(next);
+}
+
 // ── MD edit mode ──────────────────────────────────────────────────
 // Edit mode state
 let editState = null;   // null | 'html' | 'md'
@@ -995,10 +1022,11 @@ async function enterEditMode(mode) {
   // Hide the other editor's CodeMirror wrapper before showing the active one.
   // Both editors share #html-editor as their container — without this, the first
   // editor created stays visually on top even after switching modes.
+  const cmTheme = getEditorTheme() === 'light' ? 'default' : 'material-darker';
   if (mode === 'html') {
     if (mdEditor) mdEditor.getWrapperElement().style.display = 'none';
     if (!htmlEditor) {
-      htmlEditor = CodeMirror($('html-editor'), { mode:'htmlmixed', theme:'default', lineNumbers:true, lineWrapping:false, value:raw });
+      htmlEditor = CodeMirror($('html-editor'), { mode:'htmlmixed', theme:cmTheme, lineNumbers:true, lineWrapping:false, value:raw });
     } else {
       htmlEditor.setValue(raw);
       htmlEditor.getWrapperElement().style.display = '';
@@ -1007,7 +1035,7 @@ async function enterEditMode(mode) {
   } else {
     if (htmlEditor) htmlEditor.getWrapperElement().style.display = 'none';
     if (!mdEditor) {
-      mdEditor = CodeMirror($('html-editor'), { mode:'markdown', theme:'default', lineNumbers:true, lineWrapping:true, value:raw });
+      mdEditor = CodeMirror($('html-editor'), { mode:'markdown', theme:cmTheme, lineNumbers:true, lineWrapping:true, value:raw });
     } else {
       mdEditor.setValue(raw);
       mdEditor.getWrapperElement().style.display = '';
@@ -2336,6 +2364,8 @@ async function initAuthorFilter() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────
+// Restore editor theme preference (editors pick up theme on creation)
+applyEditorTheme(getEditorTheme());
 setupScrollSync();
 loadAll().then(async ()=>{
   await initAuthorFilter();
