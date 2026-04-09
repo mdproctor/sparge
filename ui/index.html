@@ -372,6 +372,42 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 <!-- CodeMirror 5 — syntax-highlighted editors -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.css">
+<style id="cm-light-theme">
+/* CodeMirror light theme — archive-room warm parchment */
+body[data-editor-theme="light"] .CodeMirror {
+  background: #f0e8d4;
+  color: #2a1a08;
+}
+body[data-editor-theme="light"] .CodeMirror-gutters {
+  background: #e8dcc4;
+  border-right: 1px solid #c8a87a;
+  color: #8a6a3a;
+}
+body[data-editor-theme="light"] .CodeMirror-cursor {
+  border-left: 1px solid #2a1a08;
+}
+body[data-editor-theme="light"] .CodeMirror-selected {
+  background: #d8c8a8;
+}
+body[data-editor-theme="light"] .CodeMirror-activeline-background {
+  background: #e8dcc4;
+}
+/* HTML/XML syntax — htmlmixed mode */
+body[data-editor-theme="light"] .cm-tag    { color: #8a4a20; }
+body[data-editor-theme="light"] .cm-attribute { color: #5a3090; }
+body[data-editor-theme="light"] .cm-string { color: #2a6a2a; }
+body[data-editor-theme="light"] .cm-comment { color: #a08050; font-style: italic; }
+body[data-editor-theme="light"] .cm-bracket { color: #8a4a20; }
+body[data-editor-theme="light"] .cm-atom   { color: #5a3090; }
+/* Markdown mode */
+body[data-editor-theme="light"] .cm-header { color: #4a6a8a; font-weight: bold; }
+body[data-editor-theme="light"] .cm-link   { color: #4a6a8a; }
+body[data-editor-theme="light"] .cm-url    { color: #4a6a8a; }
+body[data-editor-theme="light"] .cm-code   { color: #8a4a20; background: #e8dcc4; }
+body[data-editor-theme="light"] .cm-em     { font-style: italic; color: #5a3090; }
+body[data-editor-theme="light"] .cm-strong { font-weight: bold; color: #2a1a08; }
+body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic; }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
@@ -385,7 +421,7 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
   #md-editor, #html-editor { height: 100%; }
 </style>
 </head>
-<body>
+<body data-editor-theme="light">
 
 <!-- Top bar — global navigation only -->
 <div id="topbar">
@@ -962,7 +998,7 @@ async function enterEditMode(mode) {
   if (mode === 'html') {
     if (mdEditor) mdEditor.getWrapperElement().style.display = 'none';
     if (!htmlEditor) {
-      htmlEditor = CodeMirror($('html-editor'), { mode:'htmlmixed', theme:'material-darker', lineNumbers:true, lineWrapping:false, value:raw });
+      htmlEditor = CodeMirror($('html-editor'), { mode:'htmlmixed', theme:'default', lineNumbers:true, lineWrapping:false, value:raw });
     } else {
       htmlEditor.setValue(raw);
       htmlEditor.getWrapperElement().style.display = '';
@@ -971,7 +1007,7 @@ async function enterEditMode(mode) {
   } else {
     if (htmlEditor) htmlEditor.getWrapperElement().style.display = 'none';
     if (!mdEditor) {
-      mdEditor = CodeMirror($('html-editor'), { mode:'markdown', theme:'material-darker', lineNumbers:true, lineWrapping:true, value:raw });
+      mdEditor = CodeMirror($('html-editor'), { mode:'markdown', theme:'default', lineNumbers:true, lineWrapping:true, value:raw });
     } else {
       mdEditor.setValue(raw);
       mdEditor.getWrapperElement().style.display = '';
