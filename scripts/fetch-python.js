@@ -88,6 +88,18 @@ async function main() {
   fs.mkdirSync(tmpDir, { recursive: true });
   const archivePath = await fetchAndVerify(getDownloadUrl(platform, arch), tmpDir);
   extract(archivePath, destDir, info.ext);
+
+  // Install Python dependencies into the bundled runtime
+  const pipExe = platform === 'win32'
+    ? path.join(destDir, 'Scripts', 'pip.exe')
+    : path.join(destDir, 'bin', 'pip3');
+  const reqFile = path.join(projectRoot, 'requirements.txt');
+  if (fs.existsSync(reqFile)) {
+    console.log('Installing Python dependencies...');
+    execSync(`"${pipExe}" install -r "${reqFile}" --quiet`, { stdio: 'inherit' });
+    console.log('Dependencies installed.');
+  }
+
   fs.rmSync(tmpDir, { recursive: true, force: true });
   console.log(`Python installed to ${destDir}`);
 }

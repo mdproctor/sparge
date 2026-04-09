@@ -39,3 +39,8 @@ describe('getPlatformDir', () => {
   test('win32 x64 → win-x64',      () => expect(getPlatformDir('win32', 'x64')).toBe('win-x64'));
   test('linux x64 → linux-x64',    () => expect(getPlatformDir('linux', 'x64')).toBe('linux-x64'));
 });
+
+test('requirements.txt exists at project root', () => {
+  const reqPath = require('path').join(__dirname, '..', '..', 'requirements.txt');
+  expect(require('fs').existsSync(reqPath)).toBe(true);
+});

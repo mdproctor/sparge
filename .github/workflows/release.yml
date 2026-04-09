@@ -41,6 +41,14 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
+      - name: Install Playwright Chromium (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: npx playwright install chromium
+
+      - name: Run E2E tests (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: npm run test:e2e
+
       - name: Build Electron app
         run: npm run dist -- --publish never
         env:

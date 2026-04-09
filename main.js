@@ -23,9 +23,12 @@ function getPythonExe() {
   };
   const dir = dirMap[`${platform}-${arch}`];
   if (!dir) throw new Error(`Unsupported platform: ${platform}-${arch}`);
-  const base = app.isPackaged ? process.resourcesPath : path.join(__dirname, 'resources');
-  const exe  = platform === 'win32' ? 'python.exe' : 'python3';
-  return path.join(base, 'python', dir, 'bin', exe);
+  const exe = platform === 'win32' ? 'python.exe' : 'python3';
+  if (app.isPackaged) {
+    // electron-builder strips the platform subdir when copying extraResources
+    return path.join(process.resourcesPath, 'python', 'bin', exe);
+  }
+  return path.join(__dirname, 'resources', 'python', dir, 'bin', exe);
 }
 
 function getServerScript() {
@@ -36,11 +39,12 @@ function getServerScript() {
 const server = new PythonServer({ pythonExe: getPythonExe(), serverScript: getServerScript() });
 
 function showErrorWindow(message) {
-  const win  = new BrowserWindow({ width: 700, height: 500, show: false });
-  const logs = server.getLogs().join('\n').replace(/</g, '&lt;');
-  const html = `<!DOCTYPE html><html><body style="font-family:monospace;padding:20px;background:#1a1a1a;color:#eee">
+  const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const win    = new BrowserWindow({ width: 700, height: 500, show: false });
+  const logs   = escape(server.getLogs().join('\n'));
+  const html   = `<!DOCTYPE html><html><body style="font-family:monospace;padding:20px;background:#1a1a1a;color:#eee">
     <h2 style="color:#f87171">Sparge failed to start</h2>
-    <p>${message}</p>
+    <p>${escape(message)}</p>
     <pre style="overflow:auto;background:#111;padding:10px;max-height:350px">${logs}</pre>
     </body></html>`;
   win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);

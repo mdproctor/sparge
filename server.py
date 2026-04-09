@@ -876,7 +876,7 @@ if __name__ == '__main__':
 
     total = len(State.get_all())
     print(f'  {total} posts tracked')
-    print(f'\nBlog Migrator running → http://localhost:{args.port}/ui/')
+    print(f'\nBlog Migrator running → http://127.0.0.1:{args.port}/ui/')
     print(f'Project: {cfg["project_name"]}')
 
-    HTTPServer(('localhost', args.port), Handler).serve_forever()
+    HTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
