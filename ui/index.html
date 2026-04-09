@@ -79,7 +79,8 @@ button.success { background:#1a3a1f; border-color:#238636; color:#3fb950; }
 button.success:hover { background:#238636; color:#fff; }
 button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .sep { width:1px; height:22px; background:var(--border); flex-shrink:0; }
-.gl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#484f58; }
+.gl { font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+      font-family:'SFMono-Regular',Consolas,monospace; }
 
 /* ── Layout ── */
 #main { flex:1; display:flex; overflow:hidden; }
@@ -104,12 +105,16 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .edit-sidebar-divider { border-top:1px solid var(--border); }
 
 #nav-stats { padding:10px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
-#nav-stats h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em;
-                color:var(--muted); margin-bottom:8px; }
+#nav-stats h3 { font-size:9px; text-transform:uppercase; letter-spacing:.1em;
+                color:var(--muted); margin-bottom:8px;
+                font-family:'SFMono-Regular',Consolas,monospace; }
 .srow { display:flex; justify-content:space-between; margin-bottom:3px; }
 .sl { font-size:11px; color:var(--muted); }
 .sv { font-size:11px; font-weight:600; }
-.sv.g{color:#3fb950}.sv.b{color:#58a6ff}.sv.o{color:#e3b341}.sv.m{color:#484f58}
+.sv.g { color:var(--approve) }
+.sv.b { color:var(--accent) }
+.sv.o { color:var(--warn) }
+.sv.m { color:var(--muted) }
 /* Expandable stat rows + issue breakdown */
 .srow.expandable { cursor:pointer; border-radius:3px; margin-left:-4px; padding-left:4px; }
 .srow.expandable:hover { background:#1c2128; }
@@ -118,17 +123,17 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .expand-arrow.open { transform:rotate(90deg); }
 .breakdown { margin:2px 0 3px; }
 .itr { display:flex; justify-content:space-between; align-items:center;
-       padding:2px 5px; border-radius:3px; cursor:pointer; margin-bottom:1px; }
-.itr:hover { background:#1c2128; }
-.itr.active { background:#1c2d3f; }
+       padding:2px 5px; border-radius:2px; cursor:pointer; margin-bottom:1px; }
+.itr:hover { background:var(--bg); }
+.itr.active { background:var(--accent-tint); }
 .itr-label { font-size:10px; color:var(--muted); }
-.itr.active .itr-label { color:#58a6ff; }
+.itr.active .itr-label { color:var(--accent); }
 .itr-count { font-size:10px; font-weight:600; }
-.itr-count.err { color:#f85149; }
-.itr-count.warn { color:#e3b341; }
-#pbar { height:3px; background:#21262d; border-radius:2px; margin-top:8px; overflow:hidden; }
+.itr-count.err { color:var(--error); }
+.itr-count.warn { color:var(--warn); }
+#pbar { height:3px; background:var(--border); border-radius:2px; margin-top:8px; overflow:hidden; }
 #pfill { height:100%; border-radius:2px; transition:width .4s;
-         background:linear-gradient(90deg,#238636 0%,#1f6feb 100%); }
+         background:linear-gradient(90deg, var(--approve) 0%, var(--accent) 100%); }
 /* Filter zone — hover-expand container (button zone only, not post list) */
 .filter-zone { border-bottom:1px solid var(--border); flex-shrink:0; padding:6px 8px; cursor:default; }
 /* Always visible: All + HTML⚠ + MD⚠ */
@@ -160,13 +165,13 @@ button.warn { background:#2d1f0f; border-color:#9e6a03; color:#e3b341; }
 .scope-col:first-child { padding-right:6px; }
 .scope-col-header { font-size:8px; color:#484f58; text-align:center;
                     text-transform:uppercase; letter-spacing:.05em; padding-bottom:2px; }
-.scope-btn { background:none; border:1px solid transparent; border-radius:4px;
+.scope-btn { background:none; border:1px solid transparent; border-radius:2px;
              padding:3px 2px; font-size:9px; color:var(--muted); cursor:pointer; text-align:center; }
-.scope-btn:hover { background:#21262d; color:var(--sepia); }
-.fb { background:none; border:1px solid transparent; border-radius:4px;
+.scope-btn:hover { background:var(--bg); color:var(--ink); }
+.fb { background:none; border:1px solid transparent; border-radius:2px;
       padding:3px 2px; font-size:9px; color:var(--muted); cursor:pointer; text-align:center; }
-.fb:hover { background:#21262d; color:var(--sepia); }
-.fb.active { background:#21262d; border-color:var(--border); color:var(--sepia); }
+.fb:hover { background:var(--bg); color:var(--ink); }
+.fb.active { background:var(--accent); border-color:var(--accent); color:var(--bg); }
 #post-list { flex:1; overflow-y:auto; }
 .pi { padding:5px 9px; border-bottom:1px solid var(--border-light); cursor:pointer; transition:background .1s;
       border-left:2px solid transparent; }
