@@ -1,3 +1,7 @@
+# Node / Electron build artefacts
+node_modules/
+dist/
+
 # Python
 __pycache__/
 *.pyc
@@ -6,6 +10,10 @@ __pycache__/
 
 # Staged MD diffs (transient, not source)
 *.md.staged
+
+# Bundled Python runtime (downloaded at build time by scripts/fetch-python.js)
+resources/python/
+resources/_tmp/
 
 # Editor / OS
 .DS_Store

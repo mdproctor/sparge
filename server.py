@@ -33,6 +33,7 @@ GET  /api/ingest/status             → current ingest job progress
 POST /api/ingest/cancel             → cancel running ingest job
 GET  /*                             → static file from serve_root
 """
+import argparse
 import json
 import mimetypes
 import re
@@ -865,14 +866,17 @@ class Handler(BaseHTTPRequestHandler):
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--port', type=int, default=cfg['server']['port'])
+    args = parser.parse_args()
+
     print('Initialising state from source posts…')
     added = State.init_from_source()
     print(f'  {added} new posts added to state')
 
     total = len(State.get_all())
-    port  = cfg['server']['port']
     print(f'  {total} posts tracked')
-    print(f'\nBlog Migrator running → http://localhost:{port}/ui/')
+    print(f'\nBlog Migrator running → http://127.0.0.1:{args.port}/ui/')
     print(f'Project: {cfg["project_name"]}')
 
-    HTTPServer(('localhost', port), Handler).serve_forever()
+    HTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
