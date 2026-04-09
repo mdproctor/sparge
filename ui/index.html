@@ -108,9 +108,12 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
   gap: 12px;
   overflow-y: auto;
 }
-#edit-sidebar-mode { font-size:10px; color:#58a6ff; font-weight:bold; letter-spacing:.06em; text-transform:uppercase; }
-#edit-sidebar-slug { font-size:11px; color:var(--muted); word-break:break-all; line-height:1.5; }
-#edit-sidebar-dirty { font-size:10px; color:#e3b341; display:none; }
+#edit-sidebar-mode { font-size:9px; color:var(--accent); font-weight:700;
+                     letter-spacing:.08em; text-transform:uppercase;
+                     font-family:'SFMono-Regular',Consolas,monospace; }
+#edit-sidebar-slug { font-size:11px; color:var(--muted); word-break:break-all; line-height:1.5;
+                     font-family:'SFMono-Regular',Consolas,monospace; }
+#edit-sidebar-dirty { font-size:10px; color:var(--warn); display:none; font-weight:600; }
 .edit-sidebar-divider { border-top:1px solid var(--border); }
 
 #nav-stats { padding:10px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
