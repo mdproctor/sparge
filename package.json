@@ -1,0 +1,57 @@
+{
+  "name": "sparge",
+  "version": "0.1.0",
+  "description": "Blog migration tool — Electron desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration",
+    "test:e2e": "playwright test",
+    "test": "jest",
+    "postinstall": "node scripts/fetch-python.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-log": "^5.2.0",
+    "electron-updater": "^6.3.0"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "@playwright/test": "^1.50.0",
+    "jest": "^29.7.0"
+  },
+  "build": {
+    "appId": "com.sparge.app",
+    "productName": "Sparge",
+    "files": [
+      "main.js",
+      "python-server.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      { "from": "server.py", "to": "app/server.py" },
+      { "from": "scripts", "to": "app/scripts", "filter": ["**/*", "!fetch-python.js"] },
+      { "from": "ui", "to": "app/ui" }
+    ],
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "extraResources": [{ "from": "resources/python/mac-${arch}", "to": "python" }]
+    },
+    "win": {
+      "target": "nsis",
+      "extraResources": [{ "from": "resources/python/win-x64", "to": "python" }]
+    },
+    "linux": {
+      "target": "AppImage",
+      "extraResources": [{ "from": "resources/python/linux-x64", "to": "python" }]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mdproctor",
+      "repo": "sparge"
+    }
+  }
+}
