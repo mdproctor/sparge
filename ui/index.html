@@ -1730,7 +1730,7 @@ function applyIframeHighlight(selector) {
     styleTag.id = '__migrator-highlight-style__';
     (iDoc.head || iDoc.documentElement).appendChild(styleTag);
   }
-  styleTag.textContent = `${selector} { outline: 3px solid var(--error) !important; outline-offset: 2px; scroll-margin-top: 80px; }`;
+  styleTag.textContent = `${selector} { outline: 3px solid #8a2a2a !important; outline-offset: 2px; scroll-margin-top: 80px; }`;
   // Scroll to the element
   const el = iDoc.querySelector(selector);
   if (el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); return true; }
@@ -2062,11 +2062,11 @@ function _promptOverwrite(slug) {
           <button id="_ow-one"  style="padding:8px;background:var(--accent-tint);border:1px solid var(--accent);
             color:var(--accent);border-radius:2px;cursor:pointer;font-size:12px">↺ Overwrite this</button>
           <button id="_ow-skip" style="padding:8px;background:none;border:1px solid var(--border);
-            color:var(--muted);border-radius:6px;cursor:pointer;font-size:12px">⏭ Skip this</button>
+            color:var(--muted);border-radius:2px;cursor:pointer;font-size:12px">⏭ Skip this</button>
           <button id="_ow-all"  style="padding:8px;background:var(--approve-bg);border:1px solid var(--approve);
             color:var(--approve);border-radius:2px;cursor:pointer;font-size:12px">↺ Overwrite all</button>
           <button id="_ow-stop" style="padding:8px;background:none;border:1px solid var(--border);
-            color:var(--muted);border-radius:6px;cursor:pointer;font-size:12px">⏹ Skip remaining</button>
+            color:var(--muted);border-radius:2px;cursor:pointer;font-size:12px">⏹ Skip remaining</button>
         </div>
       </div>`;
     document.body.appendChild(ov);
