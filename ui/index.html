@@ -43,15 +43,16 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
        display:flex; flex-direction:column; height:100vh; overflow:hidden; font-size:13px; }
 
 /* ── Top bar ── */
-#topbar { flex-shrink:0; background:var(--chrome); border-bottom:1px solid var(--border);
+#topbar { flex-shrink:0; background:var(--chrome); border-bottom:2px solid var(--ink);
           padding:0 16px; display:flex; align-items:stretch; height:44px; }
-#logo { display:flex; align-items:center; gap:6px; font-weight:700; font-size:14px;
+#logo { display:flex; align-items:center; gap:6px; font-weight:700; font-size:16px;
+        font-family:Georgia,'Times New Roman',serif; font-style:italic;
         color:var(--ink); padding-right:16px; border-right:1px solid var(--border); margin-right:4px; }
-#logo em { color:#1f6feb; font-style:normal; }
+#logo em { color:var(--ink); font-style:normal; }
 .ttab { padding:0 14px; cursor:pointer; border-bottom:2px solid transparent;
         color:var(--muted); display:flex; align-items:center; font-size:13px; transition:all .15s; }
-.ttab:hover { color:var(--sepia); }
-.ttab.active { color:var(--ink); border-bottom-color:#1f6feb; font-weight:600; }
+.ttab:hover { color:var(--ink); }
+.ttab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
 
 /* Post crumb lives in the post action bar */
 #post-crumb { flex:1; min-width:0; font-size:13px; color:var(--muted);
