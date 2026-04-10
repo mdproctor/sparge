@@ -415,10 +415,227 @@ async function captureFeaturesScreens() {
   console.log('  ✓ 03-ingest-panel.png');
 }
 
+// ── missing screenshots ────────────────────────────────────────────────────
+
+// Directly inject HTML issues into the project state.json on disk.
+// This is needed because the embedded Python in Electron lacks lxml,
+// so the scan API cannot parse HTML with BeautifulSoup('lxml').
+function injectHtmlIssues(projectsDir, projectId, slug, issues) {
+  const statePath = path.join(projectsDir, projectId, 'state.json');
+  if (!fs.existsSync(statePath)) {
+    console.log(`  [warn] state.json not found at ${statePath}`);
+    return;
+  }
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  if (!state[slug]) {
+    console.log(`  [warn] slug ${slug} not found in state.json`);
+    return;
+  }
+  state[slug].html = state[slug].html || {};
+  state[slug].html.issues = issues;
+  state[slug].html.scanned_at = new Date().toISOString();
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+  console.log(`  [inject] wrote ${issues.length} HTML issue(s) for ${slug} into state.json`);
+}
+
+// Inject staged MD info into state.json and write the MD files to disk
+function injectStagedMd(projectsDir, projectId, fixtureRoot, slug, mdContent, stagedContent) {
+  const statePath  = path.join(projectsDir, projectId, 'state.json');
+  const mdDir      = path.join(fixtureRoot, 'md');
+  const mdFile     = path.join(mdDir, `${slug}.md`);
+  const stagedFile = path.join(mdDir, `${slug}.md.staged`);
+
+  fs.mkdirSync(mdDir, { recursive: true });
+  fs.writeFileSync(mdFile,     mdContent,     'utf8');
+  fs.writeFileSync(stagedFile, stagedContent, 'utf8');
+
+  if (!fs.existsSync(statePath)) {
+    console.log(`  [warn] state.json not found at ${statePath}`);
+    return;
+  }
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  if (!state[slug]) {
+    console.log(`  [warn] slug ${slug} not found in state.json`);
+    return;
+  }
+  const now = new Date().toISOString();
+  state[slug].md = state[slug].md || {};
+  state[slug].md.generated_at = now;
+  state[slug].md.staged        = stagedContent;
+  state[slug].md.staged_at     = now;
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+  console.log(`  [inject] wrote staged MD for ${slug} into state.json + md/ dir`);
+}
+
+async function captureMissingScreenshots() {
+  console.log('\n[Missing screenshots]');
+
+  // Projects live at ~/sparge-projects (or whatever ~/.sparge/config.json says)
+  // For tests we rely on the default; the fixture project ID is always 'docs-fixture'
+  const projectsDir  = path.join(os.homedir(), 'sparge-projects');
+  const projectId    = 'docs-fixture';
+  const fixtureRoot  = path.join(os.tmpdir(), 'sparge-docs-fixture');
+
+  const posts     = await api('GET', '/api/posts');
+  const issueSlug  = posts.find(p => p.slug === 'cloud-architecture')?.slug;
+  const devopsSlug = posts.find(p => p.slug === 'devops-best-practices')?.slug;
+
+  // ── 1. Inject HTML issues directly into state.json for cloud-architecture ─
+  // (The embedded Python lacks lxml so the scan API cannot parse HTML.)
+  if (issueSlug) {
+    injectHtmlIssues(projectsDir, projectId, issueSlug, [
+      {
+        type:     'external_image',
+        check:    'external_image',
+        level:    'WARN',
+        detail:   'Image not localised: https://cdn.example.com/diagrams/cloud-architecture.png',
+        selector: 'div:nth-of-type(2) > img',
+      },
+      {
+        type:     'missing_image_signal',
+        check:    'missing_image_signal',
+        level:    'WARN',
+        detail:   'Text signals missing image: "As shown above, services communicate..."',
+        selector: 'div:nth-of-type(2) > p:nth-of-type(2)',
+      },
+    ]);
+
+    // Reload the page so the UI picks up the updated state
+    await navigateToMainApp();
+
+    // Click the cloud-architecture post row
+    const issueRow = window.locator(`[data-slug="${issueSlug}"]`);
+    if (await issueRow.count() > 0) {
+      await issueRow.click();
+      await waitMs(800);
+    }
+
+    // Open the issues panel — ensure it's visible
+    const issuesPanelBtn = window.locator('#btn-issues');
+    if (await issuesPanelBtn.count() > 0) {
+      const panel   = window.locator('#issue-panel');
+      const isHidden = await panel.first().evaluate(el => el.classList.contains('hidden')).catch(() => true);
+      if (isHidden) {
+        await issuesPanelBtn.first().click();
+        await waitMs(400);
+      }
+    }
+
+    const htmlPane    = window.locator('#html-panel').first();
+    const issuesPanel = window.locator('#issue-panel').first();
+
+    // 06-issue-highlight.png — click first clickable HTML issue → highlight in HTML pane
+    const firstIssue = window.locator('#html-issue-list .irow.clickable').first();
+
+    if (await firstIssue.count() > 0) {
+      await firstIssue.click();
+      await waitMs(600);
+      if (await htmlPane.count() > 0) {
+        await htmlPane.screenshot({ path: path.join(IMAGES_DIR, '06-issue-highlight.png') });
+        console.log('  ✓ 06-issue-highlight.png');
+      }
+
+      // 08-issue-highlighted.png — same highlighted state, screenshot html pane again
+      if (await htmlPane.count() > 0) {
+        await htmlPane.screenshot({ path: path.join(IMAGES_DIR, '08-issue-highlighted.png') });
+        console.log('  ✓ 08-issue-highlighted.png');
+      }
+    } else {
+      console.log('  ✗ 06-issue-highlight.png — no clickable HTML issue rows found');
+      console.log('  ✗ 08-issue-highlighted.png — no clickable HTML issue rows found');
+    }
+
+    // 08-dismiss-flow.png — hover over first issue row (shows hover styling), screenshot panel
+    if (await issuesPanel.count() > 0) {
+      const anyIssueRow = window.locator('#html-issue-list .irow').first();
+      if (await anyIssueRow.count() > 0) {
+        await anyIssueRow.hover();
+        await waitMs(300);
+        await issuesPanel.screenshot({ path: path.join(IMAGES_DIR, '08-dismiss-flow.png') });
+        console.log('  ✓ 08-dismiss-flow.png');
+      } else {
+        console.log('  ✗ 08-dismiss-flow.png — no issue rows in panel');
+      }
+    }
+  }
+
+  // 08-issue-breakdown.png — click the "HTML issues" expandable stat row to reveal breakdown
+  const expandableRow = window.locator('.srow.expandable').first();
+  if (await expandableRow.count() > 0) {
+    const breakdownEl = window.locator('#html-breakdown').first();
+    const alreadyOpen = await breakdownEl.evaluate(el => el.style.display !== 'none').catch(() => false);
+    if (!alreadyOpen) {
+      await expandableRow.click();
+      await waitMs(400);
+    }
+    const navStats = window.locator('#nav-stats').first();
+    if (await navStats.count() > 0) {
+      await navStats.screenshot({ path: path.join(IMAGES_DIR, '08-issue-breakdown.png') });
+      console.log('  ✓ 08-issue-breakdown.png');
+    } else {
+      console.log('  ✗ 08-issue-breakdown.png — #nav-stats not found');
+    }
+  } else {
+    console.log('  ✗ 08-issue-breakdown.png — no expandable stat row found');
+  }
+
+  // ── 2. Inject staged MD for devops post and capture accept/reject buttons ─
+  if (devopsSlug) {
+    const savedMd = '# DevOps Best Practices\n\nAutomate everything. Test on every commit.\n\n## Continuous Integration\n\nRun your full test suite on every commit.\n';
+    const stagedMd = '# DevOps Best Practices\n\nThis is a staged draft for review.\n\n## Continuous Integration\n\nRun your full test suite on every commit.\n\n## Continuous Delivery\n\nEvery passing build should be deployable to production.\n';
+
+    injectStagedMd(projectsDir, projectId, fixtureRoot, devopsSlug, savedMd, stagedMd);
+
+    // Reload the page so staged state is reflected in the UI
+    await navigateToMainApp();
+
+    // Navigate to the devops post
+    const devopsRow = window.locator(`[data-slug="${devopsSlug}"]`);
+    if (await devopsRow.count() > 0) {
+      await devopsRow.click();
+      await waitMs(800);
+    }
+
+    // Click "Review Staged" button to open the diff modal
+    const reviewStagedBtn = window.locator('#btn-staged');
+    const btnVisible = await reviewStagedBtn.count() > 0 && await reviewStagedBtn.first().isVisible();
+
+    if (btnVisible) {
+      await reviewStagedBtn.first().click();
+      await waitMs(2000);
+
+      // The modal opens by adding class 'open'
+      const diffModal = window.locator('#diff-modal');
+      const modalOpen = await diffModal.first().evaluate(el => el.classList.contains('open')).catch(() => false);
+
+      if (modalOpen) {
+        // Screenshot the diff footer which contains Reject + Accept buttons
+        const diffFtr = window.locator('#diff-ftr').first();
+        if (await diffFtr.count() > 0) {
+          await diffFtr.screenshot({ path: path.join(IMAGES_DIR, '10-accept-reject.png') });
+          console.log('  ✓ 10-accept-reject.png');
+        }
+        // Close the modal
+        const diffClose = window.locator('#diff-close');
+        if (await diffClose.count() > 0 && await diffClose.first().isVisible()) {
+          await diffClose.first().click();
+          await waitMs(300);
+        }
+      } else {
+        console.log('  ✗ 10-accept-reject.png — diff modal did not open');
+      }
+    } else {
+      console.log('  ✗ 10-accept-reject.png — #btn-staged not visible');
+    }
+  } else {
+    console.log('  ✗ 10-accept-reject.png — devops-best-practices post not found');
+  }
+}
+
 // ── main ───────────────────────────────────────────────────────────────────
 
 (async () => {
-  console.log('\n📸  Sparge docs screenshots\n');
+  console.log('\n📸  Sparge docs — missing screenshots\n');
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
   app    = await electron.launch({ args: [path.join(ROOT, 'main.js')] });
@@ -430,13 +647,8 @@ async function captureFeaturesScreens() {
     await captureProjectsScreen();
     await setupFixtureProject();
     await navigateToMainApp();
-    await captureMainAppScreens();
-    await captureEditorScreens();
-    await captureIssuesScreens();
-    await captureSearchFilterScreens();
-    await captureStagingScreens();
-    await captureFeaturesScreens();
-    console.log('\n✅  All screenshots saved to docs/user-guide/images/\n');
+    await captureMissingScreenshots();
+    console.log('\n✅  Missing screenshots captured to docs/user-guide/images/\n');
   } finally {
     await app.close();
   }
