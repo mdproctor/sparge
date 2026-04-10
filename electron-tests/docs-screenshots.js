@@ -65,12 +65,13 @@ async function setupFixtureProject() {
   }
 
   const project = await api('POST', '/api/projects', {
-    name:         'Docs Fixture',
-    serve_root:   fixtureRoot,
-    posts_dir:    'posts',
-    md_dir:       'md',
-    enriched_dir: 'enriched',
+    name:      'Docs Fixture',
+    serve_root: fixtureRoot,
+    posts_dir:  'posts',
+    md_dir:     'md',
   });
+
+  console.log('  project created:', JSON.stringify(project));
 
   await api('POST', `/api/projects/${project.id}/activate`);
   await waitMs(500);
@@ -89,21 +90,19 @@ async function captureProjectsScreen() {
   // Full projects screen (empty/initial state)
   await shot('body', '01-first-launch.png');
 
-  // Open new project form
-  const newBtn = window.locator(
-    'button:has-text("New Project"), [data-action="new-project"], .new-project-btn, button:has-text("New"), button:has-text("Create")'
-  );
+  // Open new project form — button is "+ New Project" (id="btn-toggle-form")
+  const newBtn = window.locator('#btn-toggle-form');
   if (await newBtn.count() > 0) {
     await newBtn.first().click();
     await waitMs(400);
-    const form = window.locator('form, .project-form, #new-project-form, .modal, .dialog');
+    // Form is in #new-form-wrap
+    const form = window.locator('#new-form-wrap');
     if (await form.count() > 0) {
       await form.first().screenshot({ path: path.join(IMAGES_DIR, '02-new-project-form.png') });
       console.log('  ✓ 02-new-project-form.png');
     }
-    // Close form
-    const cancelBtn = window.locator('button:has-text("Cancel"), .cancel-btn, [data-action="cancel"]');
-    if (await cancelBtn.count() > 0) await cancelBtn.first().click();
+    // Close form — click toggle again
+    await newBtn.first().click();
     await waitMs(200);
   }
 }
@@ -122,18 +121,16 @@ async function captureMainAppScreens() {
   await window.screenshot({ path: path.join(IMAGES_DIR, 'README-hero.png') });
   console.log('  ✓ README-hero.png');
 
-  // Post list
-  const postListSel = '.posts, #posts, .post-list, #post-list, [class*="post-list"], main';
-  await shot(postListSel, '04-post-list-mixed-states.png');
+  // Post list — actual selector is #post-list or #nav
+  await shot('#post-list', '04-post-list-mixed-states.png');
 
-  // Config panel (top-right button)
-  const configBtn = window.locator(
-    'button[title*="Config"], button[title*="config"], #config-btn, .config-btn, button[title*="Settings"], button[title*="settings"]'
-  );
+  // Config panel — button text is "⚙ Config", no title attr; opens #cfg-overlay
+  const configBtn = window.locator('button:has-text("Config")');
   if (await configBtn.count() > 0) {
     await configBtn.first().click();
     await waitMs(400);
-    const panel = window.locator('#config-panel, .config-panel, [data-panel="config"], .settings-panel');
+    // Panel is #cfg-panel inside #cfg-overlay
+    const panel = window.locator('#cfg-panel');
     if (await panel.count() > 0) {
       await panel.first().screenshot({ path: path.join(IMAGES_DIR, '02-config-panel.png') });
       console.log('  ✓ 02-config-panel.png');
@@ -142,23 +139,23 @@ async function captureMainAppScreens() {
     await waitMs(200);
   }
 
-  // Click first post to open split pane
-  const postRow = window.locator('.post-row, .post-item, [data-slug], li[data-id], .post').first();
+  // Click first post to open split pane — post items use class .pi and data-slug
+  const postRow = window.locator('.pi').first();
   if (await postRow.count() > 0) {
     await postRow.click();
     await waitMs(800);
     await window.screenshot({ path: path.join(IMAGES_DIR, '05-split-pane-open.png') });
     console.log('  ✓ 05-split-pane-open.png');
 
-    // Action buttons
-    const actionBar = window.locator('.action-bar, .post-actions, #action-buttons, .toolbar, .actions');
+    // Action buttons bar — #post-action-bar
+    const actionBar = window.locator('#post-action-bar');
     if (await actionBar.count() > 0) {
       await actionBar.first().screenshot({ path: path.join(IMAGES_DIR, '05-action-buttons.png') });
       console.log('  ✓ 05-action-buttons.png');
     }
 
-    // Post metadata
-    const metaEl = window.locator('.post-meta, .post-metadata, #post-meta, .meta-panel');
+    // Post metadata — #nav-stats contains counts/stats
+    const metaEl = window.locator('#nav-stats');
     if (await metaEl.count() > 0) {
       await metaEl.first().screenshot({ path: path.join(IMAGES_DIR, '05-post-metadata.png') });
       console.log('  ✓ 05-post-metadata.png');
@@ -170,31 +167,33 @@ async function captureEditorScreens() {
   console.log('\n[Editor screens]');
 
   const posts = await api('GET', '/api/posts');
-  const cleanSlug = posts.find(p => p.slug === 'intro-to-sparge')?.slug || posts[0]?.slug;
-  const issueSlug = posts.find(p => p.slug === 'cloud-architecture')?.slug || posts[1]?.slug;
-  const javaSlug  = posts.find(p => p.slug === 'java-virtual-threads')?.slug;
+  const cleanSlug  = posts.find(p => p.slug === 'intro-to-sparge')?.slug  || posts[0]?.slug;
+  const issueSlug  = posts.find(p => p.slug === 'cloud-architecture')?.slug || posts[1]?.slug;
+  const javaSlug   = posts.find(p => p.slug === 'java-virtual-threads')?.slug;
   const devopsSlug = posts.find(p => p.slug === 'devops-best-practices')?.slug;
 
-  // Scan + generate MD for clean post
-  await api('POST', `/api/posts/${cleanSlug}/scan-html`);
+  // Scan + generate MD for clean post — endpoint is /scan (not /scan-html)
+  await api('POST', `/api/posts/${cleanSlug}/scan`);
   await waitMs(1000);
   await api('POST', `/api/posts/${cleanSlug}/generate-md`);
   await waitMs(500);
 
   // Navigate to clean post
-  const cleanRow = window.locator(`[data-slug="${cleanSlug}"], .post-row, .post-item`).first();
-  await cleanRow.click();
-  await waitMs(600);
+  const cleanRow = window.locator(`[data-slug="${cleanSlug}"]`).first();
+  if (await cleanRow.count() > 0) {
+    await cleanRow.click();
+    await waitMs(600);
+  }
 
-  // HTML editor (left pane)
-  const htmlPane = window.locator('.html-pane, #html-editor, .editor-left, .left-pane, [class*="html"]').first();
+  // HTML panel — left pane is #html-panel
+  const htmlPane = window.locator('#html-panel').first();
   if (await htmlPane.count() > 0) {
     await htmlPane.screenshot({ path: path.join(IMAGES_DIR, '06-html-editor.png') });
     console.log('  ✓ 06-html-editor.png');
   }
 
-  // MD editor (right pane)
-  const mdPane = window.locator('.md-pane, #md-editor, .editor-right, .right-pane, [class*="markdown"]').first();
+  // MD panel — right pane is #md-panel
+  const mdPane = window.locator('#md-panel').first();
   if (await mdPane.count() > 0) {
     await mdPane.screenshot({ path: path.join(IMAGES_DIR, '07-md-editor.png') });
     console.log('  ✓ 07-md-editor.png');
@@ -202,14 +201,14 @@ async function captureEditorScreens() {
 
   // Scan issue post and navigate to it
   if (issueSlug) {
-    await api('POST', `/api/posts/${issueSlug}/scan-html`);
+    await api('POST', `/api/posts/${issueSlug}/scan`);
     await waitMs(800);
     const issueRow = window.locator(`[data-slug="${issueSlug}"]`);
     if (await issueRow.count() > 0) {
       await issueRow.click();
       await waitMs(600);
-      // Click first issue to trigger highlight
-      const firstIssue = window.locator('.issue-item, .html-issue, [data-issue-type], .issue').first();
+      // Click first issue to trigger highlight — issues are in #html-issue-list .irow
+      const firstIssue = window.locator('#html-issue-list .irow.clickable').first();
       if (await firstIssue.count() > 0) {
         await firstIssue.click();
         await waitMs(400);
@@ -223,7 +222,7 @@ async function captureEditorScreens() {
 
   // Stage devops post for staging screenshots
   if (devopsSlug) {
-    await api('POST', `/api/posts/${devopsSlug}/scan-html`);
+    await api('POST', `/api/posts/${devopsSlug}/scan`);
     await api('POST', `/api/posts/${devopsSlug}/generate-md`);
     await waitMs(800);
     await api('POST', `/api/posts/${devopsSlug}/stage`, { content: '# DevOps Best Practices\n\nThis is a staged draft for the documentation demo.\n\n## Continuous Integration\n\nRun your full test suite on every commit.\n' });
@@ -232,7 +231,7 @@ async function captureEditorScreens() {
 
   // Java post for validation issues screenshot
   if (javaSlug) {
-    await api('POST', `/api/posts/${javaSlug}/scan-html`);
+    await api('POST', `/api/posts/${javaSlug}/scan`);
     await api('POST', `/api/posts/${javaSlug}/generate-md`);
     await waitMs(800);
     const javaRow = window.locator(`[data-slug="${javaSlug}"]`);
@@ -262,22 +261,21 @@ async function captureIssuesScreens() {
     }
   }
 
-  // Open issues panel if there's a toggle
-  const issuesPanelBtn = window.locator(
-    'button[title*="Issues"], .issues-tab, #issues-btn, button:has-text("Issues")'
-  );
+  // Open issues panel — button is #btn-issues with title "Show/hide issue panel"
+  const issuesPanelBtn = window.locator('#btn-issues');
   if (await issuesPanelBtn.count() > 0) {
     await issuesPanelBtn.first().click();
     await waitMs(300);
   }
 
-  const issuesPanel = window.locator('.issues-panel, #issues-panel, .html-issues, .issues');
+  // Issues panel is #issue-panel
+  const issuesPanel = window.locator('#issue-panel');
   if (await issuesPanel.count() > 0) {
     await issuesPanel.first().screenshot({ path: path.join(IMAGES_DIR, '08-issues-panel.png') });
     console.log('  ✓ 08-issues-panel.png');
 
-    // Hover to reveal dismiss button
-    const issueItem = window.locator('.issue-item, [data-issue-type], .issue').first();
+    // Hover to reveal dismiss button — issues are .irow.clickable in #html-issue-list
+    const issueItem = window.locator('#html-issue-list .irow.clickable').first();
     if (await issueItem.count() > 0) {
       await issueItem.hover();
       await waitMs(200);
@@ -287,7 +285,7 @@ async function captureIssuesScreens() {
       // Click issue to highlight in editor
       await issueItem.click();
       await waitMs(300);
-      const htmlPane = window.locator('.html-pane, #html-editor, .editor-left, .left-pane').first();
+      const htmlPane = window.locator('#html-panel').first();
       if (await htmlPane.count() > 0) {
         await htmlPane.screenshot({ path: path.join(IMAGES_DIR, '08-issue-highlighted.png') });
         console.log('  ✓ 08-issue-highlighted.png');
@@ -295,9 +293,9 @@ async function captureIssuesScreens() {
     }
   }
 
-  // Issue breakdown stats
-  const breakdown = window.locator('.issue-breakdown, .issues-stats, #issue-breakdown');
-  if (await breakdown.count() > 0) {
+  // Issue breakdown stats — #html-breakdown or nav-stats breakdown
+  const breakdown = window.locator('#html-breakdown, #md-breakdown');
+  if (await breakdown.count() > 0 && await breakdown.first().isVisible()) {
     await breakdown.first().screenshot({ path: path.join(IMAGES_DIR, '08-issue-breakdown.png') });
     console.log('  ✓ 08-issue-breakdown.png');
   }
@@ -306,44 +304,46 @@ async function captureIssuesScreens() {
 async function captureSearchFilterScreens() {
   console.log('\n[Search and filter screens]');
 
-  // Search
-  const searchInput = window.locator(
-    'input[type="search"], #search-input, .search-bar input, input[placeholder*="Search"], input[placeholder*="search"]'
-  );
-  if (await searchInput.count() > 0) {
-    await searchInput.first().fill('quarkus');
-    await waitMs(600);
-    await window.screenshot({ path: path.join(IMAGES_DIR, '09-search-active.png') });
-    console.log('  ✓ 09-search-active.png');
-    await searchInput.first().fill('');
-    await waitMs(300);
-  }
-
-  // Filter buttons
-  const filterBtn = window.locator('.filter-btn, .issue-filter, [data-filter-type], .scope-btn').first();
+  // There is no text search input — filtering uses .fb buttons in .filter-zone
+  // Click an active filter button to show filtered state
+  const filterBtn = window.locator('.filter-zone .fb').first();
   if (await filterBtn.count() > 0) {
-    await filterBtn.click();
-    await waitMs(400);
-    await window.screenshot({ path: path.join(IMAGES_DIR, '09-filter-buttons.png') });
-    console.log('  ✓ 09-filter-buttons.png');
-    await filterBtn.click();
-    await waitMs(200);
-  }
+    // Screenshot the filter zone (which shows All/HTML-issues/MD-issues buttons)
+    const filterZone = window.locator('.filter-zone');
+    if (await filterZone.count() > 0) {
+      await filterZone.first().screenshot({ path: path.join(IMAGES_DIR, '09-filter-buttons.png') });
+      console.log('  ✓ 09-filter-buttons.png');
+    }
 
-  // Filtered list (after search scope)
-  const scopeEl = window.locator('select[name*="scope"], .search-scope, #search-scope, select');
-  if (await scopeEl.count() > 0) {
-    const searchBar = window.locator('.search-bar, .search-container, .search-area');
-    if (await searchBar.count() > 0) {
-      await searchBar.first().screenshot({ path: path.join(IMAGES_DIR, 'features-search-scope.png') });
-      console.log('  ✓ features-search-scope.png');
+    // Click "HTML⚠" filter to show filtered list
+    const htmlFilter = window.locator('.filter-zone .fb:has-text("HTML")');
+    if (await htmlFilter.count() > 0) {
+      await htmlFilter.first().click();
+      await waitMs(400);
+      await window.screenshot({ path: path.join(IMAGES_DIR, '09-search-active.png') });
+      console.log('  ✓ 09-search-active.png');
+      // Reset to All
+      const allFilter = window.locator('.filter-zone .fb:has-text("All")');
+      if (await allFilter.count() > 0) await allFilter.first().click();
+      await waitMs(300);
     }
   }
 
-  const postList = window.locator('.posts, #posts, .post-list, #post-list, main').first();
+  // Post list screenshot after reset
+  const postList = window.locator('#post-list').first();
   if (await postList.count() > 0) {
     await postList.screenshot({ path: path.join(IMAGES_DIR, '09-filtered-list.png') });
     console.log('  ✓ 09-filtered-list.png');
+  }
+
+  // Author select (scope dropdown)
+  const scopeEl = window.locator('#author-select');
+  if (await scopeEl.count() > 0) {
+    const filterZone = window.locator('.filter-zone');
+    if (await filterZone.count() > 0) {
+      await filterZone.first().screenshot({ path: path.join(IMAGES_DIR, 'features-search-scope.png') });
+      console.log('  ✓ features-search-scope.png');
+    }
   }
 }
 
@@ -358,49 +358,52 @@ async function captureStagingScreens() {
     if (await row.count() > 0) {
       await row.click();
       await waitMs(600);
-      const mdPane = window.locator('.md-pane, #md-editor, .editor-right, .right-pane').first();
+      // MD panel is #md-panel
+      const mdPane = window.locator('#md-panel').first();
       if (await mdPane.count() > 0) {
         await mdPane.screenshot({ path: path.join(IMAGES_DIR, '10-staged-state.png') });
         console.log('  ✓ 10-staged-state.png');
       }
-      const stagingActions = window.locator(
-        '.staging-actions, .md-toolbar, .editor-actions, button:has-text("Accept"), button:has-text("Reject")'
-      );
-      if (await stagingActions.count() > 0) {
+      // Staging actions — "Review Staged" button is #btn-staged
+      const stagingActions = window.locator('#btn-staged');
+      if (await stagingActions.count() > 0 && await stagingActions.first().isVisible()) {
         await stagingActions.first().screenshot({ path: path.join(IMAGES_DIR, '10-accept-reject.png') });
         console.log('  ✓ 10-accept-reject.png');
       }
     }
+  } else {
+    console.log('  (no staged post found — skipping staging screenshots)');
   }
 }
 
 async function captureFeaturesScreens() {
   console.log('\n[Features screenshots]');
 
-  const divider = window.locator('.divider, .split-divider, .pane-divider, .resize-handle');
+  // Divider between html-panel and md-panel is #divider
+  const divider = window.locator('#divider');
   if (await divider.count() > 0) {
     await divider.first().screenshot({ path: path.join(IMAGES_DIR, 'features-drag-divider.png') });
     console.log('  ✓ features-drag-divider.png');
   }
 
-  const copyBtn = window.locator('.copy-title, [title*="Copy"], button:has-text("⎘"), [data-action="copy-title"]').first();
+  // Copy title button — .pi-copy inside post list items
+  const copyBtn = window.locator('.pi-copy').first();
   if (await copyBtn.count() > 0) {
     await copyBtn.hover();
     await waitMs(300);
-    const titleArea = window.locator('.post-title-area, .title-row, .post-header').first();
-    if (await titleArea.count() > 0) {
-      await titleArea.screenshot({ path: path.join(IMAGES_DIR, 'features-copy-title.png') });
+    // Screenshot a post list item to show copy button
+    const piItem = window.locator('.pi').first();
+    if (await piItem.count() > 0) {
+      await piItem.screenshot({ path: path.join(IMAGES_DIR, 'features-copy-title.png') });
       console.log('  ✓ features-copy-title.png');
     }
   }
 
-  const themeBtn = window.locator('.theme-toggle, [title*="theme"], [title*="dark"], [title*="light"], button[title*="Theme"]');
-  if (await themeBtn.count() > 0) {
-    const toolbar = window.locator('.toolbar, .top-bar, #toolbar, header').first();
-    if (await toolbar.count() > 0) {
-      await toolbar.screenshot({ path: path.join(IMAGES_DIR, 'features-theme-toggle.png') });
-      console.log('  ✓ features-theme-toggle.png');
-    }
+  // Theme toggle — #btn-editor-theme (in edit sidebar); toolbar is in the app header
+  const toolbar = window.locator('#topbar, header').first();
+  if (await toolbar.count() > 0) {
+    await toolbar.screenshot({ path: path.join(IMAGES_DIR, 'features-theme-toggle.png') });
+    console.log('  ✓ features-theme-toggle.png');
   }
 
   // Ingest panel screenshot — navigate to projects page
