@@ -10,6 +10,7 @@ Covers:
 Requires server running on localhost:9000.
 """
 import json
+import shutil
 import time
 from pathlib import Path
 import sys
@@ -53,6 +54,24 @@ def _project_ids() -> list[str]:
     return [p['id'] for p in SESSION.get(f'{API}/projects').json()]
 
 
+def _delete_project(pid: str):
+    """Delete project via API and remove its directory from sparge-projects.
+
+    Returns the requests.Response so callers can assert status_code / json().
+    The API preserves data on disk intentionally; tests must clean up themselves.
+    """
+    r = SESSION.delete(f'{API}/projects/{pid}')
+    cfg_path = Path('~/.sparge/config.json').expanduser()
+    if cfg_path.exists():
+        projects_dir = Path(json.loads(cfg_path.read_text()).get('projects_dir', '~/sparge-projects')).expanduser()
+    else:
+        projects_dir = Path('~/sparge-projects').expanduser()
+    project_dir = projects_dir / pid
+    if project_dir.exists():
+        shutil.rmtree(project_dir, ignore_errors=True)
+    return r
+
+
 # ── 1. DELETE removes project from list ───────────────────────────────────────
 
 class TestDeleteRemovesProject:
@@ -60,7 +79,7 @@ class TestDeleteRemovesProject:
         pid = _create_project('Test Delete Simple')
         assert pid in _project_ids(), 'Project must appear in list after creation'
 
-        r = SESSION.delete(f'{API}/projects/{pid}')
+        r = _delete_project(pid)
         assert r.status_code == 200, f'DELETE returned {r.status_code}'
         assert r.json().get('deleted') == pid
 
@@ -72,7 +91,7 @@ class TestDeleteRemovesProject:
     def test_deleted_project_stays_gone_on_reload(self, server):
         """Project must not reappear on a subsequent GET (no auto-rediscovery)."""
         pid = _create_project('Test Delete Stays Gone')
-        SESSION.delete(f'{API}/projects/{pid}')
+        _delete_project(pid)
 
         # Two consecutive GETs must both show it absent
         for i in range(2):
@@ -110,13 +129,13 @@ class TestDeleteSpecialCharName:
 
     def test_project_with_simple_name_deletable_via_api(self, server):
         pid = _create_project('Simple Name')
-        r = SESSION.delete(f'{API}/projects/{pid}')
+        r = _delete_project(pid)
         assert r.status_code == 200
         assert pid not in _project_ids()
 
     def test_project_with_dash_name_deletable_via_api(self, server):
         pid = _create_project('Test-Project-With-Dashes')
-        r = SESSION.delete(f'{API}/projects/{pid}')
+        r = _delete_project(pid)
         assert r.status_code == 200
         assert pid not in _project_ids()
 
@@ -179,7 +198,7 @@ class TestDeleteProjectUI:
             )
         finally:
             # Cleanup in case test failed before delete completed
-            SESSION.delete(f'{API}/projects/{pid}')
+            _delete_project(pid)
 
     def test_delete_button_callable_with_any_project_name(self, server, browser_page):
         """Delete button must work regardless of what characters are in the name."""
@@ -207,4 +226,4 @@ class TestDeleteProjectUI:
             pg.locator(f'button.danger[data-id="{pid}"]').click()
             pg.wait_for_timeout(800)
         finally:
-            SESSION.delete(f'{API}/projects/{pid}')
+            _delete_project(pid)

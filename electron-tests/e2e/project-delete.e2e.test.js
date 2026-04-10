@@ -3,6 +3,8 @@
 const { test, expect } = require('@playwright/test');
 const { _electron: electron } = require('playwright');
 const path = require('path');
+const fs   = require('fs');
+const os   = require('os');
 
 let app;
 let window;
@@ -24,16 +26,34 @@ async function navigateToProjects() {
   await window.waitForTimeout(800);
 }
 
+let projectsDir = null;
+
+async function getProjectsDir() {
+  if (projectsDir) return projectsDir;
+  const r = await api('GET', '/api/config');
+  // projects_dir is stored in ~/.sparge/config.json; derive from active project path if available
+  projectsDir = path.join(os.homedir(), 'sparge-projects');
+  return projectsDir;
+}
+
 async function createTestProject(name) {
   const r = await api('POST', '/api/projects', {
     name,
-    serve_root: '/tmp/sparge-e2e-delete-test',
+    serve_root: path.join(os.tmpdir(), 'sparge-e2e-test'),
     posts_dir: 'posts',
     assets_dir: 'assets',
     md_dir: 'md',
   });
   expect(r.status).toBe(200);
   return r.body.id;
+}
+
+async function deleteTestProject(pid) {
+  const r = await api('DELETE', `/api/projects/${pid}`);
+  // Also remove the project directory left on disk (API preserves data intentionally)
+  const dir = path.join(await getProjectsDir(), pid);
+  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  return r;
 }
 
 test.beforeAll(async () => {
@@ -56,7 +76,7 @@ test('delete button exists with correct data attributes', async () => {
     expect(await btn.getAttribute('data-id')).toBe(pid);
     expect(await btn.getAttribute('data-name')).toBe('E2E Delete Attribute Test');
   } finally {
-    await api('DELETE', `/api/projects/${pid}`);
+    await deleteTestProject(pid);
   }
 });
 
@@ -76,6 +96,9 @@ test('clicking delete with confirm removes the project card', async () => {
   // Project card must be gone
   const remaining = window.locator(`button.danger[data-id="${pid}"]`);
   await expect(remaining).toHaveCount(0, { timeout: 3000 });
+
+  // UI deleted from projects.json; clean up the directory left on disk
+  await deleteTestProject(pid);
 });
 
 test('confirm dialog cancel does NOT delete the project', async () => {
@@ -99,14 +122,14 @@ test('confirm dialog cancel does NOT delete the project', async () => {
     const ids = r.body.map(p => p.id);
     expect(ids).toContain(pid);
   } finally {
-    await api('DELETE', `/api/projects/${pid}`);
+    await deleteTestProject(pid);
   }
 });
 
 test('API DELETE returns 200 and project disappears from list', async () => {
   const pid = await createTestProject('E2E Delete API Test');
 
-  const deleteResult = await api('DELETE', `/api/projects/${pid}`);
+  const deleteResult = await deleteTestProject(pid);
   expect(deleteResult.status).toBe(200);
   expect(deleteResult.body.deleted).toBe(pid);
 
