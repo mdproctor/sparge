@@ -1,3 +1,11 @@
+---
+layout: doc
+title: User Guide Overview
+section: Getting Started
+order: 0
+permalink: /user-guide/overview/
+---
+
 # Sparge User Guide
 
 Sparge is a blog migration tool for technical bloggers. It takes your existing HTML blog posts — from a live blog URL or a local directory — and converts them to clean Markdown ready for Jekyll, Hugo, or any static site generator.

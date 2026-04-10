@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Staging &amp; Publishing
+section: Reference
+order: 10
+---
+
 # Staging & Publishing
 
 The staging workflow lets you review your Markdown edits before committing to them. *Staging* is Sparge's draft system — it saves a copy of your edits alongside the published version so you can compare and decide.

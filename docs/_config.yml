@@ -1,0 +1,31 @@
+title: Sparge
+description: "Blog migration for the obsessive archivist."
+baseurl: "/sparge"
+url: "https://mdproctor.github.io"
+author: Mark Proctor
+
+markdown: kramdown
+kramdown:
+  input: GFM
+
+plugins:
+  - jekyll-feed
+
+exclude:
+  - superpowers/
+  - adr/
+  - design-snapshots/
+  - pipeline.md
+  - ideas/
+  - SCREENSHOT-GUIDE.md
+  - Gemfile
+  - Gemfile.lock
+  - FEATURES.md
+  - retro-issues.md
+
+defaults:
+  - scope:
+      path: "user-guide"
+      type: "pages"
+    values:
+      layout: doc

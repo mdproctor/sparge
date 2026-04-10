@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Checks, Validations &amp; Autocorrects
+section: Reference
+order: 11
+---
+
 # Checks, Validations & Autocorrects
 
 Sparge runs checks and autocorrections at multiple pipeline stages. This page is a complete reference of everything it detects and fixes.

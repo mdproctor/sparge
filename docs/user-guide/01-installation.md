@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Installation
+section: Getting Started
+order: 1
+---
+
 # Installation
 
 Sparge is a desktop application available for macOS, Windows, and Linux.

@@ -24,3 +24,8 @@ resources/_tmp/
 # Claude Code / Superpowers session state (machine-specific)
 .claude/
 .superpowers/
+
+# Jekyll build output
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata

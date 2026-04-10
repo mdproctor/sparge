@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Filtering &amp; Search
+section: Reference
+order: 9
+---
+
 # Filtering & Search
 
 With hundreds of posts in a project, filtering and search let you focus on exactly the posts you need to work on.

@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Features &amp; Capabilities
+section: Reference
+order: 12
+---
+
 # Features & Capabilities
 
 A complete reference of everything Sparge can do. If you're wondering whether Sparge supports a particular feature, check here first.

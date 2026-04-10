@@ -1,3 +1,10 @@
+---
+layout: doc
+title: The Issues Panel
+section: Reference
+order: 8
+---
+
 # The Issues Panel
 
 The Issues Panel shows everything Sparge found wrong with a post — in the HTML and in the generated Markdown. Each issue tells you what the problem is and where it is.

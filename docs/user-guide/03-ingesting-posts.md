@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Ingesting Posts
+section: Getting Started
+order: 3
+---
+
 # Ingesting Posts
 
 *Ingestion* is the first pipeline stage. Sparge reads your HTML posts, cleans them up, localises images, and registers them in the project's state tracker.

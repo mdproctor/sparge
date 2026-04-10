@@ -1,3 +1,10 @@
+---
+layout: doc
+title: The HTML Editor
+section: Editors
+order: 6
+---
+
 # The HTML Editor
 
 The left pane in the split-pane view is the HTML editor. It shows the *enriched* version of your post's HTML — the version that Sparge's pipeline operates on.

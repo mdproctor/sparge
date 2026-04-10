@@ -1,3 +1,10 @@
+---
+layout: doc
+title: The Markdown Editor
+section: Editors
+order: 7
+---
+
 # The Markdown Editor
 
 The right pane shows the generated Markdown for the current post. You can read it, edit it, and stage your changes for review.

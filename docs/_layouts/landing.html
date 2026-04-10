@@ -1,0 +1,78 @@
+---
+layout: default
+---
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <p class="hero-eyebrow">Blog Migration Tool</p>
+    <h1 class="hero-title">Your blog archive,<br>beautifully migrated.</h1>
+    <p class="hero-sub">Convert hundreds of HTML posts to clean Markdown — with enrichment, validation, and full pipeline visibility. Post by post. Every issue surfaced.</p>
+    <div class="hero-btns">
+      <a href="https://github.com/mdproctor/sparge/releases" class="btn-primary">&#x2B07; Download Free</a>
+      <a href="{{ '/user-guide/' | relative_url }}" class="btn-ghost">Read the docs &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<div class="stats-strip">
+  <div class="stat"><span class="stat-num">577</span><span class="stat-label">Posts processed</span></div>
+  <div class="stat"><span class="stat-num">12</span><span class="stat-label">HTML issue checks</span></div>
+  <div class="stat"><span class="stat-num">0</span><span class="stat-label">Issues remaining</span></div>
+  <div class="stat"><span class="stat-num">Mac &middot; Win &middot; Linux</span><span class="stat-label">Platforms</span></div>
+</div>
+
+<section class="features">
+  <div class="features-header">
+    <h2>Everything your migration needs.</h2>
+    <p>A complete pipeline from raw HTML to published Markdown.</p>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-text">
+      <div class="feature-icon">&#x2B07;</div>
+      <h3>Ingest from anywhere.</h3>
+      <p>Live blog URL or local directory. Automatic platform detection for Blogger and WordPress. Images downloaded, localised, and Wayback-fallback'd during ingest.</p>
+    </div>
+    <div class="feature-shot">
+      <img src="{{ '/user-guide/images/04-post-list-mixed-states.png' | relative_url }}" alt="Post list showing pipeline states">
+    </div>
+  </div>
+
+  <div class="feature-row reverse">
+    <div class="feature-text">
+      <div class="feature-icon">&#x2691;</div>
+      <h3>12 HTML checks. Zero surprises.</h3>
+      <p>Broken images, tracking pixels, external refs, WordPress chrome, malformed code blocks — every issue surfaced before you generate Markdown. Dismiss what you've reviewed.</p>
+    </div>
+    <div class="feature-shot">
+      <img src="{{ '/user-guide/images/08-issues-panel.png' | relative_url }}" alt="Issues panel">
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-text">
+      <div class="feature-icon">&#x25C8;</div>
+      <h3>Stage, review, publish.</h3>
+      <p>Edit Markdown in the split-pane editor with autosync scroll. Stage your changes alongside the current version, review the diff, accept or reject — never lose work.</p>
+    </div>
+    <div class="feature-shot">
+      <img src="{{ '/user-guide/images/05-split-pane-open.png' | relative_url }}" alt="Split pane editor">
+    </div>
+  </div>
+</section>
+
+<section class="blog-preview">
+  <h2>Development diary.</h2>
+  <div class="blog-cards">
+    {% assign recent = site.posts | limit: 3 %}
+    {% for post in recent %}
+    <a href="{{ post.url | relative_url }}" class="blog-card">
+      <span class="card-date">{{ post.date | date: "%B %-d, %Y" }}</span>
+      <h3>{{ post.title }}</h3>
+      <p>{{ post.excerpt | strip_html | truncate: 110 }}</p>
+      {% if post.tags.first %}<span class="card-tag">{{ post.tags.first }}</span>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  <a href="{{ '/blog/' | relative_url }}" class="read-all">Read all posts &rarr;</a>
+</section>

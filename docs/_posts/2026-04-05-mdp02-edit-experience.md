@@ -1,12 +1,9 @@
 ---
-typora-root-url: ../..
----
-
-# Sparge — the edit experience
-
-**Date:** 2026-04-05
-**Type:** phase-update
-
+layout: post
+title: "The Edit Experience"
+date: 2026-04-05
+tags: [UI]
+excerpt: "Sparge could review posts. What it couldn't do was edit them comfortably. The HTML editor was a plain textarea — workable for short changes, unusable for a post where the entire article body was on a single line."
 ---
 
 ## What I was trying to achieve: an editor worth using

@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Understanding the Pipeline
+section: Pipeline
+order: 4
+---
+
 # Understanding the Pipeline
 
 Every post in Sparge moves through the same pipeline. Understanding the pipeline helps you know what to do next for any post.

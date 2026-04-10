@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Creating Your First Project
+section: Getting Started
+order: 2
+---
+
 # Creating Your First Project
 
 A *project* in Sparge is a migration workspace for one blog. It tracks your posts, their pipeline state, and where everything lives on disk.

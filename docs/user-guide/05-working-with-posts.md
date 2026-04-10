@@ -1,3 +1,10 @@
+---
+layout: doc
+title: Working With Posts
+section: Pipeline
+order: 5
+---
+
 # Working With Posts
 
 The post list is the heart of Sparge. From here you can see every post's pipeline state, open a post for editing, and run pipeline actions.
