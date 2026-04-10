@@ -13,7 +13,7 @@ const BASE_URL = 'https://github.com/astral-sh/python-build-standalone/releases/
 const PLATFORM_MAP = {
   'darwin-arm64': { dir: 'mac-arm64', arch: 'aarch64-apple-darwin',     ext: 'tar.gz' },
   'darwin-x64':   { dir: 'mac-x64',   arch: 'x86_64-apple-darwin',      ext: 'tar.gz' },
-  'win32-x64':    { dir: 'win-x64',   arch: 'x86_64-pc-windows-msvc-shared',   ext: 'zip'    },
+  'win32-x64':    { dir: 'win-x64',   arch: 'x86_64-pc-windows-msvc',   ext: 'tar.gz' },
   'linux-x64':    { dir: 'linux-x64', arch: 'x86_64-unknown-linux-gnu', ext: 'tar.gz' },
 };
 
@@ -65,11 +65,7 @@ async function fetchAndVerify(url, tmpDir) {
 
 function extract(archivePath, destDir, ext) {
   fs.mkdirSync(destDir, { recursive: true });
-  if (ext === 'tar.gz') {
-    execSync(`tar -xzf "${archivePath}" -C "${destDir}" --strip-components=1`);
-  } else {
-    execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${destDir}' -Force"`);
-  }
+  execSync(`tar -xzf "${archivePath}" -C "${destDir}" --strip-components=1`);
 }
 
 async function main() {
