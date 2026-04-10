@@ -1,0 +1,17 @@
+<div class="sidebar-brand">
+  <a href="{{ '/' | relative_url }}">&larr; Home</a>
+</div>
+
+{% assign sections = "Getting Started,Pipeline,Editors,Reference" | split: "," %}
+{% assign doc_pages = site.pages | where: "layout", "doc" | sort: "order" %}
+
+{% for section in sections %}
+<div class="sidebar-section">
+  <div class="sidebar-label">{{ section }}</div>
+  {% for doc in doc_pages %}
+    {% if doc.section == section %}
+    <a href="{{ doc.url | relative_url }}" class="sidebar-link{% if page.url == doc.url %} active{% endif %}">{{ doc.title }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endfor %}

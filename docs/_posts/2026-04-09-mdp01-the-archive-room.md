@@ -1,8 +1,9 @@
-# Sparge — The Archive Room
-
-**Date:** 2026-04-09
-**Type:** phase-update
-
+---
+layout: post
+title: "The Archive Room"
+date: 2026-04-09
+tags: [Design]
+excerpt: "A UI redesign that gives Sparge its identity — parchment, ink, and slate. Warm instead of cold. Archive instead of terminal."
 ---
 
 ## What I was trying to achieve: a UI that looked like something I'd actually want to use

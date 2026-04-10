@@ -1,0 +1,16 @@
+---
+layout: default
+---
+<div class="doc-shell">
+  <aside class="doc-sidebar">
+    {% include doc-sidebar.html %}
+  </aside>
+  <main class="doc-content">
+    <nav class="breadcrumb">
+      <a href="{{ '/' | relative_url }}">Home</a> &rsaquo;
+      <a href="{{ '/user-guide/' | relative_url }}">Docs</a>
+      {% if page.section %} &rsaquo; <span>{{ page.section }}</span>{% endif %}
+    </nav>
+    {{ content }}
+  </main>
+</div>

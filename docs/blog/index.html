@@ -1,0 +1,28 @@
+---
+layout: default
+title: Blog
+---
+<div class="blog-shell">
+  <aside class="post-sidebar">
+    <div class="sidebar-brand"><a href="{{ '/' | relative_url }}">&larr; Home</a></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navigation</div>
+      <a href="{{ '/blog/' | relative_url }}" class="sidebar-link active">Blog</a>
+      <a href="{{ '/user-guide/' | relative_url }}" class="sidebar-link">Docs</a>
+    </div>
+  </aside>
+  <main class="blog-list">
+    <h1>Development Diary</h1>
+    <p class="blog-intro">The story of building Sparge — session by session.</p>
+    <div class="blog-cards">
+      {% for post in site.posts %}
+      <a href="{{ post.url | relative_url }}" class="blog-card">
+        <span class="card-date">{{ post.date | date: "%B %-d, %Y" }}</span>
+        <h3>{{ post.title }}</h3>
+        <p>{{ post.excerpt | strip_html | truncate: 160 }}</p>
+        {% if post.tags.first %}<span class="card-tag">{{ post.tags.first }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </main>
+</div>

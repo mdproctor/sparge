@@ -1,12 +1,9 @@
 ---
-typora-root-url: ../..
----
-
-# Sparge — what the pipeline was silently losing
-
-**Date:** 2026-04-05
-**Type:** phase-update
-
+layout: post
+title: "Content Fidelity"
+date: 2026-04-05
+tags: [Pipeline]
+excerpt: "Sparge ingested HTML cleanly. What it didn't do was preserve the content that WordPress had embedded rather than written — YouTube iframes stripped silently, GitHub Gists removed without a trace."
 ---
 
 ## What I was trying to achieve: stop losing content on ingest

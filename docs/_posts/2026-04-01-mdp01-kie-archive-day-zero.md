@@ -1,12 +1,9 @@
 ---
-typora-root-url: ../..
----
-
-# Sparge — Day Zero: 577 posts and a pile of scripts
-
-**Date:** 2026-04-01
-**Type:** day-zero
-
+layout: post
+title: "KIE Archive: Day Zero"
+date: 2026-04-01
+tags: [Archive]
+excerpt: "Fifteen years of posts on blog.kie.org. 577 mine — on Drools, rule engines, PHREAK, backward chaining, the full arc of the KIE project. I wanted them on my own site, under my own control, published as Jekyll Markdown."
 ---
 
 ## What I was trying to achieve: get my old KIE blog posts into Jekyll

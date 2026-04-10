@@ -1,3 +1,11 @@
+---
+layout: post
+title: "Sparge Goes Native"
+date: 2026-04-10
+tags: [Electron]
+excerpt: "Sparge is now a desktop app. Not a web server you start from a terminal — an actual .app you open, with a dock icon and everything."
+---
+
 Sparge is now a desktop app. Not a web server you start from a terminal — an actual `.app` you open, with a dock icon and everything.
 
 The path from "Python HTTP server" to "self-contained Electron app" took most of the session. The architecture choice was straightforward: embed CPython via python-build-standalone, bundle it at build time, have the Electron main process spawn the server on a dynamic port, load `localhost:PORT/ui/` in a BrowserWindow. No changes to `server.py` beyond accepting `--port` as a CLI argument.

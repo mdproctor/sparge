@@ -858,7 +858,13 @@ class Handler(BaseHTTPRequestHandler):
         if not staged_path.exists():
             self._json(404, {'error': 'no staged version'})
             return
-        self._text(200, staged_path.read_text(encoding='utf-8'))
+        payload = staged_path.read_text(encoding='utf-8').encode('utf-8')
+        self.send_response(200)
+        self.send_cors()
+        self.send_header('Content-Type', 'text/plain; charset=utf-8')
+        self.send_header('Content-Length', len(payload))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _api_stage(self, slug: str, content: str):
         """Write content to SLUG.md.staged and mark post as staged."""

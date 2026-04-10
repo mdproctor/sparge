@@ -56,7 +56,7 @@ def _load_article(html_path: Path):
     JUNK_SELECTORS_CONVERTER for the selector list.
     """
     from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
+    soup = BeautifulSoup(html_path.read_text(errors='replace'), 'html.parser')
     article = soup.find('article') or soup.find('body')
     if not article:
         return None

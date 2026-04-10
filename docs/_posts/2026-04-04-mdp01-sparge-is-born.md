@@ -1,12 +1,9 @@
 ---
-typora-root-url: ../..
----
-
-# Sparge — the tool gets a name
-
-**Date:** 2026-04-04
-**Type:** phase-update
-
+layout: post
+title: "Sparge Is Born"
+date: 2026-04-04
+tags: [Launch]
+excerpt: "The two-panel reviewer worked. At this point I had something that solved my immediate problem — but I also had a more interesting opportunity."
 ---
 
 ## What I was trying to achieve: learn vibe coding on a real problem

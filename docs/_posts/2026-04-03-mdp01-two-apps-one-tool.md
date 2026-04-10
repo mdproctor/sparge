@@ -1,12 +1,9 @@
 ---
-typora-root-url: ../..
----
-
-# Sparge — Two apps, one tool
-
-**Date:** 2026-04-03
-**Type:** phase-update
-
+layout: post
+title: "Two Apps, One Tool"
+date: 2026-04-03
+tags: [Architecture]
+excerpt: "I needed the archived HTML and the generated Markdown side by side, with the validation issues visible, without constantly switching files. Three things in one place. The scripts gave me none of them."
 ---
 
 ## What I was trying to achieve: see a post properly

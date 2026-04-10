@@ -728,7 +728,7 @@ def scan_post(html_path: Path, posts_dir: Path | None = None) -> list[dict]:
       correct when scanning the original post file).
     """
     try:
-        soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
+        soup = BeautifulSoup(html_path.read_text(errors='replace'), 'html.parser')
     except Exception as e:
         return [_issue('parse_error', 'ERROR', f'Could not parse HTML: {e}')]
 
