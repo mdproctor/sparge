@@ -133,7 +133,7 @@ def detect_platform(base_url: str, session) -> dict:
     resp = _session_get(base_url, session)
     if resp is not None and resp.status_code == 200:
         try:
-            soup = BeautifulSoup(resp.text, 'lxml')
+            soup = BeautifulSoup(resp.text, 'html.parser')
             gen = soup.find('meta', attrs={'name': 'generator'})
             if gen and isinstance(gen, Tag):
                 content = gen.get('content', '') or ''
@@ -154,7 +154,7 @@ def _extract_site_name(base_url: str, session) -> str:
     if resp is None or resp.status_code != 200:
         return ''
     try:
-        soup = BeautifulSoup(resp.text, 'lxml')
+        soup = BeautifulSoup(resp.text, 'html.parser')
         return _extract_name_from_soup(soup, base_url)
     except Exception:
         return ''
@@ -403,7 +403,7 @@ def _fetch_post_meta(url: str, session) -> dict:
     if resp is None or resp.status_code != 200:
         return {}
     try:
-        soup = BeautifulSoup(resp.text, 'lxml')
+        soup = BeautifulSoup(resp.text, 'html.parser')
         return _extract_metadata(soup, url)
     except Exception:
         return {}
@@ -782,7 +782,7 @@ def _fetch_and_extract(url: str, session) -> dict:
 
     # Parse
     try:
-        soup = BeautifulSoup(resp.text, 'lxml')
+        soup = BeautifulSoup(resp.text, 'html.parser')
     except Exception as e:
         result['error'] = f'Parse error: {e}'
         return result
@@ -1010,8 +1010,8 @@ def ingest_post(url: str, session, posts_dir: Path, serve_root: Path) -> dict:
 
     # Re-parse the cleaned article HTML for asset localisation
     try:
-        article_soup = BeautifulSoup(data['html'], 'lxml')
-        # lxml wraps in html/body — find the top-level element
+        article_soup = BeautifulSoup(data['html'], 'html.parser')
+        # html.parser wraps in html/body — find the top-level element
         body = article_soup.find('body')
         article = body.find() if body else article_soup.find()  # type: ignore[union-attr]
         if article is None or not isinstance(article, Tag):

@@ -62,7 +62,7 @@ def scan_assets(html_path: Path, original_path: Path | None = None) -> dict:
     relative_base: Path = (original_path or html_path).parent
 
     try:
-        soup = BeautifulSoup(html_path.read_text(errors='replace'), 'lxml')
+        soup = BeautifulSoup(html_path.read_text(errors='replace'), 'html.parser')
     except Exception:
         return {'total': 0, 'localised': 0, 'broken': 0,
                 'missing_local': [], 'external': []}

@@ -89,7 +89,7 @@ def replace_youtube_embeds(article: Tag, assets_dir: Path, session) -> dict:
             f'<figcaption>&#9654; Watch on YouTube</figcaption>'
             f'</a></figure>'
         )
-        iframe.replace_with(BeautifulSoup(fig_html, 'lxml').find('figure'))
+        iframe.replace_with(BeautifulSoup(fig_html, 'html.parser').find('figure'))
         replaced += 1
     return {'youtube_replaced': replaced}
 
@@ -178,7 +178,7 @@ def replace_gist_embeds(article: Tag, github_token: str, session) -> dict:
         files = _fetch_gist(gist_id, github_token, session)
         success = bool(files)
         fig_html = _gist_figure(user, gist_id, files)
-        script.replace_with(BeautifulSoup(fig_html, 'lxml').find('figure'))
+        script.replace_with(BeautifulSoup(fig_html, 'html.parser').find('figure'))
         if success:
             replaced += 1
         else:
@@ -290,7 +290,7 @@ def replace_embed_fallbacks(article: Tag) -> dict:
             f'Original source: {link}</p>'
             f'</figure>'
         )
-        tag.replace_with(BeautifulSoup(fig_html, 'lxml').find('figure'))
+        tag.replace_with(BeautifulSoup(fig_html, 'html.parser').find('figure'))
         count += 1
     return {'embeds_wrapped': count}
 
@@ -316,7 +316,7 @@ def enrich_post(
       6. apply_code_block_fixes        — reformat DRL/XML, convert span/p-br blocks
       7. replace_embed_fallbacks       — last: catches remaining iframes
     """
-    soup    = BeautifulSoup(html_path.read_text(encoding='utf-8', errors='replace'), 'lxml')
+    soup    = BeautifulSoup(html_path.read_text(encoding='utf-8', errors='replace'), 'html.parser')
     article = soup.find('article') or soup.find('body') or soup
 
     session = requests.Session()
