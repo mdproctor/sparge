@@ -1,6 +1,6 @@
 {
   "name": "sparge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Blog migration tool — Electron desktop app",
   "main": "main.js",
   "scripts": {
