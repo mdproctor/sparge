@@ -4,6 +4,8 @@ baseurl: "/sparge"
 url: "https://mdproctor.github.io"
 author: Mark Proctor
 
+permalink: pretty
+
 markdown: kramdown
 kramdown:
   input: GFM
@@ -29,3 +31,9 @@ defaults:
       type: "pages"
     values:
       layout: doc
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: post
+      permalink: /blog/:year/:month/:day/:title/
