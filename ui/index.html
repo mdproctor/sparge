@@ -2317,11 +2317,10 @@ function openCfg() {
 }
 function closeCfg() { $('cfg-overlay').classList.remove('open'); }
 async function saveCfg() {
+  // Path fields (serve_root, posts_dir, assets_dir, md_dir) are locked at creation — omit from POST
   await fetch(`${API}/api/config`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({project_name:$('cfg-name').value,serve_root:$('cfg-root').value,
-      source:{posts_dir:$('cfg-posts').value,assets_dir:$('cfg-assets').value},
-      output:{md_dir:$('cfg-md').value},filter:{author:$('cfg-author').value}})});
-  closeCfg(); alert('Config saved. Restart the server to apply path changes.');
+    body:JSON.stringify({project_name:$('cfg-name').value,filter:{author:$('cfg-author').value}})});
+  closeCfg(); alert('Config saved.');
 }
 
 // ── Drag divider ──────────────────────────────────────────────────
