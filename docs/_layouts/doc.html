@@ -11,6 +11,21 @@ layout: default
       <a href="{{ '/user-guide/' | relative_url }}">Docs</a>
       {% if page.section %} &rsaquo; <span>{{ page.section }}</span>{% endif %}
     </nav>
-    {{ content }}
+    {{ content
+      | replace: 'src="images/', 'src="../images/'
+      | replace: 'href="01', 'href="../01'
+      | replace: 'href="02', 'href="../02'
+      | replace: 'href="03', 'href="../03'
+      | replace: 'href="04', 'href="../04'
+      | replace: 'href="05', 'href="../05'
+      | replace: 'href="06', 'href="../06'
+      | replace: 'href="07', 'href="../07'
+      | replace: 'href="08', 'href="../08'
+      | replace: 'href="09', 'href="../09'
+      | replace: 'href="10', 'href="../10'
+      | replace: 'href="11', 'href="../11'
+      | replace: 'href="features', 'href="../features'
+      | replace: '.md"', '/"'
+    }}
   </main>
 </div>
