@@ -14,10 +14,11 @@ Sparge is a blog migration tool — ingests HTML posts from live blog URLs, enri
 
 ```bash
 cd ~/claude/sparge
-python3 server.py
+python3 server.py          # browser mode (port 9000)
+npm start                  # Electron desktop app (embedded Python, dynamic port)
 ```
 
-Serves on port 9000. Project data lives in `~/sparge-projects/` (configured via `~/.sparge/config.json`).
+Browser mode serves on port 9000. Electron mode allocates a dynamic port and opens a native window. Project data lives in `~/sparge-projects/` (configured via `~/.sparge/config.json`).
 
 ## Testing
 
@@ -26,12 +27,22 @@ cd ~/claude/sparge
 python3 -m pytest tests/ -q
 ```
 
-437 passing, 433 skipped (integration tests skip without running server), 4 pre-existing failures (in `test_md_validator.py` — `TestDuplicateParagraphs`, `TestLanguageTags`, `TestYoutubeLinkCount`, `TestTableAcknowledged`).
+458+ passing, ~33 skipped (integration tests skip without running server), 4 pre-existing failures (in `test_md_validator.py` — `TestDuplicateParagraphs`, `TestLanguageTags`, `TestYoutubeLinkCount`, `TestTableAcknowledged`). 1 pre-existing failure in `test_edit_flow_comprehensive.py`.
+
+**JS tests (Electron):**
+```bash
+npm run test:unit        # 38 passing — Jest unit tests (mocked)
+npm run test:integration # 4 passing — real Python process tests
+npm run test:e2e         # 4 passing — Playwright full app tests
+```
+E2E tests require `resources/python/` (run `node scripts/fetch-python.js` once) and the Electron binary (run `node node_modules/electron/install.js` once).
 
 ## Key directories — this repo
 
 - `scripts/` — core logic (ingest, scan, enrich, state, config, asset_store, consolidate)
-- `ui/` — single-file frontend (index.html, projects.html)
+- `ui/` — single-file frontend (index.html, projects.html, browse-utils.js)
+- `electron-tests/` — Jest unit/integration + Playwright E2E tests for the Electron wrapper
+- `main.js`, `preload.js`, `python-server.js` — Electron entry point and process manager
 - `tests/` — pytest test suite
 - `docs/adr/` — architecture decision records
 - `docs/design-snapshots/` — immutable design state snapshots

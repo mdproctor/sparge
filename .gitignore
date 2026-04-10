@@ -20,3 +20,7 @@ resources/_tmp/
 *.swp
 .idea/
 .worktrees/
+
+# Claude Code / Superpowers session state (machine-specific)
+.claude/
+.superpowers/
