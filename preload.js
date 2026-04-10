@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld('sparge', {
   onUpdateAvailable:  (fn) => ipcRenderer.on('update:available',  (_, info) => fn(info)),
   onUpdateDownloaded: (fn) => ipcRenderer.on('update:downloaded', (_, info) => fn(info)),
   installUpdate:      () => ipcRenderer.send('update:install'),
+  openDir:            (defaultPath) => ipcRenderer.invoke('dialog:openDir', defaultPath),
 });

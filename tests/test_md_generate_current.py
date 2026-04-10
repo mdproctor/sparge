@@ -442,7 +442,7 @@ class TestAssetScanPathResolution:
         """
         import sys
         from pathlib import Path
-        sys.path.insert(0, '/Users/mdproctor/claude/sparge/scripts')
+        sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
         from scan_assets import scan_assets
 
         cfg = session.get(f'{API}/config').json()

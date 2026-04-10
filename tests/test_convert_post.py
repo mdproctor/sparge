@@ -37,6 +37,10 @@ import pytest
 MIGRATOR_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(MIGRATOR_ROOT / 'scripts'))
 
+# ── KIE archive availability check ─────────────────────────────────────────────
+_KIE_POSTS = Path('/Users/mdproctor/mdproctor.github.io/legacy/posts/mark-proctor')
+_kie_present = _KIE_POSTS.exists()
+
 # ── Garbling signatures ───────────────────────────────────────────────────────
 
 # All known garbling patterns. Any match = encoding bug.
@@ -177,6 +181,7 @@ class TestNonAsciiPreservation:
         assert 'Ã¢Â' not in result, \
             'Triple-encoding (pattern B) detected — old lxml garbling may have returned'
 
+    @pytest.mark.skipif(not _kie_present, reason="KIE archive not present on this machine")
     def test_real_post_not_garbled(self):
         """Convert an actual KIE archive post and verify no garbling.
 
@@ -578,6 +583,7 @@ class TestTableBlankLineCollapse:
         idx = result.find('\n---\n')
         return result[idx + 5:] if idx >= 0 else result
 
+    @pytest.mark.skipif(not _kie_present, reason="KIE archive not present on this machine")
     def test_blank_lines_removed_within_table(self):
         """Blank/whitespace-only lines between table rows must be removed.
 

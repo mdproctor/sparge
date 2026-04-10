@@ -5,8 +5,6 @@ from pathlib import Path
 from bs4 import BeautifulSoup, NavigableString, Tag
 import html2text
 
-ROOT = Path('/Users/mdproctor/mdproctor.github.io')
-
 JUNK_SELECTORS = [
     '.entry-header', 'header', '.entry-meta',
     '.author-box', '.author-description', '.author-info',
@@ -647,11 +645,14 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
 
 
 if __name__ == '__main__':
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from scripts.config import cfg
+    _root = cfg['_root']
     html = Path(sys.argv[1]) if len(sys.argv) > 1 else (
-        ROOT / 'legacy/posts/mark-proctor/2006-05-31-what-is-a-rule-engine.html'
+        _root / 'legacy/posts/mark-proctor/2006-05-31-what-is-a-rule-engine.html'
     )
     result = convert_post(html)
-    out = ROOT / 'mark-proctor' / (html.stem + '.md')
+    out = _root / 'mark-proctor' / (html.stem + '.md')
     out.parent.mkdir(exist_ok=True)
     out.write_text(result, encoding='utf-8')
     print(f'Written: {out}')

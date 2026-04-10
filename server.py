@@ -48,7 +48,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.config import cfg, set_config_path
+from scripts.config import cfg, set_config_path, save as save_cfg
 from scripts import state as State
 from scripts.state import stage as state_stage, accept_staged, reject_staged, set_state_file
 from scripts.sparge_home import get_projects_dir
@@ -393,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
         proj_dir.mkdir(parents=True, exist_ok=True)
         project_cfg = {
             'project_name': name,
-            'serve_root':   data.get('serve_root', str(ROOT.parent)),
+            'serve_root':   data.get('serve_root', str(Path.home())),
             'source': {
                 'posts_dir':  data.get('posts_dir',  'legacy/posts'),
                 'assets_dir': data.get('assets_dir', 'legacy/assets'),

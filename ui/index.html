@@ -661,18 +661,25 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
       <div class="cfg-f"><label>Project name</label><input id="cfg-name"></div>
       <div class="cfg-f">
         <label>Serve root (absolute path)</label>
-        <input id="cfg-root">
+        <input id="cfg-root" readonly style="opacity:0.5;cursor:default"
+          title="Set at project creation — create a new project to change paths">
         <div class="cfg-note">Static files served from here</div>
       </div>
     </div>
     <div class="cfg-sec">
       <h3>Source (relative to serve root)</h3>
-      <div class="cfg-f"><label>Posts directory</label><input id="cfg-posts"></div>
-      <div class="cfg-f"><label>Assets directory</label><input id="cfg-assets"></div>
+      <div class="cfg-f"><label>Posts directory</label><input id="cfg-posts" readonly style="opacity:0.5;cursor:default"
+          title="Set at project creation — create a new project to change paths"></div>
+      <div class="cfg-f"><label>Assets directory</label><input id="cfg-assets" readonly style="opacity:0.5;cursor:default"
+          title="Set at project creation — create a new project to change paths"></div>
     </div>
     <div class="cfg-sec">
       <h3>Output (relative to serve root)</h3>
-      <div class="cfg-f"><label>Markdown output directory</label><input id="cfg-md"></div>
+      <div class="cfg-f"><label>Markdown output directory</label><input id="cfg-md" readonly style="opacity:0.5;cursor:default"
+          title="Set at project creation — create a new project to change paths"></div>
+      <div class="note" style="margin-top:4px;opacity:0.65">
+        Paths are locked at project creation. To use different paths, create a new project.
+      </div>
     </div>
     <div class="cfg-sec">
       <h3>Filter</h3>
@@ -2310,11 +2317,10 @@ function openCfg() {
 }
 function closeCfg() { $('cfg-overlay').classList.remove('open'); }
 async function saveCfg() {
+  // Path fields (serve_root, posts_dir, assets_dir, md_dir) are locked at creation — omit from POST
   await fetch(`${API}/api/config`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({project_name:$('cfg-name').value,serve_root:$('cfg-root').value,
-      source:{posts_dir:$('cfg-posts').value,assets_dir:$('cfg-assets').value},
-      output:{md_dir:$('cfg-md').value},filter:{author:$('cfg-author').value}})});
-  closeCfg(); alert('Config saved. Restart the server to apply path changes.');
+    body:JSON.stringify({project_name:$('cfg-name').value,filter:{author:$('cfg-author').value}})});
+  closeCfg(); alert('Config saved.');
 }
 
 // ── Drag divider ──────────────────────────────────────────────────

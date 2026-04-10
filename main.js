@@ -1,6 +1,6 @@
 // main.js
 'use strict';
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path            = require('path');
 const log             = require('electron-log');
 const { autoUpdater } = require('electron-updater');
@@ -99,3 +99,11 @@ app.on('window-all-closed', () => {
 
 ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.on('update:install',  () => autoUpdater.quitAndInstall());
+
+ipcMain.handle('dialog:openDir', async (_event, defaultPath) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    defaultPath: defaultPath || app.getPath('home'),
+  });
+  return canceled ? null : filePaths[0];
+});

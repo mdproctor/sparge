@@ -171,6 +171,7 @@ button.success:hover { background:var(--approve); border-color:var(--approve); c
 .form-error { font-size:12px; color:var(--error); margin-top:8px; display:none; }
 .form-error.visible { display:block; }
 </style>
+<script src="/ui/browse-utils.js"></script>
 </head>
 <body>
 
@@ -287,26 +288,42 @@ button.success:hover { background:var(--approve); border-color:var(--approve); c
         </div>
         <div class="field">
           <label>Serve root <span style="color:var(--muted)">(absolute path)</span></label>
-          <input id="l-root" type="text" placeholder="/Users/you/blog-archive"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
-          <div class="note">Static files are served from this directory</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="l-root" type="text" placeholder="/Users/you/blog-archive" style="flex:1"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+            <button type="button" onclick="browseField('l-root', null)" title="Browse for folder"
+              style="padding:5px 10px;white-space:nowrap;flex-shrink:0">📁</button>
+          </div>
+          <div class="note">Static files are served from this directory. Starts at your home folder.</div>
         </div>
         <div class="fields-row">
           <div class="field">
             <label>Posts directory <span style="color:var(--muted)">(relative)</span></label>
-            <input id="l-posts" type="text" placeholder="posts"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="l-posts" type="text" placeholder="posts" style="flex:1"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+              <button type="button" onclick="browseField('l-posts', 'l-root')" title="Browse for folder"
+                style="padding:5px 10px;flex-shrink:0">📁</button>
+            </div>
           </div>
           <div class="field">
             <label>Assets directory <span style="color:var(--muted)">(relative)</span></label>
-            <input id="l-assets" type="text" placeholder="assets"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="l-assets" type="text" placeholder="assets" style="flex:1"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+              <button type="button" onclick="browseField('l-assets', 'l-root')" title="Browse for folder"
+                style="padding:5px 10px;flex-shrink:0">📁</button>
+            </div>
           </div>
         </div>
         <div class="field">
           <label>MD output directory <span style="color:var(--muted)">(relative)</span></label>
-          <input id="l-md" type="text" placeholder="markdown"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="l-md" type="text" placeholder="markdown" style="flex:1"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor=''">
+            <button type="button" onclick="browseField('l-md', 'l-root')" title="Browse for folder"
+              style="padding:5px 10px;flex-shrink:0">📁</button>
+          </div>
         </div>
         <div class="field">
           <label>Author filter <span style="color:var(--muted)">(optional)</span></label>
@@ -649,6 +666,29 @@ async function cancelIngest() {
 
 function openActiveProject() {
   window.location.href = '/ui/index.html';
+}
+
+// ── Browse helpers ────────────────────────────────────────────────
+async function browseDir(defaultPath) {
+  if (window.sparge && window.sparge.openDir) {
+    return await window.sparge.openDir(defaultPath || null);
+  }
+  return null; // browser mode — no-op
+}
+
+async function browseField(inputId, relativeToId) {
+  const defaultPath = relativeToId
+    ? ($(relativeToId).value.trim() || null)
+    : null;
+  const selected = await browseDir(defaultPath);
+  if (!selected) return;
+  const input = $(inputId);
+  if (relativeToId) {
+    const serveRoot = $(relativeToId).value.trim();
+    input.value = computeStoredPath(selected, serveRoot);
+  } else {
+    input.value = selected;
+  }
 }
 
 // ── Error helper ──────────────────────────────────────────────────
