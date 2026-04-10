@@ -418,8 +418,8 @@ async function captureFeaturesScreens() {
 // ── missing screenshots ────────────────────────────────────────────────────
 
 // Directly inject HTML issues into the project state.json on disk.
-// This is needed because the embedded Python in Electron lacks lxml,
-// so the scan API cannot parse HTML with BeautifulSoup('lxml').
+// This avoids running a live scan so screenshots are deterministic
+// and don't depend on network access or enriched HTML being present on disk.
 function injectHtmlIssues(projectsDir, projectId, slug, issues) {
   const statePath = path.join(projectsDir, projectId, 'state.json');
   if (!fs.existsSync(statePath)) {
@@ -481,7 +481,8 @@ async function captureMissingScreenshots() {
   const devopsSlug = posts.find(p => p.slug === 'devops-best-practices')?.slug;
 
   // ── 1. Inject HTML issues directly into state.json for cloud-architecture ─
-  // (The embedded Python lacks lxml so the scan API cannot parse HTML.)
+  // Inject state directly rather than running a live scan, so screenshots are
+  // deterministic and don't depend on network access or enriched HTML on disk.
   if (issueSlug) {
     injectHtmlIssues(projectsDir, projectId, issueSlug, [
       {
