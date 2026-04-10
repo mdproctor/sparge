@@ -1,0 +1,19 @@
+<html>
+<head><title>Java 21 Virtual Threads</title></head>
+<body>
+<div class="post-header">
+  <h1 class="post-title">Java 21 Virtual Threads</h1>
+  <span class="published">February 3, 2026</span>
+  <span class="author">Mark Proctor</span>
+</div>
+<div class="post-body">
+  <p>Virtual threads, introduced in Java 21, make it easy to write highly concurrent code without the overhead of OS threads.</p>
+  <h2>Creating a Virtual Thread</h2>
+  <pre class="brush: java">Thread.ofVirtual().start(() -> {<br/>    System.out.println("Running in a virtual thread");<br/>});</pre>
+  <h2>Using an Executor</h2>
+  <p>For managing many threads, use the virtual thread executor:</p>
+  <pre class="brush: java">try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {<br/>    IntStream.range(0, 1000).forEach(i -> {<br/>        executor.submit(() -> processRequest(i));<br/>    });<br/>}</pre>
+  <p>This creates one virtual thread per task, with minimal memory overhead compared to platform threads.</p>
+</div>
+</body>
+</html>
