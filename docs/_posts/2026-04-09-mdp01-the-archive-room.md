@@ -12,7 +12,7 @@ The session before this one crashed mid-implementation. No handover, no context 
 
 The Archive Room aesthetic is simple: parchment background (`#f4f0e8`), ink-black primary (`#2a2218`), muted-slate accent (`#4a6a8a`), Georgia serif italic logo, 2px border radius throughout. Warm instead of cold. Archive instead of terminal. Thirteen CSS tokens replacing several dozen hardcoded hex values from the GitHub-dark palette.
 
-[![Sparge — main UI with post selected, Archive Room theme](../assets/blog/sparge-main-ui-thumb.jpg)](../..../assets/blog/sparge-main-ui.png)
+![Sparge — main UI with post selected, Archive Room theme](/sparge/user-guide/images/05-split-pane-open.png)
 *Post list on the left, HTML source in the middle, rendered Markdown on the right. Parchment chrome throughout.*
 
 ## Twelve tasks and three bugs caught before they shipped
@@ -33,12 +33,12 @@ Three regressions. None obvious from visual inspection. Two with no errors at al
 
 The CodeMirror editor also needed restyling. It was on `material-darker` — correct for the old dark UI, wrong for parchment. We switched it to CodeMirror's `default` theme and wrote a custom CSS block scoped to `body[data-editor-theme="light"]`: warm cream background (`#f0e8d4`), rust-brown HTML tags, slate-blue Markdown headers. A toggle button in the edit sidebar switches back to `material-darker` for anyone who prefers it, persisted in `localStorage`.
 
-[![Sparge — editor in light theme](../assets/blog/sparge-editor-ui-thumb.jpg)](../..../assets/blog/sparge-editor-ui.png)
+![Sparge — editor in light theme](/sparge/user-guide/images/06-html-editor.png)
 *CodeMirror in the Archive Room light theme — warm parchment, sepia/slate syntax colours.*
 
 `projects.html` still had the full GitHub-dark palette after `index.html` was done. Same job, one task: add the `:root` block, sweep every dark hex, match the component patterns. The only interesting decision was the SVG logo — CSS `var()` in SVG presentation attributes is unreliable across browsers, so we used literal hex instead: `#4a6a8a` for the droplets, `#c87020` for the filter bars.
 
-[![Sparge — projects page, Archive Room theme](../assets/blog/sparge-projects-archive-room-thumb.jpg)](../..../assets/blog/sparge-projects-archive-room.png)
+![Sparge — projects page, Archive Room theme](/sparge/user-guide/images/01-first-launch.png)
 *Projects page, consistent with the main UI.*
 
 ## The eight tests that weren't pre-existing

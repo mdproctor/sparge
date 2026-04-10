@@ -18,7 +18,7 @@ App 1 would be the HTML reviewer — load a post in an iframe, run the scan chec
 
 Claude and I built both in the same session. App 1 got asset scanning alongside the content checks — whether every image had been localised to disk, how many were broken. The issue highlighting overlaid CSS outlines directly on the iframe so the problem was visible in context, not just flagged in a list. App 2 got a diff view and the stage/accept/reject cycle.
 
-[![Sparge two-panel reviewer — click to enlarge](/assets/blog/sparge-two-panel-reviewer-thumb.jpg)](../../assets/blog/sparge-two-panel-reviewer.png)
+![Sparge two-panel reviewer — HTML and Markdown side by side](/sparge/user-guide/images/05-split-pane-open.png)
 *The merged tool: archived HTML with CSS issue highlights on the left, generated Markdown on the right, issue panel far right.*
 
 ## The obvious merge

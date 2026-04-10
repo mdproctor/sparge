@@ -32,10 +32,7 @@ Fill in:
 
 ## Using the folder picker
 
-Click the 📁 button next to any path field to open your system's native folder picker.
-
-![Native macOS folder picker dialog open](images/02-folder-picker.png)
-*The native folder picker opens at your home directory. Navigate to the folder and click Open.*
+Click the 📁 button next to any path field to open your system's native folder picker. Navigate to the folder and click **Open**.
 
 > **Note:** Paths inside your serve root are stored as relative paths. Paths outside serve root are stored as absolute paths, so they work regardless of where your serve root is located.
 

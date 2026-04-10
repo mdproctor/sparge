@@ -18,7 +18,7 @@ This was also the perfect opportunity to find out exactly what vibe coding can d
 
 I brought Claude back in for this phase. The ingest pipeline was the core piece — given a URL, detect the platform, discover all post URLs via sitemap or API, fetch each one, extract the article body, localise images, write the HTML to the project folder. Claude and I built the full pipeline in one session: platform detection, discovery, preview before committing, and a background job runner with progress reporting.
 
-[![Sparge ingest pipeline — click to enlarge](/assets/blog/sparge-ingest-thumb.jpg)](../../assets/blog/sparge-ingest.png)
+![Sparge ingest pipeline](/sparge/user-guide/images/03-ingest-panel.png)
 *Discovering posts from a live blog URL — platform auto-detected as WordPress, 577 posts queued for ingest.*
 
 Multi-project architecture came alongside it — each project gets its own config, state file, and folder. Switching between them activates the right paths across the whole server.

@@ -20,7 +20,7 @@ The redesign I wanted: enter edit mode and the nav sidebar becomes edit controls
 
 Claude and I built the whole thing in one session. HTML edits preview in an iframe via `srcdoc`. Markdown edits render through `marked.js`. The scroll sync uses a percentage-based position so editor and preview stay aligned regardless of content length.
 
-[![Sparge edit mode — click to enlarge](/assets/blog/sparge-edit-mode-thumb.jpg)](../../assets/blog/sparge-edit-mode.png)
+![Sparge edit mode — CodeMirror HTML editor](/sparge/user-guide/images/06-html-editor.png)
 *Three-partition edit mode: edit controls on the left, CodeMirror in the middle, live preview on the right.*
 
 ## The prettify bug
