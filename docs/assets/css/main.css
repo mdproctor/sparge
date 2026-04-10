@@ -26,9 +26,11 @@ img { max-width: 100%; height: auto; display: block; border-radius: 6px; }
   padding: 20px 48px;
 }
 .nav-logo {
+  display: flex; align-items: center; gap: 8px;
   color: var(--gold); font-size: 13px; font-weight: 700;
-  letter-spacing: 3px; text-transform: uppercase;
+  letter-spacing: 2px; text-transform: uppercase;
 }
+.nav-logomark { flex-shrink: 0; display: block; }
 .nav-links { display: flex; gap: 28px; }
 .nav-link { color: var(--muted-dark); font-size: 13px; transition: color 0.2s; }
 .nav-link:hover, .nav-link.active { color: var(--gold); }
@@ -53,6 +55,8 @@ body:not(.has-hero) .site-nav {
   z-index: 1;
 }
 .hero-content { position: relative; z-index: 2; max-width: 680px; }
+.hero-logo { margin-bottom: 20px; }
+.hero-logo svg { margin: 0 auto; filter: drop-shadow(0 2px 12px rgba(122,176,204,0.3)); }
 .hero-eyebrow {
   color: var(--gold); font-size: 10px; font-weight: 700;
   letter-spacing: 4px; text-transform: uppercase; margin-bottom: 20px;
