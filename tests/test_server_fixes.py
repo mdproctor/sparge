@@ -57,3 +57,14 @@ def test_save_cfg_import_is_available():
     sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
     from config import save
     assert callable(save)
+
+
+def test_convert_post_root_not_hardcoded():
+    """convert_post.py must not contain a hardcoded absolute path as ROOT at module level."""
+    from pathlib import Path
+    src = (Path(__file__).parent.parent / 'scripts' / 'convert_post.py').read_text()
+    # The hardcoded path must not appear before the __main__ block
+    module_level = src.split('if __name__')[0]
+    assert '/Users/' not in module_level, (
+        f"Hardcoded absolute path found in module-level code of convert_post.py"
+    )
