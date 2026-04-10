@@ -16,10 +16,10 @@ describe('getDownloadUrl', () => {
     expect(url).toMatch(/\.tar\.gz$/);
   });
 
-  test('windows x64 uses x86_64-pc-windows-msvc zip', () => {
+  test('windows x64 uses x86_64-pc-windows-msvc tar.gz', () => {
     const url = getDownloadUrl('win32', 'x64');
     expect(url).toContain('x86_64-pc-windows-msvc');
-    expect(url).toMatch(/\.zip$/);
+    expect(url).toMatch(/\.tar\.gz$/);
   });
 
   test('linux x64 uses x86_64-unknown-linux-gnu tar.gz', () => {

@@ -86,13 +86,13 @@ async function main() {
   extract(archivePath, destDir, info.ext);
 
   // Install Python dependencies into the bundled runtime
-  const pipExe = platform === 'win32'
-    ? path.join(destDir, 'Scripts', 'pip.exe')
-    : path.join(destDir, 'bin', 'pip3');
+  const pythonExe = platform === 'win32'
+    ? path.join(destDir, 'python.exe')
+    : path.join(destDir, 'bin', 'python3');
   const reqFile = path.join(projectRoot, 'requirements.txt');
   if (fs.existsSync(reqFile)) {
     console.log('Installing Python dependencies...');
-    execSync(`"${pipExe}" install -r "${reqFile}" --quiet`, { stdio: 'inherit' });
+    execSync(`"${pythonExe}" -m pip install -r "${reqFile}"`, { stdio: 'inherit' });
     console.log('Dependencies installed.');
   }
 
