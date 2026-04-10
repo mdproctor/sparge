@@ -370,7 +370,8 @@ def chk_code_fence_language(md, slug):
     """Code fences with unknown/garbage language tags won't highlight."""
     KNOWN = {'java','python','javascript','typescript','xml','json','yaml','sql',
              'drl','bash','shell','html','css','kotlin','scala','groovy','ruby',
-             'go','rust','c','cpp','csharp','php','swift','r','perl','lua',''}
+             'go','rust','c','cpp','csharp','php','swift','r','perl','lua',
+             'text','plaintext','plain','ebnf','properties','mvel',''}
     unknown = set(re.findall(r'^```(\w+)', md, re.MULTILINE)) - KNOWN
     if unknown:
         return [Issue('WARN', 'unknown_fence_language',
@@ -585,8 +586,15 @@ def cross_last_section_present(md, slug, article):
     # Strip inline links from MD body so hyperlinked terms still match
     # Pad link text with spaces so adjacent text never merges: "Registration:[link]" → "Registration: link "
     # Handle optional title attribute: [text](<url> "title") or [text](<url>)
-    md_plain = re.sub(r'\[\s*([^\]]+?)\s*\]\(<[^>]+>[^)]*\)', lambda m: ' ' + m.group(1).strip() + ' ', _body(md))
-    md_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', md_plain)  # strip bold/italic markers; space preserves adjacent spacing (e.g. **Name**(text) → "Name (text")
+    # Strip [text](<url>) links. When the link text IS a URL (e.g. [http://x.com](<url>))
+    # discard it — it's a bare URL that first_words will also strip, so keeping it in
+    # the body creates a mismatch. For meaningful text (e.g. [Rule Engine](<url>)) keep it.
+    def _strip_link(m):
+        text = m.group(1).strip()
+        return ' ' if re.match(r'https?://', text) else ' ' + text + ' '
+    md_plain = re.sub(r'\[\s*([^\]]+?)\s*\]\(<[^>]+>[^)]*\)', _strip_link, _body(md))
+    md_plain = re.sub(r'<https?://[^>]+>', ' ', md_plain)  # strip bare <http://...> autolinks
+    md_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', md_plain)  # strip bold/italic markers
     # Normalise all whitespace to single spaces so <br/>-split content ('DBM  \nSo far')
     # matches as a continuous phrase when searching for 'dbm so far'
     body_raw = re.sub(r'\s+', ' ', md_plain).replace('\xa0', ' ').lower()
@@ -602,13 +610,28 @@ def cross_last_section_present(md, slug, article):
         # separator=' ' avoids word-merge from adjacent inline elements
         text = p.get_text(separator=' ', strip=True).replace('\xa0', ' ')
         if len(text) > 60:
-            # For URL-only paragraphs, use the first non-URL word or domain only —
-            # URLs render differently in MD (as <http://...> or [text](<url>))
+            # For URL-starting paragraphs, strip all URLs and check the remaining
+            # text.  URLs render differently in MD (<http://...> or [text](<url>))
+            # and the domain alone is not reliably searchable in the stripped body.
             words = text.split()
             if words and re.match(r'https?://', words[0]):
-                # Use first 2 words but extract just domain from URL
-                domain = re.sub(r'^https?://([^/]+).*', r'\1', words[0]).lower()
-                first_words = domain
+                # Strip every URL from the paragraph; check what's left
+                remaining = re.sub(r'\s+', ' ',
+                                   re.sub(r'https?://\S+', '', text)).strip()
+                if len(remaining) < 20:
+                    # Paragraph is effectively URL-only — no text to verify.
+                    # Skip to the next (earlier) paragraph.
+                    continue
+                # Meaningful text follows the URL; use it as the comparison phrase
+                r_words = remaining.split()
+                first_words = re.sub(r'\s+([,;:!?.])', r'\1',
+                                     ' '.join(r_words[:6]).lower())
+                first_words = re.sub(r'\*+', ' ', first_words)
+                first_words = re.sub(r'\s+', ' ', first_words).strip()
+                first_words = re.sub(r'([\u201c\u2018"\'])\s+', r'\1', first_words)
+                # Normalise digit + ordinal suffix split by whitespace ("5 th" → "5th")
+                first_words = re.sub(r'(\d)\s+(st|nd|rd|th)\b', r'\1\2', first_words)
+                first_words = re.sub(r'\s+', ' ', first_words).strip()
             else:
                 first_words = re.sub(r'\s+([,;:!?.])', r'\1',  # incl. period
                                      ' '.join(words[:6]).lower())
@@ -622,6 +645,13 @@ def cross_last_section_present(md, slug, article):
                 # are sufficient to confirm the paragraph is present.
                 first_words = re.sub(r'\bhttps?(?:://\S*)?', '', first_words)
                 first_words = re.sub(r'\s+', ' ', first_words).strip().rstrip(' ()')
+                # Strip space after an opening quotation mark — HTML text nodes
+                # sometimes have '" text' (quote + space + word) while the MD
+                # renders it as '"text' (no space), so '" the' ≠ '"the' in body.
+                first_words = re.sub(r'([\u201c\u2018"\'])\s+', r'\1', first_words)
+                # Normalise digit + ordinal suffix split by whitespace ("5 th" → "5th")
+                first_words = re.sub(r'(\d)\s+(st|nd|rd|th)\b', r'\1\2', first_words)
+                first_words = re.sub(r'\s+', ' ', first_words).strip()
             if first_words and first_words not in body:
                 return [Issue('WARN', 'truncated_at_end',
                               f'Last HTML paragraph not in MD: "{text[:60]}"')]
@@ -711,7 +741,15 @@ def cross_key_phrase_sample(md, slug, article):
         lambda m: ' ' + m.group(1).strip() + ' ',
         _body(md))
     md_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', md_plain)  # strip bold/italic markers
+    md_plain = re.sub(r'(\d+)\\\.', r'\1.', md_plain)    # unescape list markers: "1\." → "1."
     body_raw = re.sub(r'\s+', ' ', md_plain).replace('\xa0', ' ').lower()
+    # Normalise smart/curly quotes in the MD body to straight ASCII quotes —
+    # html2text may preserve curly quotes from the original HTML (e.g. \u201c
+    # left double, \u2019 right single/apostrophe), while the phrase extracted
+    # from the HTML is also normalised to straight quotes for comparison.
+    # Both sides must use the same quote style for substring matching to work.
+    body_raw = body_raw.replace('\u201c', '"').replace('\u201d', '"')
+    body_raw = body_raw.replace('\u2018', "'").replace('\u2019', "'")
     # Normalise punctuation spacing — get_text(separator=' ') inserts spaces
     # between inline elements and following punctuation ("Fest , hosted"), but
     # the MD link-stripping leaves no space ("Fest, hosted").
@@ -741,12 +779,28 @@ def cross_key_phrase_sample(md, slug, article):
         # - strip _ (underscores appear in body as spaces after bold/path stripping)
         # - strip URLs — full and partial (phrase boundary may cut mid-URL leaving
         #   bare "http" or "htt" that never appears in the body's stripped links)
-        phrase = re.sub(r'\s+([,;:!?.])', r'\1',
-                        re.sub(r'\s+', ' ', text[start:start + 35])).lower().strip()
+        phrase_raw = re.sub(r'\s+', ' ', text[start:start + 35])
+        phrase = re.sub(r'\s+([,;:!?.])', r'\1', phrase_raw).lower().strip()
         phrase = re.sub(r'\*+', ' ', phrase)                      # * list markers → space
         phrase = re.sub(r'_+', ' ', phrase)                       # _ (path/italic) → space
         phrase = re.sub(r'\b(?:https?|htt?)[:/]*\S*', '', phrase) # strip full & partial URLs
         phrase = re.sub(r'\s*>\s*', ' ', phrase)                  # > path sep → space
+        # Strip space after opening curly quote only — HTML text nodes sometimes
+        # have '\u201c text' (curly open + space + word) while MD renders it as
+        # '"text' (straight quote, no space).  Only strip after opening curly quotes
+        # (\u201c \u2018), NOT after straight " ' which may be closing quotes whose
+        # following space must be preserved for the phrase to match the MD body.
+        phrase = re.sub(r'[\u201c\u2018]\s+', '', phrase)         # strip open curly quote+space
+        # Normalise smart/curly quotes to straight ASCII quotes — HTML may use
+        # typographic quotes while MD uses straight quotes (" '), so the same text
+        # won't match without normalisation.  Done after the open-quote strip above
+        # so we don't confuse opening vs closing positions once all quotes are straight.
+        phrase = phrase.replace('\u201c', '"').replace('\u201d', '"')
+        phrase = phrase.replace('\u2018', "'").replace('\u2019', "'")
+        # Normalise digit + ordinal suffix split by whitespace ("4 th" → "4th") —
+        # HTML ordinal superscripts sometimes have a space between digit and suffix
+        # ("4<sup>th</sup>") that html2text collapses in MD but get_text() preserves.
+        phrase = re.sub(r'(\d)\s+(st|nd|rd|th)\b', r'\1\2', phrase)
         phrase = re.sub(r'\s+', ' ', phrase).strip()              # renormalise after removals
         if phrase and len(phrase) > 20 and phrase not in body:
             issues.append(Issue('WARN', 'content_phrase_missing',

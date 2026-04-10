@@ -249,6 +249,9 @@ class Handler(BaseHTTPRequestHandler):
             self._api_projects_list()
         elif path == '/api/config':
             self._api_config_get()
+        elif path == '/api/search':
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+            self._api_search(params.get('q', ''), params.get('scope', 'both'))
         elif path == '/api/posts':
             params = dict(urllib.parse.parse_qsl(parsed.query))
             self._api_posts_list(author=params.get('author'))
@@ -307,6 +310,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._api_save_md(rest[:-len('/save-md')], body)
             elif rest.endswith('/save-html'):
                 self._api_save_html(rest[:-len('/save-html')], body)
+            elif rest.endswith('/dismiss-html-check'):
+                slug = rest[:-len('/dismiss-html-check')]
+                try:
+                    data = json.loads(body)
+                    issue_type = data.get('type', '')
+                    if issue_type:
+                        State.dismiss_html_check(slug, issue_type)
+                        self._json(200, State.get(slug))
+                    else:
+                        self._json(400, {'error': 'type required'})
+                except Exception as e:
+                    self._json(400, {'error': str(e)})
             elif rest.endswith('/accept-staged'):
                 self._api_accept_staged(rest[:-len('/accept-staged')])
             elif rest.endswith('/reject-staged'):
@@ -327,6 +342,18 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith('/api/projects/'):
             project_id = path[len('/api/projects/'):]
             self._api_projects_delete(project_id)
+        elif path.startswith('/api/posts/'):
+            rest = path[len('/api/posts/'):]
+            # DELETE /api/posts/{slug}/dismiss-html-check/{type}
+            if '/dismiss-html-check/' in rest:
+                parts = rest.split('/dismiss-html-check/', 1)
+                slug, issue_type = parts[0], parts[1]
+                State.undismiss_html_check(slug, issue_type)
+                # Rescan so the issue reappears immediately without a manual scan
+                self._api_scan_html(slug)
+                return  # _api_scan_html already sent the response
+            else:
+                self._json(404, {'error': 'unknown endpoint'})
         else:
             self._json(404, {'error': 'unknown endpoint'})
 
@@ -408,6 +435,40 @@ class Handler(BaseHTTPRequestHandler):
         cfg.update(patch)
         save_cfg(cfg)
         self._json(200, {'saved': True})
+
+    def _api_search(self, q: str, scope: str):
+        """Full-text search across post titles and/or MD body content.
+
+        scope: 'title' | 'body' | 'both'
+        Returns {'slugs': [...]} — the caller filters allPosts client-side.
+        """
+        q = q.strip().lower()
+        if not q:
+            self._json(200, {'slugs': [p['slug'] for p in State.get_all()]})
+            return
+
+        results = []
+        posts = State.get_all()
+        for p in posts:
+            slug = p.get('slug', '')
+            title = (p.get('title', '') or '').lower()
+
+            in_title = scope in ('title', 'both') and q in title
+
+            in_body = False
+            if scope in ('body', 'both') and not in_title:
+                md_path = MD_DIR / (slug + '.md')
+                if md_path.exists():
+                    try:
+                        body = md_path.read_text(encoding='utf-8', errors='replace').lower()
+                        in_body = q in body
+                    except Exception:
+                        pass
+
+            if in_title or in_body:
+                results.append(slug)
+
+        self._json(200, {'slugs': results})
 
     def _api_posts_list(self, author: str | None = None):
         posts = State.get_all()
@@ -551,8 +612,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             enriched_path = ENRICHED_DIR / (slug + '.html')
 
-            # ── Step 1: Enrich first ──────────────────────────────────────────
-            if _can_enrich:
+            # ── Step 1: Enrich if not yet enriched ───────────────────────────
+            # Only enrich when the enriched copy does not yet exist.
+            # If the enriched copy exists (including user-edited versions),
+            # scan works on that as-is — re-enriching would overwrite manual edits.
+            if _can_enrich and not enriched_path.exists():
                 github_token = cfg.get('github_token', '')
                 enrich_stats = _enrich_post(
                     html_path, enriched_path,
@@ -572,6 +636,27 @@ class Handler(BaseHTTPRequestHandler):
                     f'{enrich_stats["classes_normalised"]}cls '
                     f'{enrich_stats["embeds_wrapped"]}wrap'
                 )
+
+            # ── Step 1.5: Apply code block fixes to enriched copy ────────────
+            # Second-chance fix for posts enriched before the fixers existed:
+            # normalise <br/> in <pre>, reformat one-line DRL/XML, convert
+            # Blogger span-tokenised code to <pre><code>.  Idempotent — safe
+            # to run on every scan; only writes if something actually changed.
+            if enriched_path.exists() and _can_generate:
+                try:
+                    from bs4 import BeautifulSoup as _BS
+                    from fix_code_blocks import apply_code_block_fixes as _fix_blocks
+                    _soup = _BS(enriched_path.read_text(encoding='utf-8', errors='replace'), 'html.parser')
+                    # Also normalise any remaining <br/> → \n in <pre> blocks
+                    _article = _soup.find('article') or _soup.find('body') or _soup
+                    for _pre in _article.find_all('pre'):
+                        for _br in _pre.find_all('br'):
+                            _br.replace_with('\n')
+                    if _fix_blocks(_soup):
+                        enriched_path.write_text(str(_soup), encoding='utf-8')
+                        print(f'Code blocks fixed (pre-scan): {slug}')
+                except Exception as _e:
+                    print(f'Warning: code block pre-fix failed for {slug}: {_e}')
 
             # ── Step 2: Scan the enriched HTML (or original if enrich unavailable) ──
             scan_path = enriched_path if enriched_path.exists() else html_path

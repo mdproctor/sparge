@@ -920,6 +920,140 @@ class TestPhraseWithInlineListMarkers:
         )
 
 
+class TestTruncatedAtEndWithAutolink:
+    """truncated_at_end must not fire when the last HTML paragraph contains
+    a bare URL that becomes a <http://...> autolink in the MD.
+
+    Pattern: HTML has "Release Notes summary – http://wiki.jboss.org/..."
+    as one paragraph. MD splits it across lines with trailing spaces and
+    renders the URL as a bare <http://...> autolink.
+
+    cross_last_section_present strips URLs from first_words before comparing,
+    but the body preparation was NOT stripping bare <http://...> autolinks —
+    only [text](<url>) Markdown links. So the body had
+    "summary – <http://wiki.jboss.org/...> detailed" but first_words had
+    "summary – detailed" (URL stripped). The autolink sat in the gap,
+    breaking the substring match.
+
+    Fix: also strip bare <http://...> autolinks from the body in
+    cross_last_section_present (same treatment already applied in
+    cross_key_phrase_sample).
+    """
+
+    def test_last_para_with_autolink_not_flagged(self, session):
+        slug = '2007-06-26-4-0-0-mr3-released'
+        r = session.post(f'{API}/posts/{slug}/validate-md')
+        issues = r.json().get('md', {}).get('issues', [])
+        bad = [i for i in issues if i['check'] == 'truncated_at_end']
+        assert not bad, (
+            f'truncated_at_end fired for last paragraph containing a bare URL. '
+            f'HTML: "Release Notes summary – http://wiki.jboss.org/..." '
+            f'MD: autolink <http://...> sits between "–" and "detailed" so the '
+            f'stripped first_words "summary – detailed" is not a substring of '
+            f'"summary – <http://...> detailed". '
+            f'Fix: strip bare <https?://[^>]+> autolinks from body_raw in '
+            f'cross_last_section_present. '
+            f'Issues: {bad}'
+        )
+
+
+class TestEmptyAnchorArtifactStripping:
+    """Empty <a href="url"> anchors (no link text) produce [](<url>) artifacts
+    in the MD when html2text converts them with protect_links=True.
+
+    When these artifacts appear at the START of a line before real content
+    (e.g. [](<url>)[](<url>)A recent Decision Modeling...), the JUNK_LINES
+    pattern r'^\[\]\(<https?://' removes the ENTIRE line, silently dropping
+    the paragraph.
+
+    Fix: strip the [](<url>) prefix from lines rather than removing the whole
+    line, so content that follows is preserved.
+    """
+
+    def test_paragraph_after_empty_anchor_artifact_preserved(self, session):
+        slug = '2015-02-09-the-relationship-of-decision-model-and-notation-dmn-to-sbvr-and-bpmn'
+        r = session.post(f'{API}/posts/{slug}/generate-md?dry=1')
+        content = r.json().get('content', '')
+        assert 'Decision Modeling Information Day' in content, (
+            f'Paragraph "A recent Decision Modeling Information Day..." missing from MD. '
+            f'Empty <a href="blog.athico.com"></a> anchors before it become '
+            f'[](<url>)[](<url>) in html2text output. The JUNK_LINES pattern '
+            f'r"^\\[\\]\\(<https?://" removes the entire line, erasing the '
+            f'real paragraph that follows on the same line. '
+            f'Fix: strip the [](<url>) prefix instead of removing the whole line.'
+        )
+
+    def test_third_paragraph_after_artifact_preserved(self, session):
+        """The 3rd paragraph ('This quote says a little about how DMN may relate...')
+        also starts with empty anchor artifacts and was dropped by the same bug."""
+        slug = '2015-02-09-the-relationship-of-decision-model-and-notation-dmn-to-sbvr-and-bpmn'
+        r = session.post(f'{API}/posts/{slug}/generate-md?dry=1')
+        content = r.json().get('content', '')
+        # This specific phrase is in the 3rd div paragraph — not anywhere else in the post
+        assert 'This quote says a little' in content, (
+            f'Paragraph "This quote says a little about how DMN may relate..." missing. '
+            f'Same cause: empty anchor artifact at line start removes the entire line. '
+            f'Content snippet: {content[500:800]!r}'
+        )
+
+
+class TestTruncatedAtEndUrlAsLinkText:
+    """truncated_at_end must not fire when the last paragraph contains links
+    whose text IS a bare URL (e.g. [http://uni-rostock.de](<url>)).
+
+    After stripping [text](<url>) links, the link TEXT (which is a URL) was
+    left in the body as plain text: "rostock, http://uni-rostock.de chair of".
+    But first_words strips URLs from the HTML text, giving "rostock, chair of".
+    These don't match: body has the URL text, first_words doesn't.
+
+    Fix: when the link text is itself a URL (starts with http), discard it
+    during link stripping (same treatment as first_words gives to URLs in
+    the HTML paragraph text).
+    """
+
+    def test_url_as_link_text_not_flagged(self, session):
+        slug = '2008-09-17-improving-the-naval-engineering-process-using-drools-michael-zimmermann'
+        r = session.post(f'{API}/posts/{slug}/validate-md')
+        issues = r.json().get('md', {}).get('issues', [])
+        bad = [i for i in issues if i['check'] == 'truncated_at_end']
+        assert not bad, (
+            f'truncated_at_end fired for last paragraph containing [url](<url>) links. '
+            f'HTML has "University of Rostock, http://uni-rostock.de Chair of..." '
+            f'After link stripping, body kept the URL text but first_words stripped it, '
+            f'causing a mismatch. Fix: discard link text that is itself a URL. '
+            f'Issues: {bad}'
+        )
+
+
+class TestTruncatedAtEndOpeningQuote:
+    """truncated_at_end must not fire when the last HTML paragraph starts with
+    an opening quotation mark followed by a space before the actual text.
+
+    Pattern: HTML text node '" The technology however...' (U+201C + space + The)
+    splits into words ['"', 'The', 'technology', ...] so first_words becomes
+    '" the technology however has some' with a space after the quote.
+
+    The MD has '"The technology...' (quote directly before The, no space), so
+    body has '"the technology...' — the space in first_words breaks the match.
+
+    Fix: strip space immediately after an opening quotation mark in first_words
+    so '" the technology' normalises to '"the technology' and matches the body.
+    """
+
+    def test_opening_quote_space_not_flagged(self, session):
+        slug = '2009-04-22-the-bpm-technology-convergence'
+        r = session.post(f'{API}/posts/{slug}/validate-md')
+        issues = r.json().get('md', {}).get('issues', [])
+        bad = [i for i in issues if i['check'] == 'truncated_at_end']
+        assert not bad, (
+            f'truncated_at_end fired for last paragraph starting with \'"\' + space. '
+            f'HTML has \'" The technology...\' (U+201C + space + text) so first_words '
+            f'gets the space, but the MD has \'"The technology...\' without it. '
+            f'Fix: strip space after opening quote chars in first_words. '
+            f'Issues: {bad}'
+        )
+
+
 class TestIssuesPanelScrollSync:
     """Issues panel toggle must rebuild scroll anchors.
 
@@ -997,4 +1131,39 @@ class TestIssuesPanelScrollSync:
             f'Last anchor md: before={last_md_before:.0f}, after={last_md_after:.0f} '
             f'(should increase because mdBody.clientHeight shrank). '
             f'Fix: call requestAnimationFrame(() => buildScrollAnchors()) in toggleIssues().'
+        )
+
+
+class TestPhraseWithEscapedListMarkers:
+    """content_phrase_missing must not fire when an HTML paragraph contains
+    inline numbered list items (e.g. "Say,\n1. item\n2. item") separated
+    by <br/> tags.
+
+    Pattern: <p>Say,<br/>1. color == 'red'...<br/>2. when...</p> in HTML.
+    html2text converts <br/> to trailing spaces + newline, and escapes any
+    digit-dot at the start of a line to prevent accidental ordered-list parsing:
+    "1." → "1\." in the MD body.
+
+    The phrase extractor sees "say, 1. color == 'red' and" from the HTML
+    but the MD body contains "say,   \n1\\. color == 'red'..." — the phrase
+    "1." never appears literally because it is escaped to "1\." after collapse.
+
+    Fix: in cross_key_phrase_sample body normalization, unescape digit-dot
+    list markers: re.sub(r'(\d+)\\.', r'\1.', body_raw) so "1\." → "1."
+    before the phrase search.
+    """
+
+    def test_escaped_numbered_list_markers_not_flagged(self, session):
+        slug = '2008-03-19-drools-and-multi-colored-balls'
+        r = session.post(f'{API}/posts/{slug}/validate-md')
+        issues = r.json().get('md', {}).get('issues', [])
+        bad = [i for i in issues if i['check'] == 'content_phrase_missing']
+        assert not bad, (
+            f'content_phrase_missing fired for paragraph with <br/>-separated '
+            f'numbered items. HTML has "Say,\\n1. color == \'red\'..." but '
+            f'html2text escapes "1." at line-start to "1\\." in the MD — '
+            f'the phrase with unescaped "1." is never found. '
+            f'Fix: add re.sub(r"(\\d+)\\\\.", r"\\1.", body_raw) before '
+            f'the phrase search in cross_key_phrase_sample. '
+            f'Issues: {bad}'
         )

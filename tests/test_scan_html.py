@@ -21,6 +21,8 @@ from scan_html import (
     check_wordpress_chrome,
     check_missing_image_signals,
     check_md_notation_in_text,
+    check_suspicious_encoded_html,
+    check_layout_spacer_images,
 )
 from bs4 import BeautifulSoup
 
@@ -426,6 +428,144 @@ class TestMdNotationInText:
         assert has_type(issues, 'md_notation_in_text'), (
             'check_md_notation_in_text not called from scan_post(). '
             'Add it to the issues pipeline in scan_post().'
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# suspicious_encoded_html
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSuspiciousEncodedHtml:
+    """LESSON: Blogger and some CMS platforms HTML-encode table/div markup when
+    pasted into a rich-text editor.  The result is <pre><code> containing literal
+    &lt;table&gt; text — when archived, html2text wraps this as a 20k-char code
+    fence rather than a rendered table.  Automated detection lets the human decide
+    whether the code block is intentional (e.g. an HTML example) or a conversion
+    artefact.  The human can then dismiss the issue if it is intentional.
+    """
+
+    def test_pre_code_with_encoded_table_detected(self):
+        """<pre><code> containing &lt;table is flagged as suspicious."""
+        art = article('<pre><code>&lt;table&gt;&lt;tr&gt;&lt;td&gt;Cell&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</code></pre>')
+        issues = check_suspicious_encoded_html(art)
+        assert has_type(issues, 'suspicious_code_content'), (
+            '<pre><code> with HTML-encoded table not flagged as suspicious_code_content.'
+        )
+
+    def test_pre_code_with_encoded_div_detected(self):
+        """`<pre><code>` with &lt;div is also suspicious."""
+        art = article('<pre><code>&lt;div class="foo"&gt;content&lt;/div&gt;</code></pre>')
+        issues = check_suspicious_encoded_html(art)
+        assert has_type(issues, 'suspicious_code_content')
+
+    def test_pre_code_with_real_code_not_flagged(self):
+        """Legitimate code (no &lt; HTML tags) must not be flagged."""
+        art = article('<pre><code>public class Foo { int x = 1; }</code></pre>')
+        assert is_clean(check_suspicious_encoded_html(art), 'suspicious_code_content')
+
+    def test_pre_code_with_xml_escapes_detected(self):
+        """XML-escaped content (&lt;?xml) also flagged."""
+        art = article('<pre><code>&lt;?xml version="1.0"?&gt;&lt;root/&gt;</code></pre>')
+        issues = check_suspicious_encoded_html(art)
+        assert has_type(issues, 'suspicious_code_content')
+
+    def test_no_pre_code_not_flagged(self):
+        """Inline HTML-encoded entities in a paragraph are fine."""
+        art = article('<p>Use &lt;br&gt; for line breaks.</p>')
+        assert is_clean(check_suspicious_encoded_html(art), 'suspicious_code_content')
+
+    def test_level_is_warn(self):
+        """Must be WARN — human decides if intentional."""
+        art = article('<pre><code>&lt;table&gt;&lt;/table&gt;</code></pre>')
+        issues = check_suspicious_encoded_html(art)
+        assert has_level(issues, 'suspicious_code_content', 'WARN')
+
+    def test_scan_post_includes_check(self, tmp_path):
+        """scan_post() must include suspicious_code_content in its output."""
+        html = ('<html><body><article>'
+                '<pre><code>&lt;table&gt;&lt;tr&gt;&lt;td&gt;A&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</code></pre>'
+                '</article></body></html>')
+        p = tmp_path / 'post.html'
+        p.write_text(html)
+        issues = scan_post(p)
+        assert has_type(issues, 'suspicious_code_content'), (
+            'check_suspicious_encoded_html not called from scan_post(). '
+            'Add it to the issues pipeline.'
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# layout_spacer_images
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestLayoutSpacerImages:
+    """LESSON: Old HTML table layouts use 1×N transparent GIF images named
+    'spacer.gif' (or similar) as invisible column/row separators.  These have
+    zero content value in a blog archive — they produce broken-image indicators
+    or external requests to defunct servers.  Detecting them lets the human
+    decide whether to strip them (almost always yes) and allows the convert_post
+    pipeline to remove them automatically in a follow-up fix.
+    """
+
+    def test_spacer_by_filename_detected(self):
+        """<img src='.../spacer.gif'> is flagged."""
+        art = article('<img src="//example.com/images/spacer.gif" width="25" height="1" alt="">')
+        issues = check_layout_spacer_images(art)
+        assert has_type(issues, 'layout_spacer_image'), (
+            'spacer.gif image not detected as layout_spacer_image.'
+        )
+
+    def test_spacer_case_insensitive(self):
+        """Filename matching must be case-insensitive (Spacer.GIF etc.)."""
+        art = article('<img src="/assets/Spacer.GIF" width="1" height="1" alt="">')
+        assert has_type(check_layout_spacer_images(art), 'layout_spacer_image')
+
+    def test_height_one_empty_alt_detected(self):
+        """1px-tall image with empty alt is a layout spacer even without 'spacer' in name."""
+        art = article('<img src="//example.com/pixel.gif" width="100" height="1" alt="">')
+        assert has_type(check_layout_spacer_images(art), 'layout_spacer_image')
+
+    def test_content_image_not_flagged(self):
+        """Normal content image must not be flagged."""
+        art = article('<img src="diagram.png" width="800" height="600" alt="Architecture diagram">')
+        assert is_clean(check_layout_spacer_images(art), 'layout_spacer_image')
+
+    def test_height_one_with_real_alt_not_flagged(self):
+        """1px-tall image with meaningful alt text is content, not a spacer."""
+        art = article('<img src="line.png" width="600" height="1" alt="Horizontal divider">')
+        assert is_clean(check_layout_spacer_images(art), 'layout_spacer_image')
+
+    def test_level_is_warn(self):
+        """Must be WARN — human confirms before removal."""
+        art = article('<img src="spacer.gif" width="1" height="1" alt="">')
+        issues = check_layout_spacer_images(art)
+        assert has_level(issues, 'layout_spacer_image', 'WARN')
+
+    def test_count_all_spacers(self):
+        """All spacer images in a post must be reported (aggregate count)."""
+        art = article(
+            '<img src="spacer.gif" width="25" height="1" alt="">'
+            '<img src="spacer.gif" width="10" height="1" alt="">'
+            '<img src="real.png" width="400" height="300" alt="photo">'
+        )
+        issues = check_layout_spacer_images(art)
+        spacer_issues = [i for i in issues if i['type'] == 'layout_spacer_image']
+        # Reported as one aggregate issue with the count, not one-per-image
+        assert spacer_issues, 'No spacer issues reported'
+        assert '2' in spacer_issues[0]['detail'], (
+            f'Expected count of 2 in detail. Got: {spacer_issues[0]["detail"]!r}'
+        )
+
+    def test_scan_post_includes_check(self, tmp_path):
+        """scan_post() must run check_layout_spacer_images."""
+        html = ('<html><body><article>'
+                '<img src="//example.com/spacer.gif" width="25" height="1" alt="">'
+                '</article></body></html>')
+        p = tmp_path / 'post.html'
+        p.write_text(html)
+        issues = scan_post(p)
+        assert has_type(issues, 'layout_spacer_image'), (
+            'check_layout_spacer_images not called from scan_post().'
         )
 
 

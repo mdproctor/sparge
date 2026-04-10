@@ -15,10 +15,12 @@ _cfg_path: Path = Path(__file__).parent.parent / 'projects' / 'kie-mark-proctor'
 def _resolve(raw: dict) -> dict:
     """Resolve relative source/output paths against serve_root."""
     root = Path(raw['serve_root'])
-    raw['_root']       = root
-    raw['_posts_dir']  = root / raw['source']['posts_dir']
-    raw['_assets_dir'] = root / raw['source']['assets_dir']
-    raw['_md_dir']     = root / raw['output']['md_dir']
+    raw['_root']         = root
+    raw['_posts_dir']    = root / raw['source']['posts_dir']
+    raw['_assets_dir']   = root / raw['source']['assets_dir']
+    raw['_md_dir']       = root / raw['output']['md_dir']
+    # Enriched copies live alongside state.json in the project directory
+    raw['_enriched_dir'] = Path(_cfg_path).parent / 'enriched'
     return raw
 
 

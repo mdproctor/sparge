@@ -513,3 +513,265 @@ class TestEditorSwitch:
             f'Fix: in toggleHtmlEditMode(), if editState === "md", call '
             f'exitEditModeImmediate() before enterEditMode("html").'
         )
+
+
+# ── No-op edit: opening and immediately closing must not prompt ───────────────
+
+# A post with generated MD — so the MD editor can also be tested
+NOOP_SLUG = '2006-05-31-what-is-a-rule-engine'
+
+
+@pytest.fixture(scope='module')
+def noop_page(edit_page, server):
+    """Fresh browser context for no-op edit tests (reuses existing Playwright session)."""
+    ctx = edit_page.context.browser.new_context(viewport={'width': 1400, 'height': 900})
+    pg = ctx.new_page()
+    pg.goto(APP_URL, wait_until='networkidle')
+    pg.wait_for_selector('.pi', timeout=15000)
+    yield pg
+    ctx.close()
+
+
+def _is_dirty(pg):
+    """True if the editor has flagged unsaved changes (editDirty === true in JS)."""
+    return pg.evaluate("() => typeof editDirty !== 'undefined' ? editDirty : false")
+
+
+def _unsaved_dialog_visible(pg):
+    """True if the #unsaved-modal dialog is displayed (display:flex)."""
+    return pg.evaluate("""() => {
+        const modal = document.getElementById('unsaved-modal');
+        return modal ? modal.style.display === 'flex' : false;
+    }""")
+
+
+class TestNoOpEditNoPrompt:
+    """Opening the HTML or MD editor and immediately closing it — without
+    making any changes — must NOT mark the content as dirty and must NOT
+    show the 'Unsaved changes' dialog.
+
+    Bug: setupEditorLivePreview() attaches a 'change' handler that sets
+    editDirty = true unconditionally. CodeMirror fires 'change' when
+    editor.setValue() is called during initial load (origin: "setValue"),
+    which sets editDirty before the user touches anything.
+
+    Fix: skip setting editDirty when changeObj.origin === "setValue"
+    (CodeMirror's programmatic load origin).
+    """
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _navigate_to(self, pg, slug):
+        """Navigate to slug with fast JS reset — no full page reload."""
+        pg.evaluate("() => { editDirty=false; const m=document.getElementById('unsaved-modal'); if(m) m.style.display='none'; if(typeof exitEditModeImmediate==='function') exitEditModeImmediate(); }")
+        pg.locator(f'[data-slug="{slug}"]').scroll_into_view_if_needed()
+        pg.locator(f'[data-slug="{slug}"]').click()
+        pg.wait_for_function(
+            f"() => document.getElementById('orig-frame')?.src?.includes('{slug}')",
+            timeout=8000)
+
+    def _open_editor(self, pg, btn_id):
+        """Click an edit button and wait until the editor is visible and the
+        CodeMirror setValue debounce window (300ms) has safely elapsed."""
+        pg.locator(f'#{btn_id}').click()
+        pg.wait_for_selector('#html-editor', state='visible', timeout=5000)
+        # Wait for the debounce window to pass. We mark a timestamp in JS and
+        # wait_for_function completes as soon as 350ms has elapsed — faster than
+        # a fixed sleep and self-correcting if the browser is slow.
+        pg.evaluate("() => window.__editorOpenedAt = Date.now()")
+        pg.wait_for_function(
+            "() => Date.now() - window.__editorOpenedAt >= 350",
+            timeout=3000)
+
+    def _force_close_editor(self, pg):
+        """Close the editor without showing any dialog (test teardown)."""
+        pg.evaluate("() => { editDirty=false; exitEditModeImmediate(); }")
+
+    # ── HTML editor ──────────────────────────────────────────────────────────
+
+    def test_open_html_editor_not_dirty(self, noop_page, server):
+        """Opening the HTML editor must not set editDirty."""
+        pg = noop_page
+        self._navigate_to(pg, NOOP_SLUG)
+        self._open_editor(pg, 'btn-edit-html')
+
+        assert not _is_dirty(pg), (
+            'editDirty is true immediately after opening the HTML editor without '
+            'making any changes. CodeMirror fires "change" during setValue() — '
+            'the handler must skip origin="setValue" events.'
+        )
+        self._force_close_editor(pg)
+
+    def test_close_html_editor_no_dialog(self, noop_page, server):
+        """Closing the HTML editor after no changes must not show the dialog."""
+        pg = noop_page
+        self._navigate_to(pg, NOOP_SLUG)
+        self._open_editor(pg, 'btn-edit-html')
+
+        pg.locator('button[onclick="exitEditMode()"]').click()
+        # Wait until edit mode has exited (sidebar hidden) — not a fixed sleep
+        pg.wait_for_function(
+            "() => document.getElementById('edit-sidebar').style.display === 'none'",
+            timeout=3000)
+
+        assert not _unsaved_dialog_visible(pg), (
+            '"Unsaved changes" dialog appeared after opening HTML editor and '
+            'clicking Back without making any changes.'
+        )
+        assert not _is_dirty(pg), 'editDirty still true after exiting no-op edit'
+
+    def test_html_editor_dirty_only_after_real_change(self, noop_page, server):
+        """editDirty must become true only after a real keystroke, not on load."""
+        pg = noop_page
+        self._navigate_to(pg, NOOP_SLUG)
+        self._open_editor(pg, 'btn-edit-html')
+
+        assert not _is_dirty(pg), 'Should not be dirty before any keystroke'
+
+        pg.evaluate("() => htmlEditor && htmlEditor.replaceRange('x', {line:0, ch:0})")
+        # Wait FOR dirty to become true — much faster than a fixed sleep
+        pg.wait_for_function("() => editDirty === true", timeout=2000)
+
+        assert _is_dirty(pg), 'editDirty should be true after a real edit'
+        self._force_close_editor(pg)
+
+    # ── MD editor ────────────────────────────────────────────────────────────
+
+    def test_open_md_editor_not_dirty(self, noop_page, server):
+        """Opening the MD editor must not set editDirty."""
+        pg = noop_page
+        self._navigate_to(pg, NOOP_SLUG)
+        self._open_editor(pg, 'btn-edit-md')
+
+        assert not _is_dirty(pg), (
+            'editDirty is true immediately after opening the MD editor without '
+            'making any changes.'
+        )
+        self._force_close_editor(pg)
+
+    def test_close_md_editor_no_dialog(self, noop_page, server):
+        """Closing the MD editor after no changes must not show the dialog."""
+        pg = noop_page
+        self._navigate_to(pg, NOOP_SLUG)
+        self._open_editor(pg, 'btn-edit-md')
+
+        pg.locator('button[onclick="exitEditMode()"]').click()
+        pg.wait_for_function(
+            "() => document.getElementById('edit-sidebar').style.display === 'none'",
+            timeout=3000)
+
+        assert not _unsaved_dialog_visible(pg), (
+            '"Unsaved changes" dialog appeared after opening MD editor and '
+            'clicking Back without any changes.'
+        )
+
+    # ── Happy path: real changes DO prompt ───────────────────────────────────
+
+    def test_real_change_triggers_dialog_on_close(self, noop_page, server):
+        """A genuine edit followed by Back MUST show the dialog — the fix
+        must not suppress legitimate dirty detection."""
+        pg = noop_page
+        self._navigate_to(pg, NOOP_SLUG)
+        self._open_editor(pg, 'btn-edit-html')
+
+        pg.evaluate("() => htmlEditor && htmlEditor.replaceRange('X', {line:0, ch:0})")
+        pg.wait_for_function("() => editDirty === true", timeout=2000)
+        assert _is_dirty(pg), 'Should be dirty after real edit'
+
+        pg.locator('button[onclick="exitEditMode()"]').click()
+        # Dialog appears synchronously — just give the DOM a moment to render
+        pg.wait_for_function(
+            "() => document.getElementById('unsaved-modal')?.style?.display === 'flex'",
+            timeout=2000)
+
+        assert _unsaved_dialog_visible(pg), (
+            '"Unsaved changes" dialog did not appear after making a real edit '
+            'and clicking Back. The fix must only suppress the no-op dirty flag, '
+            'not genuine edits.'
+        )
+        # Force-exit — dismiss modal and clear state
+        pg.evaluate("() => { const m=document.getElementById('unsaved-modal'); if(m) m.style.display='none'; editDirty=false; exitEditModeImmediate(); }")
+        pg.wait_for_timeout(200)
+
+
+# ── Save button re-enabled after successful save ──────────────────────────────
+
+SAVE_BTN_SLUG = '2006-05-31-what-is-a-rule-engine'
+
+
+@pytest.fixture(scope='module')
+def save_btn_page(edit_page, server):
+    """Fresh browser context for save-button state tests."""
+    ctx = edit_page.context.browser.new_context(viewport={'width': 1400, 'height': 900})
+    pg = ctx.new_page()
+    pg.goto(APP_URL, wait_until='networkidle')
+    pg.wait_for_selector('.pi', timeout=15000)
+    yield pg
+    ctx.close()
+
+
+class TestSaveButtonReenabledAfterSave:
+    """After saving in the HTML editor and re-opening it, the Save button must be enabled.
+
+    Bug: saveEditContent() sets btn.disabled = true at the start, but on the
+    success path it only calls exitEditModeImmediate() without resetting
+    btn.disabled — so the button remains permanently disabled for the rest of
+    the browser session.
+
+    Fix: on a successful save, reset btn.textContent and btn.disabled before
+    calling exitEditModeImmediate().
+    """
+
+    def _navigate(self, pg):
+        pg.goto(APP_URL, wait_until='networkidle')
+        pg.wait_for_selector('.pi', timeout=15000)
+        pg.locator(f'[data-slug="{SAVE_BTN_SLUG}"]').scroll_into_view_if_needed()
+        pg.locator(f'[data-slug="{SAVE_BTN_SLUG}"]').click()
+        pg.wait_for_function(
+            f"() => document.getElementById('orig-frame')?.src?.includes('{SAVE_BTN_SLUG}')",
+            timeout=8000)
+        pg.wait_for_timeout(600)
+
+    def test_save_button_enabled_on_second_edit(self, save_btn_page, server):
+        """Save HTML, exit, re-open editor — Save button must not be disabled."""
+        pg = save_btn_page
+        self._navigate(pg)
+
+        # First edit: open HTML editor, make a change, save
+        pg.locator('#btn-edit-html').click()
+        pg.wait_for_selector('#html-editor', state='visible', timeout=5000)
+        pg.wait_for_timeout(400)
+
+        original = pg.evaluate("() => htmlEditor ? htmlEditor.getValue() : ''")
+        marker = '<!-- save-btn-test -->'
+        new_content = original + f'\n{marker}'
+        pg.evaluate("(c) => htmlEditor && htmlEditor.setValue(c)", new_content)
+        pg.wait_for_timeout(200)
+
+        pg.locator('#btn-edit-save').click()
+        pg.wait_for_selector('#html-editor', state='hidden', timeout=10000)
+        pg.wait_for_timeout(400)
+
+        # Second edit: re-open HTML editor
+        pg.locator('#btn-edit-html').click()
+        pg.wait_for_selector('#html-editor', state='visible', timeout=5000)
+        pg.wait_for_timeout(400)
+
+        disabled = pg.evaluate("() => document.getElementById('btn-edit-save').disabled")
+
+        # Cleanup: restore original content before asserting
+        pg.evaluate("() => { editDirty=false; exitEditModeImmediate(); }")
+        SESSION.post(
+            f'{API}/posts/{SAVE_BTN_SLUG}/save-html',
+            data=original.encode('utf-8'),
+            headers={'Content-Type': 'text/html; charset=utf-8'},
+        )
+
+        assert not disabled, (
+            'Save button (btn-edit-save) is disabled after re-opening the HTML editor '
+            'following a successful save. saveEditContent() sets btn.disabled=true at '
+            'the start but never resets it on the success path — the button stays '
+            'permanently ghosted for the rest of the session. '
+            'Fix: add btn.textContent = orig; btn.disabled = false; before '
+            'exitEditModeImmediate() in the r.ok branch of saveEditContent().'
+        )

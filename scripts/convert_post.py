@@ -35,7 +35,9 @@ _SOCIAL_SHARE_URL_RE = re.compile(
 )
 
 JUNK_LINES = [
-    re.compile(r'^\[\]\(<https?://'),      # empty link [](<url>) — DocBook navigation artifact
+    # Note: bare [](<url>) lines are now stripped by prefix removal before this loop;
+    # this pattern remains as a fallback for any that slip through.
+    re.compile(r'^\[\]\(<https?://\s*$'),  # entire line is empty link — no content follows
     re.compile(r'^\[\]\(<https://www\.addtoany'),
     re.compile(r'^\[Post Comment\]'),
     re.compile(r'^## Author\s*$'),
@@ -65,6 +67,30 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
     from bs4 import Comment
     for c in article.find_all(string=lambda t: isinstance(t, Comment)):
         c.extract()
+
+    # Decode <pre><code> elements whose content is HTML-encoded markup.
+    # Blogger and some CMSes HTML-encode table/div content when pasted into the
+    # rich-text editor: <table> becomes &lt;table&gt; inside a <pre><code> block.
+    # Decoding and replacing the block lets html2text convert the real HTML
+    # rather than treating it as a verbatim code sample.
+    # The check scan_html.suspicious_code_content flags these for human review;
+    # this pipeline step handles them automatically during conversion.
+    import html as _html
+    _ENCODED_TAG_RE = re.compile(r'&lt;(?:table|div|p|span|ul|ol|tr|td|th)\b', re.I)
+    for pre in list(article.find_all('pre')):
+        if not isinstance(pre, Tag): continue
+        code = pre.find('code')
+        if not isinstance(code, Tag): continue
+        raw_content = str(code)
+        if _ENCODED_TAG_RE.search(raw_content):
+            # Decode and replace the pre>code block with the real HTML
+            decoded = _html.unescape(code.get_text())
+            # Strip layout spacer images from the decoded content
+            decoded = re.sub(r'<img[^>]*spacer[^>]*/?>',  '', decoded, flags=re.I)
+            decoded = re.sub(r'<img[^>]+height=["\']?[01]["\']?[^>]+alt=["\']?["\']?[^>]*/?>',
+                             '', decoded, flags=re.I)
+            fragment = BeautifulSoup(decoded, 'html.parser')
+            pre.replace_with(fragment)
 
     # Unwrap <blockquote> elements used as indentation wrappers (not semantic quotes).
     # Old blog HTML uses <blockquote> for visual indent — the entire book description,
@@ -298,6 +324,9 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         text = p.get_text(strip=True)
         if not text or len(text) > 300: continue
         if not any(sig.search(text) for sig in MISSING_IMG_SIGNALS): continue
+        # Skip if the element itself contains an image — text is a caption,
+        # not a dangling reference to a missing image.
+        if p.find('img'): continue
         # Check if next sibling is already an image or placeholder
         nxt = p.find_next_sibling()
         if nxt and isinstance(nxt, Tag):
@@ -407,6 +436,11 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         target = code_el if code_el else pre
         classes = target.get('class', [])
         lang = next((c.replace('language-', '') for c in classes if c.startswith('language-')), None)
+        # Replace <br/> tags with newlines before get_text() so that Blogger-style
+        # <pre> blocks that use <br/> for line breaks preserve their structure.
+        # get_text() silently drops all tags including <br/>, collapsing every line.
+        for br in target.find_all('br'):
+            br.replace_with('\n')
         code_text = target.get_text()
         # Normalise non-breaking spaces (\xa0) introduced by html2text inside code.
         # They break syntax highlighters (tokenisers treat \xa0 as non-identifier chars).
@@ -474,6 +508,16 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
     # calls data.strip() on the first text node inside the element, eating trailing
     # spaces (see the trailing-space DOM fix above).  This is an undocumented internal
     # behaviour — only discoverable by reading html2text/__init__.py source.
+    # ── Step: Ensure <figcaption> renders on its own line in MD ─────────────
+    # html2text does not insert a newline between <img> and <figcaption> inside
+    # a <figure>, so "![alt](src)" and the caption text run together on one line.
+    # Adding <br/> between them forces html2text to emit a line break.
+    for fig in article.find_all('figure'):
+        cap = fig.find('figcaption')
+        img = fig.find('img')
+        if cap and img:
+            img.insert_after(BeautifulSoup('<br/>', 'html.parser'))
+
     h = html2text.HTML2Text()
     h.ignore_links = False
     h.ignore_images = False
@@ -506,6 +550,14 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
             _, code_text = code_blocks[key]
             body += f'\n\n> ⚠️ Code block could not be placed inline\n\n```\n{code_text.strip()}\n```'
 
+    # Strip [](<url>) empty-link artifacts from the start of lines.
+    # html2text renders empty <a href="url"> anchors (no text) as [](<url>).
+    # When multiple appear at the start of a line before real content —
+    # e.g. [](<url>)[](<url>)A recent Decision Modeling Day... — the JUNK_LINES
+    # pattern would remove the entire line and lose the real paragraph.
+    # Stripping the prefix here preserves the following content.
+    body = re.sub(r'^(?:\[\]\(<https?://[^)]*>\))+\s*', '', body, flags=re.MULTILINE)
+
     # Clean up Markdown line-by-line
     lines = []
     for line in body.splitlines():
@@ -523,6 +575,35 @@ def convert_post(html_path: Path, json_path: Path | None = None) -> str:
         lines.append(line)
     body = '\n'.join(lines)
     body = re.sub(r'\n{3,}', '\n\n', body).strip()
+
+    # Remove blank/whitespace-only lines within Markdown table blocks.
+    # html2text inserts blank lines between rows of complex HTML tables
+    # (spacer rows, rows with <br/> content). These break MD table rendering —
+    # marked.js requires all rows to be contiguous with no blank lines.
+    # A blank line is considered "within a table" when both the nearest non-blank
+    # lines before and after it contain a pipe character ('|').
+    def _collapse_table_blanks(text):
+        lines = text.splitlines()
+        result = []
+        for i, line in enumerate(lines):
+            if not line.strip():
+                # Look backwards for the nearest non-blank line
+                prev_pipe = any(
+                    '|' in lines[j]
+                    for j in range(i - 1, max(-1, i - 10), -1)
+                    if lines[j].strip()
+                )
+                # Look forwards for the nearest non-blank line
+                next_pipe = any(
+                    '|' in lines[j]
+                    for j in range(i + 1, min(len(lines), i + 10))
+                    if lines[j].strip()
+                )
+                if prev_pipe and next_pipe:
+                    continue  # drop this blank line — it's inside a table
+            result.append(line)
+        return '\n'.join(result)
+    body = _collapse_table_blanks(body)
 
     # Build front matter
     title = meta.get('title', '')

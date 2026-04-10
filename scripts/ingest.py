@@ -48,6 +48,14 @@ try:
 except ImportError:
     from constants import TRACKING_DOMAINS, is_tracking_pixel as _is_pixel
 
+try:
+    from .fix_code_blocks import apply_code_block_fixes as _apply_code_block_fixes
+except ImportError:
+    try:
+        from fix_code_blocks import apply_code_block_fixes as _apply_code_block_fixes
+    except ImportError:
+        _apply_code_block_fixes = None
+
 # Candidate RSS/feed paths for generic blogs
 GENERIC_FEED_PATHS = ['/feed/', '/rss.xml', '/atom.xml', '/feed.xml']
 
@@ -676,6 +684,35 @@ def _download_asset(url: str, local_path: Path, session) -> bool:
         return False
 
 
+_WAYBACK_API = 'https://archive.org/wayback/available'
+
+# Domains whose images are geo-blocked and must be fetched via Wayback.
+# Imgur returns HTTP 200 with a "Content not viewable in your region" stock
+# image — undetectable by status code, so we redirect to Wayback proactively.
+_WAYBACK_DOMAINS = ('imgur.com',)
+
+
+def _wayback_url(src: str, date_str: str, session) -> str | None:
+    """
+    Return the nearest Wayback Machine snapshot URL for src, anchored to
+    date_str ('YYYY-MM-DD').  Falls back to any available snapshot if no
+    snapshot exists near the given date.  Returns None if not archived.
+    """
+    timestamp = (date_str or '').replace('-', '')[:8]
+    for ts in ([timestamp, ''] if timestamp else ['']):
+        params: dict = {'url': src}
+        if ts:
+            params['timestamp'] = ts
+        try:
+            r = session.get(_WAYBACK_API, params=params, timeout=10)
+            snap = r.json().get('archived_snapshots', {}).get('closest', {})
+            if snap.get('available') and snap.get('status') == '200':
+                return snap['url']
+        except Exception:
+            pass
+    return None
+
+
 def _rewrite_css_urls(css_text: str, css_url: str, serve_root: Path, session) -> str:
     """
     Rewrite url(...) references inside a downloaded CSS file so they point
@@ -763,6 +800,24 @@ def _fetch_and_extract(url: str, session) -> dict:
     # Strip junk
     _strip_junk(article)
 
+    # ── Normalise <pre> line breaks ───────────────────────────────────────────
+    # Some CMS platforms (WordPress wpautop, Blogger) store code without newlines
+    # and add <br/> tags at render time.  Preserving those as actual newline
+    # characters ensures the stored HTML and generated MD both show correct line
+    # structure.  This is a generic extraction step — applies to any source URL.
+    for pre in article.find_all('pre'):
+        if not isinstance(pre, Tag):
+            continue
+        for br in pre.find_all('br'):
+            br.replace_with('\n')
+
+    # ── Apply code block fixes ────────────────────────────────────────────────
+    # Reformat one-line DRL/XML in <pre><code>, convert Blogger span-tokenised
+    # code, and convert <p><br/>DRL</p> blocks to <pre><code>.
+    # Runs after <br/>→\n so one-line blocks without <br/> are also caught.
+    if _apply_code_block_fixes is not None:
+        _apply_code_block_fixes(soup)
+
     # Count assets before any localisation
     asset_count = 0
     for img in article.find_all('img'):
@@ -791,6 +846,127 @@ def _fetch_and_extract(url: str, session) -> dict:
     result['html'] = str(article)
 
     return result
+
+
+# ── Image localisation ────────────────────────────────────────────────────────
+
+_IMG_EXT = re.compile(r'\.(jpe?g|png|gif|webp|svg|bmp|tiff?|avif)(\?.*)?$', re.I)
+
+
+def _resolve_download_src(src: str, date_str: str, session) -> str:
+    """
+    Return the URL to actually fetch for src.
+
+    For geo-blocked domains (e.g. imgur), try Wayback first.
+    For any URL whose direct download fails, Wayback is tried as a fallback
+    by the caller — this function only handles the proactive substitution.
+    """
+    if any(d in src for d in _WAYBACK_DOMAINS):
+        wb = _wayback_url(src, date_str, session)
+        if wb:
+            return wb
+    return src
+
+
+def _try_download(src: str, date_str: str, serve_root: Path, session) -> tuple[str, bool]:
+    """
+    Download src (substituting Wayback for geo-blocked/failed URLs) and return
+    (rel_url, success).  Falls back to Wayback for any domain if the direct
+    download fails.
+    """
+    download_src = _resolve_download_src(src, date_str, session)
+    local_path, rel_url = _asset_local_path(download_src, serve_root, 'images', date_str)
+    if _download_asset(download_src, local_path, session):
+        return rel_url, True
+
+    # Direct (or proactive-wayback) download failed — try Wayback as fallback
+    # for any domain, not just the proactive ones.
+    if 'web.archive.org' not in download_src:
+        wb = _wayback_url(src, date_str, session)
+        if wb and wb != download_src:
+            wb_path, wb_rel = _asset_local_path(wb, serve_root, 'images', date_str)
+            if _download_asset(wb, wb_path, session):
+                return wb_rel, True
+
+    return rel_url, False
+
+
+def _localise_images(
+    article: Tag,
+    serve_root: Path,
+    date_str: str,
+    session,
+) -> dict:
+    """
+    Localise all images in article in-place.  Returns {'localised': int, 'failed': int}.
+
+    Handles three cases:
+      1. <img src> — download and replace with local path.
+         - Geo-blocked domains (imgur): Wayback substituted proactively.
+         - Any failed download: Wayback tried as fallback.
+         - If the img is wrapped in <a href> pointing to the SAME URL, the href
+           is updated to the same local path without a second download.
+      2. <a href> pointing to a different image file — downloaded separately.
+         Same Wayback logic applies.
+      3. <a href> pointing to a webpage / non-image URL — left untouched.
+    """
+    localised = 0
+    failed    = 0
+    seen: dict[str, str] = {}   # original URL → local rel_url (dedup / same-image reuse)
+
+    # Pass 1: <img src>
+    for img in article.find_all('img'):
+        if not isinstance(img, Tag):
+            continue
+        src = img.get('src', '') or ''
+        if not src or src.startswith('data:') or not src.startswith('http'):
+            continue
+        if _is_tracking_pixel(img):
+            img.decompose()
+            continue
+
+        if src in seen:
+            img['src'] = seen[src]
+            localised += 1
+            continue
+
+        rel_url, ok = _try_download(src, date_str, serve_root, session)
+        if ok:
+            img['src'] = rel_url
+            seen[src] = rel_url
+            localised += 1
+            # Same-image href: update parent <a href> if it matches this src
+            parent = img.parent
+            if parent and isinstance(parent, Tag) and parent.name == 'a':
+                href = parent.get('href', '') or ''
+                if href == src or href == rel_url:
+                    parent['href'] = rel_url
+                    seen[href] = rel_url
+        else:
+            failed += 1
+
+    # Pass 2: <a href> image links not already handled
+    for a in article.find_all('a'):
+        if not isinstance(a, Tag):
+            continue
+        href = a.get('href', '') or ''
+        if not href.startswith('http'):
+            continue
+        if href in seen:
+            a['href'] = seen[href]   # reuse — same image already downloaded
+            continue
+        if not _IMG_EXT.search(urlparse(href).path):
+            continue                 # webpage or non-image — leave as external
+
+        rel_url, ok = _try_download(href, date_str, serve_root, session)
+        if ok:
+            a['href'] = rel_url
+            seen[href] = rel_url
+            localised += 1
+        else:
+            failed += 1
+
+    return {'localised': localised, 'failed': failed}
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -845,27 +1021,9 @@ def ingest_post(url: str, session, posts_dir: Path, serve_root: Path) -> dict:
         return result
 
     date_str = data.get('date', '')
-
-    # ── Localise images ───────────────────────────────────────────────────────
-    for img in article.find_all('img'):  # type: ignore[union-attr]
-        if not isinstance(img, Tag):
-            continue
-        src = img.get('src', '') or ''
-        if not src or src.startswith('data:'):
-            continue
-        if _is_tracking_pixel(img):
-            img.decompose()
-            continue
-        if not src.startswith('http'):
-            # Already relative/local — skip
-            continue
-        local_path, rel_url = _asset_local_path(src, serve_root, 'images', date_str)
-        ok = _download_asset(src, local_path, session)
-        if ok:
-            img['src'] = rel_url
-            result['asset_localised'] += 1
-        else:
-            result['asset_failed'] += 1
+    stats = _localise_images(article, serve_root, date_str, session)
+    result['asset_localised'] += stats['localised']
+    result['asset_failed']    += stats['failed']
 
     # ── Localise stylesheets ──────────────────────────────────────────────────
     for link in article.find_all('link', rel=True):  # type: ignore[union-attr]

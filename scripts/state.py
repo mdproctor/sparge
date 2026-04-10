@@ -100,12 +100,79 @@ def update(slug: str, patch: dict):
     _save(state)
 
 
+def dismiss_html_check(slug: str, issue_type: str):
+    """Mark an HTML issue type as intentional for this post.
+
+    Dismissed issues are filtered from the active scan results so they no
+    longer count toward HTML⚠ badges or scope filters.  The dismissal
+    persists across rescans unless the underlying issue disappears from the
+    HTML (in which case it is cleared automatically by set_html_issues).
+    """
+    import datetime
+    state = _load()
+    post = state.get(slug)
+    if post is None:
+        return
+    dismissed = post.setdefault('dismissed_html_checks', {})
+    dismissed[issue_type] = datetime.datetime.utcnow().isoformat()
+    # Also filter the issue out of the current active list immediately
+    html = post.setdefault('html', {})
+    html['issues'] = [i for i in html.get('issues', [])
+                      if i.get('type', i.get('check', '')) != issue_type]
+    _save(state)
+
+
+def undismiss_html_check(slug: str, issue_type: str):
+    """Remove a previous dismissal — the issue will reappear after the next scan.
+
+    The issue is removed from dismissed_html_checks immediately.  Because we
+    don't store dismissed issues separately (they are filtered out), the active
+    list is not repopulated until the next scan runs.  The server endpoint
+    triggers a rescan so the issue reappears without requiring a manual scan.
+    """
+    state = _load()
+    post = state.get(slug)
+    if post is None:
+        return
+    post.get('dismissed_html_checks', {}).pop(issue_type, None)
+    _save(state)
+
+
 def set_html_issues(slug: str, issues: list[dict]):
-    """Replace HTML issue list and refresh hash."""
-    posts_dir = cfg['_posts_dir']
-    html_path = posts_dir / (slug + '.html')
+    """Replace HTML issue list and refresh hash.
+
+    Also maintains dismissed_html_checks:
+    - If a dismissed issue type is still present in the new scan → keep it
+      dismissed (filter it from the active list, don't re-surface it).
+    - If a dismissed issue type is NO LONGER detected → clear the dismissal
+      (the human edit removed the underlying problem; nothing left to dismiss).
+    """
+    # Hash the enriched copy if it exists — that is what generate-md reads,
+    # so html.hash must track it to give accurate stale detection.
+    enriched_path = cfg['_enriched_dir'] / (slug + '.html')
+    original_path = cfg['_posts_dir']    / (slug + '.html')
+    html_path = enriched_path if enriched_path.exists() else original_path
     h = _hash(html_path) if html_path.exists() else None
-    update(slug, {'html': {'issues': issues, 'checked_at': _now(), 'hash': h}})
+
+    state = _load()
+    post = state.get(slug, {})
+    dismissed = post.get('dismissed_html_checks', {})
+
+    # Which issue types are present in this scan?
+    detected_types = {i['type'] for i in issues}
+
+    # Clear dismissals for types that are no longer detected (problem is gone)
+    for itype in list(dismissed.keys()):
+        if itype not in detected_types:
+            del dismissed[itype]
+
+    # Active issues = all detected issues EXCEPT currently dismissed ones
+    active_issues = [i for i in issues if i['type'] not in dismissed]
+
+    update(slug, {
+        'html': {'issues': active_issues, 'checked_at': _now(), 'hash': h},
+        'dismissed_html_checks': dismissed,
+    })
     # Cascade: if MD exists and was generated from a different hash, mark note
     # (stale is computed dynamically; no extra write needed)
 
@@ -116,18 +183,29 @@ def set_md_issues(slug: str, issues: list[dict]):
 
 
 def mark_md_generated(slug: str):
-    """Record that MD was just generated from the current HTML hash."""
-    posts_dir = cfg['_posts_dir']
-    html_path = posts_dir / (slug + '.html')
+    """Record that MD was just generated from the current HTML hash.
+
+    Hashes the enriched copy when it exists — generate-md reads the enriched
+    copy (and convert_post writes back to it), so both html.hash and md.html_hash
+    must track the enriched copy to give accurate stale detection.
+    Updating html.hash here ensures it matches md.html_hash immediately after
+    generation, even though convert_post's write-back changed the enriched file.
+    """
+    enriched_path = cfg['_enriched_dir'] / (slug + '.html')
+    original_path = cfg['_posts_dir']    / (slug + '.html')
+    html_path = enriched_path if enriched_path.exists() else original_path
     h = _hash(html_path) if html_path.exists() else None
-    update(slug, {'md': {
-        'generated_at': _now(),
-        'html_hash': h,
-        'staged': False,
-        'staged_at': None,
-        'issues': [],
-        'validated_at': None,
-    }})
+    update(slug, {
+        'html': {'hash': h},
+        'md': {
+            'generated_at': _now(),
+            'html_hash': h,
+            'staged': False,
+            'staged_at': None,
+            'issues': [],
+            'validated_at': None,
+        },
+    })
 
 
 def mark_enriched(slug: str, stats: dict):
@@ -164,8 +242,9 @@ def accept_staged(slug: str) -> bool:
     content = staged_path.read_text(encoding='utf-8')
     md_path.write_text(content, encoding='utf-8')
     staged_path.unlink()
-    posts_dir = cfg['_posts_dir']
-    html_path = posts_dir / (slug + '.html')
+    enriched_path = cfg['_enriched_dir'] / (slug + '.html')
+    original_path = cfg['_posts_dir']    / (slug + '.html')
+    html_path = enriched_path if enriched_path.exists() else original_path
     h = _hash(html_path) if html_path.exists() else None
     update(slug, {'md': {
         'staged': False,
@@ -205,11 +284,16 @@ def init_from_source() -> int:
     state     = _load()
     added     = 0
 
+    enriched_dir = cfg['_enriched_dir']
     for html_path in sorted(posts_dir.glob('*.html')):
         slug = html_path.stem
+        # Prefer enriched copy for hashing — it is what generate-md reads
+        effective_path = enriched_dir / (slug + '.html')
+        if not effective_path.exists():
+            effective_path = html_path
         if slug in state:
             # Recompute hash in case the file changed outside the tool
-            current_hash = _hash(html_path)
+            current_hash = _hash(effective_path)
             if state[slug].get('html', {}).get('hash') != current_hash:
                 state[slug].setdefault('html', {})['hash'] = current_hash
                 # Don't write yet — batch below
@@ -219,7 +303,7 @@ def init_from_source() -> int:
         sidecar = html_path.with_suffix('.json')
         meta    = json.loads(sidecar.read_text()) if sidecar.exists() else {}
 
-        html_hash = _hash(html_path)
+        html_hash = _hash(effective_path)  # enriched if exists, else original
 
         # Check for existing MD output
         md_path    = md_dir / (slug + '.md')

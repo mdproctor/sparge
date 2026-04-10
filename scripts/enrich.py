@@ -23,6 +23,11 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup, Tag
 
+try:
+    from .fix_code_blocks import apply_code_block_fixes
+except ImportError:
+    from fix_code_blocks import apply_code_block_fixes
+
 
 # ── YouTube ────────────────────────────────────────────────────────────────────
 
@@ -303,11 +308,13 @@ def enrich_post(
     Returns combined stats dict.
 
     Fix order:
-      1. replace_youtube_embeds   — before fallbacks
-      2. replace_gist_embeds      — before fallbacks
-      3. normalise_code_classes   — before language detection
-      4. detect_code_languages    — after normalisation
-      5. replace_embed_fallbacks  — last: catches remaining iframes
+      1. replace_youtube_embeds        — before fallbacks
+      2. replace_gist_embeds           — before fallbacks
+      3. normalise_pre_br_to_newlines  — convert <br/> in <pre> to real \n
+      4. normalise_code_classes        — before language detection
+      5. detect_code_languages         — after normalisation
+      6. apply_code_block_fixes        — reformat DRL/XML, convert span/p-br blocks
+      7. replace_embed_fallbacks       — last: catches remaining iframes
     """
     soup    = BeautifulSoup(html_path.read_text(encoding='utf-8', errors='replace'), 'lxml')
     article = soup.find('article') or soup.find('body') or soup
@@ -317,8 +324,23 @@ def enrich_post(
 
     stats.update(replace_youtube_embeds(article, assets_dir, session))
     stats.update(replace_gist_embeds(article, github_token, session))
+    # Normalise <br/> → \n inside <pre> blocks (CMS stores code without newlines,
+    # adding <br/> at render time; without this, all code collapses to one line)
+    pre_fixed = 0
+    for pre in article.find_all('pre'):
+        brs = pre.find_all('br')
+        if brs:
+            for br in brs:
+                br.replace_with('\n')
+            pre_fixed += 1
+    stats['pre_br_normalised'] = pre_fixed
     stats.update(normalise_code_classes(article))
     stats.update(detect_code_languages(article))
+    # Apply code block fixes: reformat one-line DRL/XML in <pre><code>,
+    # convert Blogger span-tokenised code blocks, and convert <p><br/>DRL</p>.
+    # Runs after class normalisation so language-drl/xml classes are in place.
+    cb_changed = apply_code_block_fixes(soup)
+    stats['code_blocks_fixed'] = 1 if cb_changed else 0
     stats.update(replace_embed_fallbacks(article))
 
     enriched_path.parent.mkdir(parents=True, exist_ok=True)

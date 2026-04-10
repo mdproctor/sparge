@@ -552,6 +552,76 @@ def _eq_post(tmp_path):
     return hp
 
 
+class TestTableBlankLineCollapse:
+    """Blank lines within html2text-generated MD tables must be removed.
+
+    html2text inserts blank lines between rows of complex HTML tables
+    (e.g. rows with <br/> content, empty spacer rows). These blank lines
+    break Markdown table rendering — marked.js requires all rows to be
+    contiguous with no blank lines between them.
+
+    Fix: after html2text conversion, remove blank lines that sit between
+    lines containing '|' (table row indicators).
+    """
+
+    def _make_table_post(self, tmp_path, table_html):
+        html = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>T</title></head>
+<body><article><h1>Test</h1>{table_html}</article></body></html>'''
+        hp = tmp_path / 'table-test.html'
+        hp.write_text(html, encoding='utf-8')
+        (tmp_path / 'table-test.json').write_text(
+            '{"title":"T","date":"2009-01-01","author":"A","categories":[],"tags":[],"original_url":"http://x.com"}')
+        return hp
+
+    def _body(self, result):
+        idx = result.find('\n---\n')
+        return result[idx + 5:] if idx >= 0 else result
+
+    def test_blank_lines_removed_within_table(self):
+        """Blank/whitespace-only lines between table rows must be removed.
+
+        The October Rules Festival 2009 post has a complex conference schedule
+        table with many spacer rows. html2text renders these spacer rows as
+        whitespace-only lines between content rows, breaking MD table rendering.
+        """
+        import sys; sys.path.insert(0, 'scripts')
+        from pathlib import Path
+        from convert_post import convert_post
+
+        slug = '2009-07-20-october-rules-festival-2009'
+        enriched = Path(f'/Users/mdproctor/sparge-projects/kie-mark-proctor/enriched/{slug}.html')
+        json_path = Path(f'/Users/mdproctor/mdproctor.github.io/legacy/posts/mark-proctor/{slug}.json')
+        if not enriched.exists() or not json_path.exists():
+            import pytest; pytest.skip('Enriched copy not available')
+
+        result = convert_post(enriched, json_path=json_path)
+        body = result[result.find('\n---\n')+5:]
+        lines = body.splitlines()
+        pipe_indices = [i for i, l in enumerate(lines) if '|' in l]
+
+        if not pipe_indices:
+            import pytest; pytest.skip('No | table content found in this post — source has no HTML tables, cannot test blank line collapse')
+
+        for a, b in zip(pipe_indices, pipe_indices[1:]):
+            between = lines[a+1:b]
+            blank_between = [l for l in between if not l.strip()]
+            assert not blank_between, (
+                f'Blank/whitespace-only line between table rows at lines {a} and {b}. '
+                f'Spacer rows in complex HTML tables produce whitespace-only lines '
+                f'that break MD table rendering in marked.js. '
+                f'Fix: remove lines within a table section that are blank/whitespace-only.'
+            )
+
+    def test_blank_lines_between_paragraphs_preserved(self, tmp_path):
+        """Blank lines between normal paragraphs (not tables) must be kept."""
+        from convert_post import convert_post
+        html = '<p>First paragraph.</p><p>Second paragraph.</p>'
+        hp = self._make_table_post(tmp_path, html)
+        body = self._body(convert_post(hp))
+        assert '\n\n' in body, 'Blank lines between paragraphs must be preserved'
+
+
 class TestAsciiSeparatorStripping:
     """'===' visual separator lines must become proper <hr> elements, not headings.
 
