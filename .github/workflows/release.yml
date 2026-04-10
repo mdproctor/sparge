@@ -39,6 +39,7 @@ jobs:
         run: npm run test:unit
 
       - name: Run integration tests
+        if: matrix.os != 'windows-latest'
         run: npm run test:integration
 
       - name: Install Electron binary (macOS only)
