@@ -6,6 +6,7 @@
   <title>{% if page.title and page.title != 'Home' %}{{ page.title }} — {% endif %}{{ site.title }}</title>
   <meta name="description" content="{{ page.excerpt | default: site.description | strip_html | normalize_whitespace | truncate: 160 }}">
   <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 </head>
 <body{% if page.layout == 'landing' %} class="has-hero"{% endif %}>
   <nav class="site-nav">
@@ -48,5 +49,8 @@
       <span class="footer-tagline">Built with Sparge</span>
     </div>
   </footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script>document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el)));</script>
 </body>
 </html>
