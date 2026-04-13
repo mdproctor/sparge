@@ -29,3 +29,4 @@ resources/_tmp/
 docs/_site/
 docs/.jekyll-cache/
 docs/.jekyll-metadata
+test-results/
