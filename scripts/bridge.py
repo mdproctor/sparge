@@ -63,31 +63,31 @@ def bridge_init() -> str:
     global _can_consolidate, _consolidate
 
     try:
-        from convert_post import convert_post as _cp
+        from scripts.convert_post import convert_post as _cp
         convert_post = _cp; _can_generate = True
     except ImportError:
         pass
 
     try:
-        from md_validator import validate as _vm, refine as _rm
+        from scripts.md_validator import validate as _vm, refine as _rm
         validate_md = _vm; refine_md = _rm; _can_validate = True
     except ImportError:
         pass
 
     try:
-        from scan_html import scan_post as _sp
+        from scripts.scan_html import scan_post as _sp
         _scan_post = _sp; _can_scan = True
     except ImportError:
         pass
 
     try:
-        from scan_assets import scan_assets as _sa
+        from scripts.scan_assets import scan_assets as _sa
         _scan_assets = _sa; _can_scan_assets = True
     except ImportError:
         pass
 
     try:
-        from enrich import enrich_post as _ep
+        from scripts.enrich import enrich_post as _ep
         _enrich_post = _ep; _can_enrich = True
     except ImportError:
         pass
@@ -99,7 +99,7 @@ def bridge_init() -> str:
         pass
 
     try:
-        from consolidate import consolidate as _c
+        from scripts.consolidate import consolidate as _c
         _consolidate = _c; _can_consolidate = True
     except ImportError:
         pass
@@ -310,7 +310,7 @@ def post_html(slug: str) -> str:
         return _err(404, f'HTML not found: {slug}')
     try:
         raw = html_path.read_text(encoding='utf-8', errors='replace')
-        from html_utils import prettify_html as _prettify_html
+        from scripts.html_utils import prettify_html as _prettify_html
         content = _prettify_html(raw)
         if 'ÃÂÃÂ' in content or ('\xc3\x82' in content):
             content = raw
@@ -387,20 +387,23 @@ def post_validate_md(slug: str) -> str:
     html_path     = enriched_path if enriched_path.exists() else POSTS_DIR / (slug + '.html')
     if not md_path.exists():
         return _err(404, 'MD not generated yet')
-    content  = md_path.read_text(errors='replace')
-    html_arg = html_path if html_path.exists() else None
-    issues   = validate_md(content, slug, html_arg)
-    State.set_md_issues(slug, [
-        {'check': i.check, 'level': i.level, 'detail': i.detail, 'selector': None}
-        for i in issues
-    ])
-    if refine_md:
-        suggestions = refine_md(content, slug, html_arg)
-        State.update(slug, {'md_suggestions': [
-            {'check': s.check, 'level': s.level, 'detail': s.detail}
-            for s in suggestions
-        ]})
-    return _ok(State.get(slug))
+    try:
+        content  = md_path.read_text(errors='replace')
+        html_arg = html_path if html_path.exists() else None
+        issues   = validate_md(content, slug, html_arg)
+        State.set_md_issues(slug, [
+            {'check': i.check, 'level': i.level, 'detail': i.detail, 'selector': None}
+            for i in issues
+        ])
+        if refine_md:
+            suggestions = refine_md(content, slug, html_arg)
+            State.update(slug, {'md_suggestions': [
+                {'check': s.check, 'level': s.level, 'detail': s.detail}
+                for s in suggestions
+            ]})
+        return _ok(State.get(slug))
+    except Exception as e:
+        return _err(500, str(e))
 
 def post_save_md(slug: str, content: str) -> str:
     md_path = MD_DIR / (slug + '.md')
@@ -424,7 +427,10 @@ def post_staged_get(slug: str) -> str:
     staged_path = MD_DIR / (slug + '.md.staged')
     if not staged_path.exists():
         return _err(404, 'no staged version')
-    return _text(staged_path.read_text(encoding='utf-8'))
+    try:
+        return _text(staged_path.read_text(encoding='utf-8'))
+    except Exception as e:
+        return _err(500, str(e))
 
 def post_stage(slug: str, content: str) -> str:
     staged_path = MD_DIR / (slug + '.md.staged')
@@ -439,16 +445,19 @@ def post_accept_staged(slug: str) -> str:
     ok = accept_staged(slug)
     if not ok:
         return _err(404, 'no staged version to accept')
-    md_path   = MD_DIR / (slug + '.md')
-    html_path = POSTS_DIR / (slug + '.html')
-    if _can_validate and md_path.exists():
-        content = md_path.read_text(errors='replace')
-        issues  = validate_md(content, slug, html_path if html_path.exists() else None)
-        State.set_md_issues(slug, [
-            {'check': i.check, 'level': i.level, 'detail': i.detail, 'selector': None}
-            for i in issues
-        ])
-    return _ok(State.get(slug))
+    try:
+        md_path   = MD_DIR / (slug + '.md')
+        html_path = POSTS_DIR / (slug + '.html')
+        if _can_validate and md_path.exists():
+            content = md_path.read_text(errors='replace')
+            issues  = validate_md(content, slug, html_path if html_path.exists() else None)
+            State.set_md_issues(slug, [
+                {'check': i.check, 'level': i.level, 'detail': i.detail, 'selector': None}
+                for i in issues
+            ])
+        return _ok(State.get(slug))
+    except Exception as e:
+        return _err(500, str(e))
 
 def post_reject_staged(slug: str) -> str:
     reject_staged(slug)
@@ -491,7 +500,7 @@ def post_scan_html(slug: str) -> str:
         if enriched_path.exists() and _can_generate:
             try:
                 from bs4 import BeautifulSoup as _BS
-                from fix_code_blocks import apply_code_block_fixes as _fix_blocks
+                from scripts.fix_code_blocks import apply_code_block_fixes as _fix_blocks
                 _soup = _BS(enriched_path.read_text(encoding='utf-8', errors='replace'),
                             'html.parser')
                 _article = _soup.find('article') or _soup.find('body') or _soup
@@ -528,8 +537,14 @@ def post_scan_html(slug: str) -> str:
 
 # ── Ingest ────────────────────────────────────────────────────────────────────
 def _ingest_worker(urls: list, author_filter: str | None) -> None:
-    import requests
-    from ingest import ingest_post
+    try:
+        import requests
+        from scripts.ingest import ingest_post
+    except ImportError as e:
+        with _job_lock:
+            _job['running'] = False
+            _job['errors'].append({'url': '', 'error': f'import error: {e}'})
+        return
     session = requests.Session()
     session.headers['User-Agent'] = 'Mozilla/5.0 (compatible; BlogMigrator/1.0)'
     with _job_lock:
@@ -561,7 +576,7 @@ def ingest_detect(body: str) -> str:
     if not _can_ingest:
         return _err(503, 'ingest not available — install requests library')
     import requests
-    from ingest import detect_platform
+    from scripts.ingest import detect_platform
     try:
         data = json.loads(body) if body.strip() else {}
     except json.JSONDecodeError:
@@ -580,7 +595,7 @@ def ingest_discover(body: str) -> str:
     if not _can_ingest:
         return _err(503, 'ingest not available — install requests library')
     import requests
-    from ingest import detect_platform, discover_urls
+    from scripts.ingest import detect_platform, discover_urls
     try:
         data = json.loads(body) if body.strip() else {}
     except json.JSONDecodeError:
@@ -603,7 +618,7 @@ def ingest_preview(body: str) -> str:
     if not _can_ingest:
         return _err(503, 'ingest not available — install requests library')
     import requests
-    from ingest import preview_post
+    from scripts.ingest import preview_post
     try:
         data = json.loads(body) if body.strip() else {}
     except json.JSONDecodeError:
@@ -675,6 +690,9 @@ def static_resolve(url_path: str) -> str:
     file_path = SERVE_ROOT / rel
     try:
         resolved = file_path.resolve()
+        # Guard against path traversal
+        if not str(resolved).startswith(str(SERVE_ROOT.resolve())):
+            return _err(403, 'path outside serve root')
         if not resolved.exists():
             return _err(404, str(resolved))
         return json.dumps({'status': 200, 'file_path': str(resolved)}, ensure_ascii=False)
