@@ -834,3 +834,236 @@ class TestInlineFormatAdjacentToPunct:
             'html2text, so only real spaces are preserved. '
             f'Body: {body!r}'
         )
+
+
+# ── Blockquote indentation unwrapping ────────────────────────────────────────
+#
+# Old blog HTML uses <blockquote> for visual indentation (no class, no <cite>).
+# html2text converts these to "> content" — the > prefix is noise in archive MD.
+# Fix: unwrap plain <blockquote> elements before html2text.
+# Semantic blockquotes (with <cite>) and styled ones (with class) are kept.
+
+_BLOCKQUOTE_HTML = '''\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>BQ Test</title></head>
+<body><article>
+<h1>Indentation Test</h1>
+<p>Introduction paragraph.</p>
+<blockquote>
+  <p>This is indented for visual effect only — no citation, no class.</p>
+  <p>Second indented paragraph.</p>
+</blockquote>
+<blockquote class="pull-quote">
+  <p>This has a class — it's a styled quote and must be kept.</p>
+</blockquote>
+<blockquote>
+  <p>This one has a cite child — semantic attribution.</p>
+  <cite>Famous Author</cite>
+</blockquote>
+<p>Closing paragraph.</p>
+</article></body></html>'''
+
+
+def _bq_post(tmp_path):
+    hp = tmp_path / 'bq-test.html'
+    hp.write_text(_BLOCKQUOTE_HTML, encoding='utf-8')
+    (tmp_path / 'bq-test.json').write_text(json.dumps(MINIMAL_SIDECAR))
+    return hp
+
+
+class TestBlockquoteIndentationUnwrap:
+    """Plain <blockquote> used for visual indentation must be unwrapped.
+
+    Old blog HTML wraps content in <blockquote> purely for CSS indent effect.
+    html2text converts these to "> content" — noisy in archive Markdown.
+    Unwrap when: no class attribute AND no <cite> child.
+    Keep when: has class (styled) OR has <cite> (semantic attribution).
+    """
+
+    def _body(self, result):
+        idx = result.find('\n---\n')
+        return result[idx + 5:] if idx >= 0 else result
+
+    def test_plain_blockquote_content_preserved(self, tmp_path):
+        """Content inside a plain indentation <blockquote> must appear in MD."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_bq_post(tmp_path)))
+        assert 'indented for visual effect only' in body, (
+            'Content inside plain <blockquote> was lost — it should be unwrapped, '
+            'not removed. Only the > prefix should disappear.'
+        )
+
+    def test_plain_blockquote_prefix_removed(self, tmp_path):
+        """Plain indentation <blockquote> must NOT produce > prefix in MD."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_bq_post(tmp_path)))
+        # html2text produces "> text" for blockquote — the > must not appear
+        # for content that was purely an indentation wrapper.
+        lines_with_gt = [l for l in body.splitlines()
+                         if l.startswith('> ') and 'indented for visual effect' in l]
+        assert not lines_with_gt, (
+            'Plain <blockquote> still produces "> " prefix in MD output. '
+            'It should be unwrapped before html2text. '
+            f'Offending lines: {lines_with_gt}'
+        )
+
+    def test_classed_blockquote_kept(self, tmp_path):
+        """<blockquote class="pull-quote"> must be kept (rendered as > in MD)."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_bq_post(tmp_path)))
+        assert 'styled quote' in body, (
+            'Styled <blockquote class="pull-quote"> content was lost — '
+            'only classless blockquotes should be unwrapped.'
+        )
+
+    def test_cited_blockquote_kept(self, tmp_path):
+        """<blockquote> with <cite> child must be kept (semantic attribution)."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_bq_post(tmp_path)))
+        assert 'semantic attribution' in body, (
+            '<blockquote> with <cite> child was removed — '
+            'semantic quotes with attribution must be preserved.'
+        )
+
+
+# ── Social platform content protection ───────────────────────────────────────
+#
+# The social platform strip must NOT remove paragraphs that merely mention
+# Twitter/Facebook/etc. as a topic (e.g. "I've set up a Twitter account").
+# Only strip: short bare labels (< 50 chars, no hrefs) or sharing widget URLs.
+
+_SOCIAL_CONTENT_HTML = '''\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>Social Test</title></head>
+<body><article>
+<h1>Social Platform Test</h1>
+<p>I've set up a twitter account to send updates about Drools releases — follow @drools for news.</p>
+<p>Share on Twitter</p>
+<p><a href="https://twitter.com/intent/tweet?text=foo">Tweet this</a></p>
+<p>Real content about the rules engine architecture and design.</p>
+</article></body></html>'''
+
+
+def _social_post(tmp_path):
+    hp = tmp_path / 'social-test.html'
+    hp.write_text(_SOCIAL_CONTENT_HTML, encoding='utf-8')
+    (tmp_path / 'social-test.json').write_text(json.dumps(MINIMAL_SIDECAR))
+    return hp
+
+
+class TestSocialPlatformProtection:
+    """Long content paragraphs mentioning social platforms must not be stripped.
+
+    The social strip must only remove sharing widgets (short labels, sharing URLs),
+    not content paragraphs that happen to mention Twitter/Facebook as a topic.
+    """
+
+    def _body(self, result):
+        idx = result.find('\n---\n')
+        return result[idx + 5:] if idx >= 0 else result
+
+    def test_content_paragraph_mentioning_twitter_preserved(self, tmp_path):
+        """A paragraph mentioning 'twitter' as a topic must not be stripped."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_social_post(tmp_path)))
+        assert "twitter account" in body.lower() or "drools releases" in body.lower(), (
+            "Content paragraph mentioning 'twitter' as a topic was incorrectly stripped. "
+            "Only sharing widgets (short bare labels or sharing URLs) should be removed."
+        )
+
+    def test_short_share_label_stripped(self, tmp_path):
+        """'Share on Twitter' (short bare label, no href) must be stripped."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_social_post(tmp_path)))
+        # "Share on Twitter" is a bare sharing label — should be removed
+        assert 'Share on Twitter' not in body, (
+            "Short bare social label 'Share on Twitter' was not stripped. "
+            "Labels < 50 chars with no hrefs and a platform name are sharing widgets."
+        )
+
+    def test_sharing_url_stripped(self, tmp_path):
+        """A link to twitter.com/intent/tweet must be stripped."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_social_post(tmp_path)))
+        assert 'intent/tweet' not in body, (
+            "Sharing URL (twitter.com/intent/tweet) was not stripped. "
+            "Elements with sharing URLs in hrefs are widgets, not content."
+        )
+
+    def test_real_content_preserved(self, tmp_path):
+        """Non-social content in the post must be unaffected."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_social_post(tmp_path)))
+        assert 'rules engine architecture' in body, (
+            "Real content paragraph was removed — social strip is too aggressive."
+        )
+
+
+# ── send_to_friend link removal ───────────────────────────────────────────────
+#
+# Newsletter "Forward this message" links from email marketing platforms
+# (vresp.com, mailchimp) appear in posts originally distributed as newsletters.
+# These links have no archival value and must be removed.
+
+_SEND_TO_FRIEND_HTML = '''\
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>Newsletter Test</title></head>
+<body><article>
+<h1>Newsletter Post</h1>
+<p>Real content here about Drools.</p>
+<p><a href="http://www.vresp.com/send_to_friend.html?id=abc123">Forward this message to a friend</a></p>
+<p>More real content after the newsletter chrome.</p>
+<p><a href="http://mc.sendgrid.com/track/sendtofriend/abc">Send to a friend</a></p>
+</article></body></html>'''
+
+
+def _newsletter_post(tmp_path):
+    hp = tmp_path / 'newsletter-test.html'
+    hp.write_text(_SEND_TO_FRIEND_HTML, encoding='utf-8')
+    (tmp_path / 'newsletter-test.json').write_text(json.dumps(MINIMAL_SIDECAR))
+    return hp
+
+
+class TestSendToFriendRemoval:
+    """Newsletter 'Forward this message' links must be removed from archive MD.
+
+    These links appear in posts originally distributed as email newsletters.
+    The href contains 'send_to_friend' or 'sendtofriend' (case-insensitive).
+    """
+
+    def _body(self, result):
+        idx = result.find('\n---\n')
+        return result[idx + 5:] if idx >= 0 else result
+
+    def test_send_to_friend_link_removed(self, tmp_path):
+        """A link with send_to_friend in href must not appear in MD output."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_newsletter_post(tmp_path)))
+        assert 'send_to_friend' not in body.lower(), (
+            "Newsletter 'Forward this message' link (send_to_friend URL) "
+            "survived into MD output — it must be removed as newsletter chrome."
+        )
+
+    def test_sendtofriend_variant_removed(self, tmp_path):
+        """A link with sendtofriend (no underscore) in href must also be removed."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_newsletter_post(tmp_path)))
+        assert 'sendtofriend' not in body.lower(), (
+            "Newsletter link with 'sendtofriend' URL variant survived into MD output."
+        )
+
+    def test_real_content_before_link_preserved(self, tmp_path):
+        """Content before the newsletter link must be unaffected."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_newsletter_post(tmp_path)))
+        assert 'Real content here about Drools' in body, (
+            "Content before the send_to_friend link was removed — strip is too broad."
+        )
+
+    def test_real_content_after_link_preserved(self, tmp_path):
+        """Content after the newsletter link must be unaffected."""
+        from convert_post import convert_post
+        body = self._body(convert_post(_newsletter_post(tmp_path)))
+        assert 'More real content after the newsletter chrome' in body, (
+            "Content after the send_to_friend link was removed — strip is too broad."
+        )

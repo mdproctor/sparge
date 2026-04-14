@@ -586,6 +586,7 @@ _CODE_SIGNALS_STRONG: list[re.Pattern] = [
     re.compile(r'\bpublic\s+(class|static\s+void|interface)\b'),  # Java class/method
     re.compile(r'\bimport\s+[\w.]+;'),                        # Java import
     re.compile(r'<\?xml\b'),                                   # XML declaration
+    re.compile(r'<[a-zA-Z][a-zA-Z0-9:._-]*\b[^>]+/>'),       # self-closing XML tag with attributes (e.g. <bean id="x"/>)
 ]
 
 # Weak signals — need 2+ to flag.  Each appears in English prose on its own.
