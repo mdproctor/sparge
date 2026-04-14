@@ -1,60 +1,74 @@
-# Handover — 2026-04-06
+# Handover — 2026-04-14
 
-**Head commit:** `e62b6a0` — docs: update CLAUDE.md with canonical paths, remove legacy orphan artifacts
+**Head commit:** `4810147` — fix(#1): resolve 4 pre-existing md_validator test failures
 **GitHub:** https://github.com/mdproctor/sparge (private)
 **Previous handover:** `git show HEAD~1:HANDOVER.md`
 
 ## What Changed This Session
 
-- **Codebase consolidated** — All work moved from `blog-migrator/` (Jekyll repo) into `~/claude/sparge/`. `blog-migrator/` deleted from Jekyll repo. Two codebases are now one.
-- **`asset_store.py` + `consolidate.py` integrated (Option A)** — Ported from original sparge ancestor. `POST /api/consolidate` endpoint + UI button. 86 tests ported (28 skip until Option B).
-- **6 new consolidate endpoint tests** — 326 total passing.
-- **Path audit** — All pipeline paths confirmed canonical, consistent, no duplicates. Legacy `.issues.json` removed. Orphaned enriched file removed.
-- **CLAUDE.md** — Now documents canonical paths table, "do not work elsewhere" rule, and full state of KIE archive.
-- **Design snapshot** — `2026-04-06-canonical-paths-and-confusion.md` documents the two-codebase confusion root cause for future Claude sessions.
+- **Archive Quality Sweep (epic #15) — fully closed.** All 11 open issues resolved.
+- **Test count:** 456 passing / 5 failing → **473 passing / 0 failing**
+- **New tests added:** 12 for convert_post.py pipeline fixes (#6), XML code signal (#37)
+- **New feature:** Search bar (`#search-input`, `#search-scope` title/body/both) in `ui/index.html`; wired into `filtered()` so search stacks with filter buttons and issue-type scoping
+- **Bug fix:** Divider drag `pointer-events:none` on iframe during drag — leftward drag no longer stalls
+- **Bug fix:** `cross_table_acknowledged` now uses cell-count (≥2 cells = significant) not pure text length
+- **Bug fix:** 4 pre-existing md_validator failures resolved (duplicate test needed HTML; language/youtube tests moved to `refine()`; table significance threshold)
+- **Housekeeping:** CLAUDE.md test count updated, stale `docs/design-snapshots/` path fixed, DESIGN.md Next Steps updated to show Quarkus migration as declared next
 
-## The Two-Codebase Confusion — What Happened
+## Issues Closed This Session
 
-This is important context for any future Claude session:
-
-1. `~/claude/sparge` was the original proof-of-concept (8 commits, 2026-04-04)
-2. Work moved to `blog-migrator/` in the Jekyll repo but HANDOVER.md was not updated
-3. Subsequent Claude sessions read HANDOVER.md → `python3 blog-migrator/server.py` → worked in the wrong place
-4. Two days of work (CodeMirror, edit mode, enrichment, storage) accumulated in the wrong codebase
-5. **Resolution:** `blog-migrator/` deleted. `~/claude/sparge/` is the only location.
-
-**Do not work anywhere else. The CLAUDE.md rule is not optional.**
+| # | Title | How |
+|---|---|---|
+| #1 | MD validator false positives | 4 pre-existing failures fixed |
+| #2 | html2text trailing whitespace | Already done; closed |
+| #3 | HTML editor save not visible | Already done; closed |
+| #4 | HTML↔MD editor switch | Already done; closed |
+| #5 | Scroll sync broken | Already done; closed |
+| #6 | convert_post.py pipeline fixes | Regression tests added |
+| #7 | md_notation_in_text scan check | Already done; closed |
+| #8 | generateAll() overwrite prompt | Already done; closed |
+| #37 | Code block recovery | XML strong signal added |
+| #38 | Search bar + divider drag | Implemented |
+| #15 | Archive Quality Sweep (epic) | Closed |
 
 ## State Right Now
 
-- **Application:** `~/claude/sparge/` — 326 tests passing
-- **KIE archive posts:** 577 HTML in `~/mdproctor.github.io/legacy/posts/mark-proctor/` (already enriched by pre-Sparge scripts — YouTube thumbnails on ~7, `language-` classes on 89, `brush:` eliminated)
+- **Application:** `~/claude/sparge/` — 473 tests passing, 0 failing
+- **KIE archive posts:** 577 HTML in `~/mdproctor.github.io/legacy/posts/mark-proctor/`
 - **MD output:** 31 files in `~/mdproctor.github.io/mark-proctor/` (546 still need generation)
-- **Enriched folder:** Empty — Sparge's enrichment pipeline has never been bulk-run
-- **Sparge has scanned 0 of 577 posts** — state.json posts all have empty `html.issues` because they haven't been scanned, NOT because they're clean
+- **Enriched folder:** Empty — Sparge's bulk scan has never been run
+- **Open GitHub issues:** 0
+- **v1.0.0** shipped (tagged, binaries on GitHub Releases)
 
-## Immediate Next Step
+## Declared Next: Quarkus Migration Phase 0
 
-**Bulk re-scan all 577 posts.** Write a script iterating slugs from `~/sparge-projects/kie-mark-proctor/state.json`, calling `POST http://localhost:9000/api/posts/{slug}/scan` for each. Start server first: `cd ~/claude/sparge && python3 server.py`. Most posts should come back clean (legacy scripts already enriched the HTML). Then bulk generate MD for the 546 posts that have none.
+The v1.0.0 blog entry explicitly says "Phase 0 is next." This is the next piece of work.
 
-## Open Questions / Blockers
+**What Phase 0 means:**
+- Scaffold a Quarkus project alongside the existing Python server
+- Wire in JEP (Java Embedded Python) so Quarkus delegates ALL operations to the existing Python modules
+- Zero porting at Phase 0 — the goal is to establish the bridge and prove the architecture
+- `libpython3.12.dylib` is confirmed present in `resources/python/mac-arm64/lib/` — JEP can link against it
 
-- Should `enriched/` copies be committed to git or gitignored? Currently untracked.
-- Should the full 1,801-post KIE archive (all authors) become one Sparge project?
-- Legacy `scripts/` in Jekyll repo (`~/mdproctor.github.io/scripts/`) — delete or keep for reference?
-- Option B (full ingest rearchitecture) — see `docs/ideas/IDEAS.md`
+**Where the design lives:**
+- Design spec: `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md`
+- No plan file written yet — Phase 0 plan needs to be drafted before any code
+
+**Phase sequence (from design):**
+- Phase 0: Quarkus JVM + JEP → delegates everything to Python
+- Phase 1–N: Port modules one by one (state/config → scan/enrich → convert → ingest)
+- Final: Remove JEP + CPython bundle → Quarkus Native
 
 ## References
 
 | Context | Where | Retrieve with |
 |---|---|---|
-| Canonical paths + confusion history | `docs/design-snapshots/2026-04-06-canonical-paths-and-confusion.md` | `cat` |
+| Quarkus migration design | `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md` | `cat` |
 | Pipeline reference | `docs/pipeline.md` | `cat` |
 | ADRs | `docs/adr/` | `ls` then `cat` as needed |
+| Living design doc | `DESIGN.md` | `cat` |
+| Development diary | `docs/_posts/` | `ls` then `cat` as needed |
 | Option B idea | `docs/ideas/IDEAS.md` | `cat` |
-| Blog diary | `docs/blog/` | `ls` then `cat` as needed |
-| Writing style guide | `~/claude-workspace/writing-styles/blog-technical.md` | `cat` |
-| Previous handover | git history | `git show HEAD~1:HANDOVER.md` |
 
 ## Environment
 
@@ -64,4 +78,3 @@ This is important context for any future Claude session:
 - **Project data:** `~/sparge-projects/kie-mark-proctor/`
 - **App config:** `~/.sparge/config.json` → points to `~/sparge-projects/`
 - **Jekyll blog (content only):** `~/mdproctor.github.io/` — separate repo, no app code
-- `PERSONAL_WRITING_STYLES_PATH=~/claude-workspace/writing-styles` in `~/.claude/settings.json`

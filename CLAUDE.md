@@ -27,7 +27,7 @@ cd ~/claude/sparge
 python3 -m pytest tests/ -q
 ```
 
-458+ passing, ~33 skipped (integration tests skip without running server), 4 pre-existing failures (in `test_md_validator.py` — `TestDuplicateParagraphs`, `TestLanguageTags`, `TestYoutubeLinkCount`, `TestTableAcknowledged`). 1 pre-existing failure in `test_edit_flow_comprehensive.py`.
+473 passing, 433 skipped (integration tests skip without running server), 0 pre-existing failures.
 
 **JS tests (Electron):**
 ```bash
@@ -45,10 +45,10 @@ E2E tests require `resources/python/` (run `node scripts/fetch-python.js` once) 
 - `main.js`, `preload.js`, `python-server.js` — Electron entry point and process manager
 - `tests/` — pytest test suite
 - `docs/adr/` — architecture decision records
-- `docs/design-snapshots/` — immutable design state snapshots
+- `docs/_posts/` — development diary entries (Jekyll blog posts)
 - `docs/pipeline.md` — full pipeline reference (stages, checks, fixes)
-- `docs/blog/` — development diary entries
 - `docs/ideas/IDEAS.md` — parked ideas (including Option B ingest rearchitecture)
+- `DESIGN.md` — living design document (captures snapshots + decisions)
 
 ## KIE archive project — canonical file locations
 

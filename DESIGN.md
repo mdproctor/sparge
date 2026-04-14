@@ -84,16 +84,29 @@ Canonical paths (configured in `~/sparge-projects/kie-mark-proctor/config.json`)
 | MD output | `~/mdproctor.github.io/mark-proctor/` | 31 MD | 546 posts need MD generation |
 | Enriched HTML | `~/sparge-projects/kie-mark-proctor/enriched/` | 0 files | Bulk scan not yet run |
 
-326 tests passing (as of 2026-04-06). HTML files pre-enriched by pre-Sparge scripts (YouTube thumbnails, language classes). 533 unlabelled code fences across 130 MD posts — bulk language detection needed.
+473 tests passing (as of 2026-04-14), 0 pre-existing failures. HTML files pre-enriched by pre-Sparge scripts (YouTube thumbnails, language classes). 533 unlabelled code fences across 130 MD posts — bulk language detection needed.
 
 ---
 
 ## Next Steps
 
+**Immediate — Quarkus migration (declared next in v1.0.0 blog entry):**
+- Phase 0: Scaffold Quarkus project alongside Python; JEP (Java Embedded Python) delegates all operations to existing Python modules. Zero porting, establishes the bridge.
+- Phase 1–N: Port modules one by one in dependency order (state/config → scan/enrich → convert → ingest). Each port removes one JEP call.
+- Final: Remove JEP + CPython bundle; compile to Quarkus Native.
+- Design spec: `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md`
+- `libpython3.12.dylib` confirmed present in `resources/python/mac-arm64/lib/` — JEP can use it.
+
+**Archive quality (all issues closed as of 2026-04-14):**
+- Archive Quality Sweep (epic #15) fully closed. 0 open issues.
+
+**Remaining archive work (no issues open, not yet started):**
 - Bulk re-scan all 577 posts through Sparge's enrichment pipeline
 - Bulk generate MD for the 546 posts without it
 - Fix 533 unlabelled code fences (bulk language detection for syntax highlighting)
-- Multi-project tabs (post-V1): each tab opens a project in parallel
+
+**Post-V1 ideas:**
+- Multi-project tabs: each tab opens a project in parallel
 - Image recovery pipeline: Wayback Machine, lazy images, Playwright iframes
 - Code signing: Apple Developer ID and Windows EV cert when distribution scale warrants
 
