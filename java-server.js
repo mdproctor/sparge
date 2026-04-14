@@ -63,6 +63,12 @@ function getPythonLibPath(isPackaged, resourcesPath) {
   return path.join(base, 'lib');
 }
 
+function getPythonHomePath(isPackaged, resourcesPath) {
+  return isPackaged
+    ? path.join(resourcesPath, 'python')
+    : path.join(__dirname, 'resources', 'python', 'mac-arm64');
+}
+
 class JavaServer extends EventEmitter {
   constructor({ isPackaged = false, resourcesPath = '' } = {}) {
     super();
@@ -90,9 +96,10 @@ class JavaServer extends EventEmitter {
   }
 
   _doSpawn() {
-    const jarPath   = getJarPath(this._isPackaged, this._resourcesPath);
-    const jepLib    = getJepLibPath(this._isPackaged, this._resourcesPath);
-    const pythonLib = getPythonLibPath(this._isPackaged, this._resourcesPath);
+    const jarPath    = getJarPath(this._isPackaged, this._resourcesPath);
+    const jepLib     = getJepLibPath(this._isPackaged, this._resourcesPath);
+    const pythonLib  = getPythonLibPath(this._isPackaged, this._resourcesPath);
+    const pythonHome = getPythonHomePath(this._isPackaged, this._resourcesPath);
 
     const jvmArgs = [
       `-Djava.library.path=${jepLib}`,
@@ -102,6 +109,7 @@ class JavaServer extends EventEmitter {
 
     const env = {
       ...process.env,
+      PYTHONHOME:        pythonHome,
       DYLD_LIBRARY_PATH: `${pythonLib}${path.delimiter}${process.env.DYLD_LIBRARY_PATH || ''}`,
       LD_LIBRARY_PATH:   `${pythonLib}${path.delimiter}${process.env.LD_LIBRARY_PATH   || ''}`,
     };
