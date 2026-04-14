@@ -27,9 +27,14 @@ public final class BridgeResponse {
                 : "application/json; charset=utf-8";
 
             JsonNode bodyNode = node.get("body");
-            String   body     = bodyNode.isTextual()
-                ? bodyNode.asText()       // text/plain or text/html — return raw string
-                : bodyNode.toString();    // JSON — serialize back
+            String   body;
+            if (bodyNode == null) {
+                body = "null";
+            } else if (bodyNode.isTextual()) {
+                body = bodyNode.asText();       // text/plain or text/html — return raw string
+            } else {
+                body = bodyNode.toString();    // JSON — serialize back
+            }
 
             return Response.status(status)
                 .header("Content-Type",                contentType)

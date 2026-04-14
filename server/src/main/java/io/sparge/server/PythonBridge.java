@@ -27,7 +27,9 @@ public class PythonBridge {
         try {
             interp = new SharedInterpreter();
             interp.exec("import sys");
-            interp.exec("sys.path.insert(0, '" + escape(repoRootPath) + "')");
+            // Use set() to pass path safely — avoids Python string escaping issues
+            interp.set("_sparge_root", repoRootPath);
+            interp.exec("sys.path.insert(0, _sparge_root)");
             interp.exec("import scripts.bridge as bridge");
             String result = (String) interp.invoke("bridge.bridge_init");
             System.out.println("[PythonBridge] initialized: " + result);
@@ -57,7 +59,4 @@ public class PythonBridge {
         }
     }
 
-    private static String escape(String path) {
-        return path.replace("\\", "/");
-    }
 }
