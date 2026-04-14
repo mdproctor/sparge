@@ -515,6 +515,19 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
       <button onclick="bulkAcceptStaged()" style="font-size:11px;padding:3px 8px;background:var(--approve-bg);border-color:var(--approve);color:var(--approve)" title="Accept all staged versions in current scope">✓ Accept all staged</button>
       <button onclick="bulkRejectStaged()" style="font-size:11px;padding:3px 8px;background:#f4e0e0;border-color:var(--error);color:var(--error)" title="Reject all staged versions in current scope">✕ Reject all staged</button>
     </div>
+    <!-- Search bar -->
+    <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;align-items:center">
+      <input id="search-input" type="search" placeholder="Search posts…"
+        style="flex:1;background:var(--chrome);color:var(--sepia);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:11px;min-width:0"
+        oninput="onSearchInput(this.value)" title="Search post titles and/or Markdown body">
+      <select id="search-scope"
+        style="background:var(--chrome);color:var(--sepia);border:1px solid var(--border);border-radius:4px;padding:3px 4px;font-size:11px;cursor:pointer"
+        onchange="onSearchInput(document.getElementById('search-input').value)" title="Search scope">
+        <option value="both">Both</option>
+        <option value="title">Title</option>
+        <option value="body">Body</option>
+      </select>
+    </div>
     <div id="post-list"></div>
   </div>
 
@@ -695,6 +708,8 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
 <script>
 const API = '';
 let allPosts = [], currentSlug = null, currentFilter = 'all', currentIssueType = null, currentMdCheck = null, cfg = {};
+let searchSlugs = null; // null = no active search; Set<string> = slugs matching current query
+let _searchDebounce = null;
 let currentAuthor = '';
 let htmlBreakdownOpen = false, mdBreakdownOpen = false;
 let layout = 'split', activeTab = 'orig', issuesOpen = false;
@@ -1415,6 +1430,7 @@ function setMdCheck(check) {
 // ── Nav ───────────────────────────────────────────────────────────
 function filtered() {
   return allPosts.filter(p => {
+    if (searchSlugs !== null && !searchSlugs.has(p.slug)) return false;
     const hi=(p.html?.issues||[]).length, mi=(p.md?.issues||[]).length;
     const gen=!!p.md?.generated_at, stale=p.md?.stale, staged=p.md?.staged;
     if (currentFilter==='html-issues') {
@@ -1431,6 +1447,27 @@ function filtered() {
     return true;
   });
 }
+function onSearchInput(q) {
+  clearTimeout(_searchDebounce);
+  if (!q.trim()) {
+    searchSlugs = null;
+    renderNav();
+    return;
+  }
+  _searchDebounce = setTimeout(async () => {
+    const scope = document.getElementById('search-scope')?.value || 'both';
+    try {
+      const r = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&scope=${scope}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      searchSlugs = new Set(data.slugs);
+    } catch (_) {
+      searchSlugs = null;
+    }
+    renderNav();
+  }, 300);
+}
+
 function setFilter(btn,f) {
   currentFilter=f;
   currentIssueType=null;
@@ -2324,15 +2361,27 @@ async function saveCfg() {
 }
 
 // ── Drag divider ──────────────────────────────────────────────────
+// Disable pointer-events on the iframe during drag so that mousemove events
+// are not swallowed by the iframe when dragging leftward over it.
 let dragging=false;
-$('divider').addEventListener('mousedown',()=>{dragging=true;});
+$('divider').addEventListener('mousedown',()=>{
+  dragging=true;
+  const fr=$('orig-frame');
+  if(fr) fr.style.pointerEvents='none';
+});
 document.addEventListener('mousemove',e=>{
   if(!dragging) return;
   const r=$('panels').getBoundingClientRect();
   const pct=Math.max(20,Math.min(80,(e.clientX-r.left)/r.width*100));
   $('html-panel').style.flex='none'; $('html-panel').style.width=pct+'%'; $('md-panel').style.flex='1';
 });
-document.addEventListener('mouseup',()=>{dragging=false;});
+document.addEventListener('mouseup',()=>{
+  if(dragging) {
+    dragging=false;
+    const fr=$('orig-frame');
+    if(fr) fr.style.pointerEvents='';
+  }
+});
 
 // ── Keyboard ──────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{

@@ -430,24 +430,28 @@ class TestPostSearchBar:
         pg.locator('.fb[onclick*="all"]').click()
         pg.wait_for_timeout(300)
 
-    def test_scope_slug_only_filters_correctly(self, server, page):
-        """Selecting 'Slug' scope searches only slugs."""
+    def test_title_scope_filters_correctly(self, server, page):
+        """Selecting 'Title' scope returns only posts with query in title."""
         pg = page
 
-        pg.select_option('#search-scope', 'slug')
+        pg.select_option('#search-scope', 'title')
         pg.fill('#search-input', 'drools')
-        pg.wait_for_timeout(300)
+        pg.wait_for_timeout(700)
 
-        slug_count = _visible_post_count(pg)
-        assert slug_count > 0
+        count = _visible_post_count(pg)
+        assert count > 0
 
-        # All results must have 'drools' in the slug specifically
-        all_in_slug = pg.evaluate("""() => {
-            return Array.from(document.querySelectorAll('.pi')).every(el =>
-                (el.dataset.slug || '').includes('drools')
-            );
+        # All results must have 'drools' in the title
+        all_in_title = pg.evaluate("""() => {
+            const q = 'drools';
+            const postMap = Object.fromEntries(allPosts.map(p => [p.slug, p]));
+            return Array.from(document.querySelectorAll('.pi')).every(el => {
+                const slug = el.dataset.slug || '';
+                const p = postMap[slug];
+                return ((p && p.title) || slug).toLowerCase().includes(q);
+            });
         }""")
-        assert all_in_slug, 'Slug-only search: all results must have "drools" in slug'
+        assert all_in_title, 'Title-scope: all results must have "drools" in title'
 
         # Cleanup
         pg.fill('#search-input', '')
