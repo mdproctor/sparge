@@ -7,7 +7,7 @@ Run: python3 -m pytest blog-migrator/tests/test_md_validator.py -v
 import tempfile
 from pathlib import Path
 
-from md_validator import validate, MD_CHECKS, CROSS_CHECKS, Issue
+from md_validator import validate, refine, MD_CHECKS, CROSS_CHECKS, Issue
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,13 +30,14 @@ def make_md(body: str) -> str:
 def make_html(body: str) -> str:
     return f'<html><body><article>{body}</article></body></html>'
 
-def issues_of(md: str, html: str = None, check: str = None):
+def issues_of(md: str, html: str = None, check: str = None, use_refine: bool = False):
     html_path = None
     if html:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
             f.write(html); html_path = Path(f.name)
     try:
-        all_issues = validate(md, 'test-slug', html_path)
+        fn = refine if use_refine else validate
+        all_issues = fn(md, 'test-slug', html_path)
         return [i for i in all_issues if i.check == check] if check else all_issues
     finally:
         if html_path and html_path.exists():
@@ -201,7 +202,9 @@ class TestDuplicateParagraphs:
 
     def test_catches_duplicate(self):
         para = "This is a long paragraph about Drools rule engines and how they work in practice with real-world examples."
-        assert has_error(issues_of(make_md(f"{para}\n\nMiddle.\n\n{para}")), 'duplicate_paragraph')
+        # HTML contains the paragraph only once — duplication in MD is a conversion error, not faithful to source
+        html = make_html(f'<p>{para}</p><p>Middle.</p>')
+        assert has_error(issues_of(make_md(f"{para}\n\nMiddle.\n\n{para}"), html), 'duplicate_paragraph')
 
     def test_clean_no_duplicates(self):
         assert is_clean(issues_of(make_md("First.\n\nSecond.\n\nThird.")), 'duplicate_paragraph')
@@ -267,8 +270,10 @@ class TestLanguageTags:
     """LESSON: language-X class in HTML must produce matching ```X fence."""
 
     def test_catches_wrong_language(self):
+        # language_tag_missing is a refinement check (not a content-fixing check) —
+        # the conversion was faithful but the language annotation is wrong/missing.
         html = make_html('<pre><code class="language-drl">rule x end</code></pre>')
-        assert has_warn(issues_of(make_md("```java\nrule x end\n```"), html), 'language_tag_missing')
+        assert has_warn(issues_of(make_md("```java\nrule x end\n```"), html, use_refine=True), 'language_tag_missing')
 
     def test_clean_matching_language(self):
         html = make_html('<pre><code class="language-drl">rule x end</code></pre>')
@@ -443,8 +448,10 @@ class TestYoutubeLinkCount:
     """LESSON: YouTube embed figures in HTML should appear as links in MD."""
 
     def test_catches_youtube_dropped(self):
+        # youtube_links_dropped is a refinement check — YouTube embeds need a separate
+        # enrichment/embed strategy. Use refine() not validate().
         html = make_html('<figure class="video-embed"><a href="https://youtube.com/watch?v=abc123"><img src="/thumb.jpg"></a></figure>')
-        assert has_warn(issues_of(make_md("No video link here."), html), 'youtube_links_dropped')
+        assert has_warn(issues_of(make_md("No video link here."), html, use_refine=True), 'youtube_links_dropped')
 
     def test_clean_youtube_present(self):
         html = make_html('<figure class="video-embed"><a href="https://youtube.com/watch?v=abc123"><img src="/thumb.jpg"></a></figure>')

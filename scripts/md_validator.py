@@ -554,10 +554,14 @@ def cross_table_acknowledged(md, slug, article):
     body_plain = re.sub(r'\[\s*([^\]]+?)\s*\]\(<[^>]+>\)', r'\1', body)  # [text](<url>)→text
     body_plain = re.sub(r'\*{1,2}|_{1,2}', ' ', body_plain)
     body_lower = re.sub(r'\s+', ' ', body_plain).replace('\xa0', ' ').lower()
-    # Only check tables with substantial content (> 20 chars).  Single-cell
-    # layout wrappers (e.g. a "PRESS RELEASE" header table) have no meaningful
-    # Markdown equivalent and should not trigger table_dropped.
-    significant = [t for t in tables if len(t.get_text(strip=True)) > 20]
+    # Only check tables with substantial content.  Single-cell layout wrappers
+    # (e.g. a "PRESS RELEASE" header) have no meaningful Markdown equivalent.
+    # A table is significant when it has 2+ cells (it is a data table, even
+    # with short cell values) OR has a single cell with > 20 chars of text.
+    def _is_significant(t):
+        cells = t.find_all(['td', 'th'])
+        return len(cells) >= 2 or len(t.get_text(strip=True)) > 20
+    significant = [t for t in tables if _is_significant(t)]
     if not significant:
         return []  # all tables are trivial layout elements — nothing to check
     md_has_table_text = any(
