@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))  # add repo root so 'scripts' is importable as a p
 
 from scripts.config import cfg, set_config_path, save as save_cfg
 from scripts import state as State
-from scripts.state import stage as state_stage, accept_staged, reject_staged, set_state_file
+from scripts.state import accept_staged, set_state_file
 from scripts.sparge_home import get_projects_dir
 
 # ── Global state (mirrors server.py) ─────────────────────────────────────────
@@ -214,29 +214,6 @@ def search(q: str, scope: str) -> str:
 
 
 # ── Posts CRUD ────────────────────────────────────────────────────────────────
-def posts_list(author: str | None = None) -> str:
-    posts = State.get_all()
-    effective = author if author is not None else cfg.get('filter', {}).get('author', '')
-    if effective:
-        posts = [p for p in posts if p.get('author', '') == effective]
-    posts.sort(key=lambda p: (p.get('date', ''), p.get('slug', '')))
-    return _ok(posts)
-
-def post_get(slug: str) -> str:
-    post = State.get(slug)
-    if post is None:
-        return _err(404, f'unknown slug: {slug}')
-    return _ok(post)
-
-def post_patch(slug: str, body: str) -> str:
-    try:
-        patch = json.loads(body)
-    except json.JSONDecodeError:
-        return _err(400, 'invalid JSON')
-    allowed = {'flagged', 'user_note', 'reviewed'}
-    safe = {k: v for k, v in patch.items() if k in allowed}
-    State.update(slug, safe)
-    return _ok(State.get(slug))
 
 
 # ── Posts HTML ────────────────────────────────────────────────────────────────
@@ -371,15 +348,6 @@ def post_staged_get(slug: str) -> str:
     except Exception as e:
         return _err(500, str(e))
 
-def post_stage(slug: str, content: str) -> str:
-    staged_path = MD_DIR / (slug + '.md.staged')
-    try:
-        staged_path.write_text(content, encoding='utf-8')
-        state_stage(slug)
-        return _ok(State.get(slug))
-    except Exception as e:
-        return _err(500, str(e))
-
 def post_accept_staged(slug: str) -> str:
     ok = accept_staged(slug)
     if not ok:
@@ -397,10 +365,6 @@ def post_accept_staged(slug: str) -> str:
         return _ok(State.get(slug))
     except Exception as e:
         return _err(500, str(e))
-
-def post_reject_staged(slug: str) -> str:
-    reject_staged(slug)
-    return _ok(State.get(slug))
 
 
 # ── HTML issue dismiss ────────────────────────────────────────────────────────
