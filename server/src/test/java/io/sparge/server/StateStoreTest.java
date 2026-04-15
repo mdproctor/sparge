@@ -215,7 +215,7 @@ class StateStoreTest {
         Path htmlFile = dir.resolve("my-post.html");
         Files.writeString(htmlFile, "<html>content</html>");
         store.markMdGenerated("my-post", htmlFile);
-        ObjectNode md = store.get("my-post").path("md");
+        ObjectNode md = (ObjectNode) store.get("my-post").path("md");
         assertFalse(md.path("generated_at").isMissingNode(), "generated_at must be set");
         assertFalse(md.path("html_hash").isMissingNode(), "html_hash must be set");
         assertFalse(md.path("staged").asBoolean(true), "staged must be false");
@@ -241,7 +241,7 @@ class StateStoreTest {
             "youtube_replaced", 2, "gists_replaced", 1, "gists_failed", 0,
             "classes_normalised", 5, "languages_detected", 3, "embeds_wrapped", 1
         ));
-        ObjectNode enriched = store.get("post").path("enriched");
+        ObjectNode enriched = (ObjectNode) store.get("post").path("enriched");
         assertEquals(2, enriched.path("youtube_replaced").asInt());
         assertEquals(1, enriched.path("gists_replaced").asInt());
         assertFalse(enriched.path("generated_at").isMissingNode());
