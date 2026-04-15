@@ -138,7 +138,7 @@ public class ProjectsResource {
             java.nio.file.Path projectDir = store.getProjectDir(id);
             java.nio.file.Path configPath = projectDir.resolve("config.json");
             if (Files.exists(configPath)) {
-                activeProject.set(id, SpargeConfig.load(configPath, projectDir));
+                activeProject.set(id, SpargeConfig.load(configPath, projectDir), projectDir);
             }
         } catch (Exception ignored) {}
         return BridgeResponse.of(bridgeResult);
