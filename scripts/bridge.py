@@ -159,68 +159,7 @@ def _activate_project(project_id: str) -> bool:
     State.init_from_source()
     return True
 
-def _project_stats(project_id: str) -> dict:
-    state_path = _project_dir(project_id) / 'state.json'
-    stats = {'total': 0, 'reviewed': 0, 'staged': 0, 'md_generated': 0, 'html_issues': 0}
-    if not state_path.exists():
-        return stats
-    try:
-        state = json.loads(state_path.read_text())
-        for entry in state.values():
-            stats['total'] += 1
-            if entry.get('reviewed'):                           stats['reviewed']     += 1
-            if entry.get('md', {}).get('staged'):              stats['staged']       += 1
-            if entry.get('md', {}).get('generated_at'):        stats['md_generated'] += 1
-            if (entry.get('html', {}).get('issues') or []):    stats['html_issues']  += 1
-    except Exception:
-        pass
-    return stats
-
-
 # ── Projects API ──────────────────────────────────────────────────────────────
-def projects_list() -> str:
-    projects = _load_projects()
-    result = []
-    for p in projects:
-        stats = _project_stats(p['id'])
-        result.append({**p, 'stats': stats, 'active': p['id'] == _active_project_id})
-    return _ok(result)
-
-def projects_create(body: str) -> str:
-    try:
-        data = json.loads(body)
-    except Exception:
-        return _err(400, 'invalid JSON')
-    name = (data.get('name') or '').strip()
-    if not name:
-        return _err(400, 'name required')
-    project_id = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')[:40]
-    proj_dir   = _project_dir(project_id)
-    proj_dir.mkdir(parents=True, exist_ok=True)
-    project_cfg = {
-        'project_name': name,
-        'serve_root':   data.get('serve_root', str(Path.home())),
-        'source': {
-            'posts_dir':  data.get('posts_dir',  'legacy/posts'),
-            'assets_dir': data.get('assets_dir', 'legacy/assets'),
-        },
-        'output': {'md_dir': data.get('md_dir', 'output/md')},
-        'filter': {'author': data.get('author_filter', '')},
-        'server': {'port': cfg.get('server', {}).get('port', 9000)},
-    }
-    (proj_dir / 'config.json').write_text(json.dumps(project_cfg, indent=2))
-    projects = _load_projects()
-    if not any(p['id'] == project_id for p in projects):
-        projects.append({'id': project_id, 'name': name,
-                         'created_at': datetime.now().isoformat(timespec='seconds')})
-        _save_projects(projects)
-    return _ok({'id': project_id, 'name': name})
-
-def projects_delete(project_id: str) -> str:
-    projects = [p for p in _load_projects() if p['id'] != project_id]
-    _save_projects(projects)
-    return _ok({'deleted': project_id})
-
 def projects_activate(project_id: str) -> str:
     ok = _activate_project(project_id)
     if not ok:
