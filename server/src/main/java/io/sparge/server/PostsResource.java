@@ -52,7 +52,7 @@ public class PostsResource {
 
     @POST
     @Path("{slug}/save-html")
-    @Consumes(MediaType.TEXT_PLAIN)
+    @Consumes({MediaType.TEXT_PLAIN, MediaType.TEXT_HTML, MediaType.WILDCARD})
     public Response saveHtml(@PathParam("slug") String slug, String body) {
         return BridgeResponse.of(bridge.call("bridge.post_save_html", slug,
                                              body == null ? "" : body));
@@ -63,7 +63,9 @@ public class PostsResource {
     @POST
     @Path("{slug}/generate-md")
     public Response generateMd(@PathParam("slug") String slug,
-                                @QueryParam("dry") @DefaultValue("false") boolean dry) {
+                                @QueryParam("dry") @DefaultValue("") String dryParam) {
+        // Accept ?dry=1 (Python server convention) and ?dry=true (JAX-RS convention)
+        boolean dry = "1".equals(dryParam) || "true".equalsIgnoreCase(dryParam);
         return BridgeResponse.of(bridge.call("bridge.post_generate_md", slug, dry));
     }
 
