@@ -125,7 +125,7 @@ if _startup_projects:
 SERVE_ROOT   = cfg.get('_root', ROOT.parent)
 POSTS_DIR    = cfg.get('_posts_dir', ROOT.parent / 'legacy' / 'posts')
 MD_DIR       = cfg.get('_md_dir',    ROOT.parent / 'mark-proctor')
-ENRICHED_DIR: Path = PROJECTS_DIR / 'kie-mark-proctor' / 'enriched'
+ENRICHED_DIR: Path = PROJECTS_DIR / '_default' / 'enriched'
 
 # MD tools live in scripts/ alongside the server
 # (convert_post.py and md_validator.py are self-contained here)

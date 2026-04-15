@@ -2,6 +2,9 @@
 node_modules/
 dist/
 
+# Quarkus build output
+server/target/
+
 # Python
 __pycache__/
 *.pyc
