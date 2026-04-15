@@ -1,37 +1,78 @@
 package io.sparge.server;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+
+import java.util.List;
+import java.util.Map;
 
 @Path("/api/posts")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class PostsResource {
 
-    @Inject PythonBridge bridge;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Inject PythonBridge  bridge;
+    @Inject StateStore    stateStore;
+    @Inject ActiveProject activeProject;
 
     // ── CRUD ──────────────────────────────────────────────────────────────────
 
     @GET
     public Response list(@QueryParam("author") String author) {
-        // Empty string means no filter (matches server.py behaviour)
-        return BridgeResponse.of(bridge.call("bridge.posts_list",
-                                             author != null ? author : ""));
+        try {
+            List<ObjectNode> posts = stateStore.getAll();
+            String effectiveAuthor = (author != null) ? author : "";
+            if (!effectiveAuthor.isEmpty()) {
+                posts = posts.stream()
+                        .filter(p -> effectiveAuthor.equals(p.path("author").asText("")))
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            posts.sort(java.util.Comparator
+                    .comparing((ObjectNode p) -> p.path("date").asText(""))
+                    .thenComparing(p -> p.path("slug").asText("")));
+            ArrayNode result = MAPPER.createArrayNode();
+            posts.forEach(result::add);
+            return ok(result.toString());
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @GET
     @Path("{slug}")
     public Response get(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_get", slug));
+        ObjectNode post = stateStore.get(slug);
+        if (post == null) return Response.status(404)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Access-Control-Allow-Origin", "*")
+                .entity("{\"error\":\"unknown slug: " + slug + "\"}").build();
+        return ok(post.toString());
     }
 
     @PATCH
     @Path("{slug}")
     public Response patch(@PathParam("slug") String slug, String body) {
-        return BridgeResponse.of(bridge.call("bridge.post_patch", slug,
-                                             body == null ? "{}" : body));
+        try {
+            ObjectNode patch = (body != null && !body.isBlank())
+                    ? (ObjectNode) MAPPER.readTree(body)
+                    : MAPPER.createObjectNode();
+            Map<String, Object> safe = new java.util.LinkedHashMap<>();
+            if (patch.has("flagged"))   safe.put("flagged",   patch.get("flagged").asBoolean());
+            if (patch.has("reviewed"))  safe.put("reviewed",  patch.get("reviewed").asBoolean());
+            if (patch.has("user_note")) safe.put("user_note", patch.get("user_note").asText());
+            stateStore.update(slug, safe);
+            ObjectNode updated = stateStore.get(slug);
+            return ok(updated != null ? updated.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     // ── HTML ──────────────────────────────────────────────────────────────────
@@ -96,8 +137,18 @@ public class PostsResource {
     @Path("{slug}/stage")
     @Consumes(MediaType.TEXT_PLAIN)
     public Response stage(@PathParam("slug") String slug, String body) {
-        return BridgeResponse.of(bridge.call("bridge.post_stage", slug,
-                                             body == null ? "" : body));
+        try {
+            SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+            if (cfg == null) return BridgeResponse.of(bridge.call("bridge.post_stage", slug,
+                    body == null ? "" : body));
+            java.nio.file.Files.writeString(cfg.mdDir().resolve(slug + ".md.staged"),
+                    body == null ? "" : body);
+            stateStore.stage(slug);
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @POST
@@ -109,7 +160,15 @@ public class PostsResource {
     @POST
     @Path("{slug}/reject-staged")
     public Response rejectStaged(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_reject_staged", slug));
+        try {
+            SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+            if (cfg == null) return BridgeResponse.of(bridge.call("bridge.post_reject_staged", slug));
+            stateStore.rejectStaged(slug, cfg.mdDir());
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     // ── Scan ─────────────────────────────────────────────────────────────────
@@ -134,5 +193,23 @@ public class PostsResource {
     public Response undismiss(@PathParam("slug") String slug,
                                @PathParam("type") String type) {
         return BridgeResponse.of(bridge.call("bridge.post_undismiss_html_check", slug, type));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private Response ok(String json) {
+        return Response.ok(json)
+                .header("Content-Type",                "application/json; charset=utf-8")
+                .header("Access-Control-Allow-Origin", "*")
+                .build();
+    }
+
+    private Response err(String msg) {
+        String escaped = msg == null ? "error" : msg.replace("\"", "\\\"");
+        return Response.serverError()
+                .header("Content-Type",                "application/json; charset=utf-8")
+                .header("Access-Control-Allow-Origin", "*")
+                .entity("{\"error\":\"" + escaped + "\"}")
+                .build();
     }
 }
