@@ -92,6 +92,57 @@ public class Enricher {
         return count;
     }
 
+    // ── detectCodeLanguages ───────────────────────────────────────────────────
+
+    private static final List<Map.Entry<String, List<String>>> LANG_PATTERNS = List.of(
+        Map.entry("java",       List.of("\\bpublic\\s+class\\b",
+                                        "\\bpublic\\s+static\\s+void\\s+main\\b",
+                                        "\\bimport\\s+java\\.")),
+        Map.entry("xml",        List.of("<\\?xml\\s", "xmlns=")),
+        Map.entry("html",       List.of("<!DOCTYPE\\s+html", "<html[\\s>]")),
+        Map.entry("sql",        List.of("\\bSELECT\\b.+\\bFROM\\b",
+                                        "\\bCREATE\\s+TABLE\\b",
+                                        "\\bINSERT\\s+INTO\\b")),
+        Map.entry("python",     List.of("\\bdef\\s+\\w+\\s*\\(",
+                                        "\\bimport\\s+\\w+",
+                                        "\\bprint\\s*\\(")),
+        Map.entry("javascript", List.of("\\bfunction\\s+\\w+\\s*\\(",
+                                        "\\bconst\\s+\\w+\\s*=",
+                                        "=>")),
+        Map.entry("bash",       List.of("^#!.*\\bsh\\b", "\\$\\{?\\w+\\}?")),
+        Map.entry("drl",        List.of("\\brule\\s+\"", "\\bwhen\\b.*\\bthen\\b", "\\bend\\b")));
+
+    static int detectCodeLanguages(Element article) {
+        int count = 0;
+        for (Element pre : article.select("pre")) {
+            Element code = pre.selectFirst("code");
+            if (code == null) continue;
+            boolean hasLang = code.classNames().stream().anyMatch(c -> c.startsWith("language-"))
+                           || pre.classNames().stream().anyMatch(c -> c.startsWith("language-"));
+            if (hasLang) continue;
+
+            String text = code.wholeText();
+            String detected = null;
+            outer:
+            for (Map.Entry<String, List<String>> entry : LANG_PATTERNS) {
+                for (String pattern : entry.getValue()) {
+                    if (Pattern.compile(pattern, Pattern.MULTILINE | Pattern.CASE_INSENSITIVE)
+                               .matcher(text).find()) {
+                        detected = entry.getKey();
+                        break outer;
+                    }
+                }
+            }
+            if (detected != null) {
+                Set<String> classes = new LinkedHashSet<>(code.classNames());
+                classes.add("language-" + detected);
+                code.classNames(classes);
+                count++;
+            }
+        }
+        return count;
+    }
+
     // ── HTTP helpers (package-private — overridden in MockEnricher) ───────────
 
     byte[] fetchUrl(String url) {

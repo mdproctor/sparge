@@ -101,4 +101,46 @@ class EnricherTest {
         assertEquals(0, Enricher.normaliseCodeClasses(a));
         assertTrue(a.selectFirst("pre").hasClass("someclass"));
     }
+
+    // ── detectCodeLanguages ───────────────────────────────────────────────────
+
+    @Test
+    void javaPublicClassDetected() {
+        Element a = article("<pre><code>public class Foo { }</code></pre>");
+        assertEquals(1, Enricher.detectCodeLanguages(a));
+        assertTrue(a.selectFirst("code").hasClass("language-java"));
+    }
+
+    @Test
+    void drlRuleDetected() {
+        Element a = article("<pre><code>rule \"test\" when Foo() then end</code></pre>");
+        assertEquals(1, Enricher.detectCodeLanguages(a));
+        assertTrue(a.selectFirst("code").hasClass("language-drl"));
+    }
+
+    @Test
+    void xmlDeclarationDetected() {
+        Element a = article("<pre><code>&lt;?xml version=\"1.0\"?&gt;</code></pre>");
+        assertEquals(1, Enricher.detectCodeLanguages(a));
+        assertTrue(a.selectFirst("code").hasClass("language-xml"));
+    }
+
+    @Test
+    void alreadyLabelledCodeNotRelabelled() {
+        Element a = article("<pre><code class=\"language-python\">public class Foo {}</code></pre>");
+        assertEquals(0, Enricher.detectCodeLanguages(a));
+        assertFalse(a.selectFirst("code").hasClass("language-java"), "python label not replaced by java");
+    }
+
+    @Test
+    void preWithoutCodeElementSkipped() {
+        assertEquals(0, Enricher.detectCodeLanguages(article("<pre>no code element</pre>")));
+    }
+
+    @Test
+    void unrecognisedCodeHasNoLangAdded() {
+        Element a = article("<pre><code>¯\\_(ツ)_/¯</code></pre>");
+        assertEquals(0, Enricher.detectCodeLanguages(a));
+        assertTrue(a.selectFirst("code").classNames().isEmpty());
+    }
 }
