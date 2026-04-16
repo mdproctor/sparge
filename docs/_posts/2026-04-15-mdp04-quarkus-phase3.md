@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [sparge]
 tags: [Quarkus, Java, Python, migration, Jsoup, BeautifulSoup, DOM]
+typora-root-url: /Users/mdproctor/claude/sparge/docs
 ---
 
 Phase 3 ports the HTML manipulation layer: a DRL code reformatter, an XML
@@ -74,7 +75,7 @@ But the logic is a straight port and the 5 test cases all pass on first run.
 
 ## The hard one: HTML prettification and the MARKER trick
 
-![The MARKER trick — preserving inline adjacency through prettification](/sparge/blog-images/marker-trick.png)
+![The MARKER trick — preserving inline adjacency through prettification](/blog-images/marker-trick.png)
 
 BeautifulSoup (and Jsoup) puts every element on its own line when prettifying.
 For inline elements like `<b>` and `<strong>`, this hides whether the closing

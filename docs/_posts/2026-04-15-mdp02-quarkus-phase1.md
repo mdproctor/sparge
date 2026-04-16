@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [sparge]
 tags: [Quarkus, Java, Python, migration, Jackson, TDD]
+typora-root-url: /Users/mdproctor/claude/sparge/docs
 ---
 
 Sparge is a blog migration tool — it ingests HTML posts from live blog URLs,
@@ -34,7 +35,7 @@ is ported, the JEP bridge calls that delegated to it are removed. I'm tracking
 JEP call count as the public metric — it starts at 35 and drops to zero when
 the migration is complete.
 
-![Migration phases and architecture — JEP call count dropping phase by phase](/sparge/blog-images/migration-architecture.png)
+![Migration phases and architecture — JEP call count dropping phase by phase](/blog-images/migration-architecture.png)
 
 The diagram shows the full picture: four phases complete, two more to go, then
 Quarkus Native. The test strategy pairs with this — JUnit tests are written
@@ -75,7 +76,7 @@ thought to port to Java.
 
 ## The mutable dict problem
 
-![Python cfg dict vs Java ResolvedConfig record — side-by-side comparison](/sparge/blog-images/config-comparison.png)
+![Python cfg dict vs Java ResolvedConfig record — side-by-side comparison](/blog-images/config-comparison.png)
 
 The instinct is to reach for a `HashMap<String, Object>`. It works, but you
 lose all type safety, you're constantly casting, and you have no idea what keys

@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [sparge]
 tags: [Quarkus, Java, Python, migration, Jackson, TDD, state-management]
+typora-root-url: /Users/mdproctor/claude/sparge/docs
 ---
 
 `state.py` is where Sparge tracks everything that happens to a post: when the
@@ -65,7 +66,7 @@ type system. Not a hardship, but worth naming as a genuine difference.
 
 ## Stale detection and why TDD mattered
 
-![Stale detection decision tree — 4 edge cases TDD surfaced](/sparge/blog-images/stale-detection.png)
+![Stale detection decision tree — 4 edge cases TDD surfaced](/blog-images/stale-detection.png)
 
 MD is stale when the HTML hash changed since generation. Four conditions must
 all be true. The Python version:
