@@ -1,49 +1,46 @@
-# Handover — 2026-04-15
+# Handover — 2026-04-16
 
-**Head commit:** `a359e00` — docs: session wrap — gitignore, CLAUDE.md, blog entry for Phase 0
-**Branch:** `epic-quarkus-migration` (not yet merged to main)
-**GitHub:** mdproctor/sparge, issue #51 open (epic: Quarkus migration)
+**Head commit:** `075c7cc` — docs: add Phase 4 blog entry and three diagrams
+**Branch:** `main` (clean, pushed)
+**Open issues:** none
 
 ## What changed this session
 
-**Phase 0 of the Quarkus migration is complete.** Full JEP bridge from Quarkus to Python:
+Phases 1–4 of the Quarkus migration fully completed and documented.
 
-- `scripts/bridge.py` — 35 bridge functions, all Python handler logic as JSON-returning functions
-- `server/` — Quarkus 3.34.3 Maven project, all 35 JAX-RS endpoints delegating via JEP
-- `java-server.js` — Electron JVM process manager (mirrors python-server.js state machine)
-- `main.js` — `SPARGE_SERVER=java` toggle selects Java server in Electron
-- `PythonBridge` — dedicated daemon thread owning the SharedInterpreter (critical: synchronized is wrong)
+**JEP count:** 35 (Phase 0) → 23 (Phase 4 end)
 
-**Key runtime requirements** (not obvious from code):
-- `PYTHONHOME=$HOME/claude/sparge/resources/python/mac-arm64` — required for CPython stdlib
-- `DYLD_LIBRARY_PATH` — for libpython3.12.dylib
-- `java.library.path` — for libjep.jnilib
-- `lxml` installed in bundled Python: `resources/python/mac-arm64/bin/pip install lxml`
+| Phase | Modules ported | JEP removed |
+|---|---|---|
+| 1 | sparge_home.py, config.py | 35→32 |
+| 2 | state.py | 32→27 |
+| 3 | html_utils.py, fix_code_blocks.py | 27→26 |
+| 4 | scan_html.py, scan_assets.py, constants.py | 26→23 |
 
-**Test state:** 473 passing, 0 failing (baseline preserved). All API tests pass against Quarkus.
-Playwright UI tests (hardcoded port 9000) reveal pre-existing JS bugs — not Quarkus regressions.
+**Blog series:** 5 entries written (Phase 0–4), diagrams in `docs/blog-images/`
 
-**Garden:** 7 JEP entries submitted — Hortora/garden#56 (new `jep/` domain).
+**Garden:** 8 JEP entries (Hortora/garden#56) + 1 Quarkus @QuarkusTest entry (Hortora/garden#66)
 
 ## State right now
 
-- Branch `epic-quarkus-migration` — all Phase 0 work committed, needs merge to main
-- Issue #51: open (epic covers all phases — merge branch now; close #51 when all phases done, or retitle to Phase 1+)
-- Tests: 473 passing, 0 failing
-- Quarkus jar: gitignored — rebuild with `cd server && mvn package -DskipTests`
-- Blog: `docs/_posts/2026-04-15-mdp01-quarkus-phase0.md` written and committed
+- Tests: 290 pytest passing, 156 JUnit passing, 0 failing
+- Bridge: 30 functions remain (23 public JEP calls + private helpers)
+- `tests/python-legacy/`: test_sparge_home, test_config, test_path_resolution, test_html_prettify, test_code_block_autofixes, test_scan_html all retired (never run in CI)
+- All phases pushed, issues #52–55 closed
 
-## Immediate next steps
+## Next: Phase 5 — enrich.py
 
-1. **Merge the epic branch** — `git checkout main && git merge epic-quarkus-migration`
-2. **Phase 1 plan** — port `sparge_home.py` + `config.py` to Java (Quarkus Config + Jackson). Use `superpowers:writing-plans` before any code. Pattern: write JUnit test via JEP first, swap to Java, retire pytest to `tests/python-legacy/`.
-3. **Pre-existing Playwright JS bugs** — save button stays disabled after first save; dirty-detection edge case. Fix before Phase 1 if touching the UI anyway.
+Port `scripts/enrich.py` (YouTube oEmbed thumbnails, Gist API inlining, HTML class normalisation). Removes `bridge.post_enrich_only` plus several related calls.
+
+**Expected JEP drop:** 23 → ~18
+
+**To start:** create issue, write plan with `superpowers:writing-plans`, execute with subagent-driven dev. Same TDD pattern: unit + integration + E2E.
 
 ## References
 
 | Context | Where |
 |---|---|
-| Quarkus migration design spec | `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md` |
-| Phase 0 implementation plan | `docs/superpowers/plans/2026-04-14-quarkus-phase0.md` |
+| Migration design spec | `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md` |
+| Phase 4 plan (for pattern reference) | `docs/superpowers/plans/2026-04-15-quarkus-phase4.md` |
 | Living design doc | `DESIGN.md` |
-| Blog entry (Phase 0) | `docs/_posts/2026-04-15-mdp01-quarkus-phase0.md` |
+| Blog series | `docs/_posts/2026-04-15-mdp0*-quarkus-phase*.md` |
