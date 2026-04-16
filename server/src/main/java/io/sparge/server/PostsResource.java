@@ -81,7 +81,34 @@ public class PostsResource {
     @Path("{slug}/html")
     @Produces(MediaType.TEXT_PLAIN)
     public Response html(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_html", slug));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) {
+            // No active project — fall back to bridge
+            return BridgeResponse.of(bridge.call("bridge.post_html", slug));
+        }
+        try {
+            java.nio.file.Path enriched = cfg.enrichedDir().resolve(slug + ".html");
+            java.nio.file.Path original  = cfg.postsDir().resolve(slug + ".html");
+            java.nio.file.Path htmlPath  = java.nio.file.Files.exists(enriched) ? enriched : original;
+
+            if (!java.nio.file.Files.exists(htmlPath)) {
+                return Response.status(404)
+                        .header("Content-Type",                "application/json; charset=utf-8")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .entity("{\"error\":\"HTML not found: " + slug + "\"}")
+                        .build();
+            }
+
+            String raw     = java.nio.file.Files.readString(htmlPath);
+            String content = HtmlUtils.prettifyHtml(raw);
+
+            return Response.ok(content)
+                    .header("Content-Type",                "text/plain; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .build();
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @GET
