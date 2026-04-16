@@ -1,6 +1,5 @@
 # Handover — 2026-04-16
 
-**Head commit:** `f55d665` — docs: session handover 2026-04-16
 **Branch:** `main` (clean, pushed)
 
 ## ⚠️ Current migration status — read this first
