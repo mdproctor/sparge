@@ -43,6 +43,55 @@ public class Enricher {
         return count;
     }
 
+    // ── normaliseCodeClasses ──────────────────────────────────────────────────
+
+    private static final Pattern BRUSH_RE =
+            Pattern.compile("\\bbrush\\s*:\\s*(\\w+)\\b", Pattern.CASE_INSENSITIVE);
+
+    private static final Map<String, String> BRUSH_MAP;
+    static {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("jscript", "javascript"); m.put("js", "javascript");
+        m.put("csharp",  "csharp");     m.put("c#", "csharp");
+        m.put("c++",     "cpp");        m.put("cplusplus", "cpp");
+        m.put("plain",   "plaintext");  m.put("text", "plaintext");
+        m.put("shell",   "bash");       m.put("sh",  "bash");
+        m.put("drl",     "drl");
+        BRUSH_MAP = Collections.unmodifiableMap(m);
+    }
+
+    static int normaliseCodeClasses(Element article) {
+        int count = 0;
+        for (Element pre : article.select("pre")) {
+            String classAttr = String.join(" ", pre.classNames());
+            Matcher m = BRUSH_RE.matcher(classAttr);
+            if (!m.find()) continue;
+
+            String langToken = m.group(1).toLowerCase();
+            String lang = BRUSH_MAP.getOrDefault(langToken, langToken);
+
+            Set<String> newClasses = pre.classNames().stream()
+                    .filter(c -> !BRUSH_RE.matcher(c).find())
+                    .filter(c -> !c.toLowerCase().startsWith("brush"))
+                    .filter(c -> !BRUSH_MAP.containsKey(c.toLowerCase()))
+                    .filter(c -> !c.toLowerCase().equals(langToken))
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            newClasses.add("language-" + lang);
+            pre.classNames(newClasses);
+
+            Element code = pre.selectFirst("code");
+            if (code != null) {
+                Set<String> codeClasses = code.classNames().stream()
+                        .filter(c -> !c.startsWith("language-"))
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+                codeClasses.add("language-" + lang);
+                code.classNames(codeClasses);
+            }
+            count++;
+        }
+        return count;
+    }
+
     // ── HTTP helpers (package-private — overridden in MockEnricher) ───────────
 
     byte[] fetchUrl(String url) {

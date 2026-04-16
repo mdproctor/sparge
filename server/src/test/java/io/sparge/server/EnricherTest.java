@@ -55,4 +55,50 @@ class EnricherTest {
     void preWithoutBrNotCounted() {
         assertEquals(0, Enricher.normaliseBrToNewlines(article("<pre>no brs here</pre>")));
     }
+
+    // ── normaliseCodeClasses ──────────────────────────────────────────────────
+
+    @Test
+    void brushJavaConvertedToLanguageJava() {
+        Element a = article("<pre class=\"brush:java\"><code>public class Foo {}</code></pre>");
+        int count = Enricher.normaliseCodeClasses(a);
+        assertEquals(1, count);
+        assertTrue(a.selectFirst("pre").hasClass("language-java"));
+        assertFalse(a.selectFirst("pre").classNames().stream().anyMatch(c -> c.startsWith("brush")));
+    }
+
+    @Test
+    void brushJscriptConvertedToJavascript() {
+        Element a = article("<pre class=\"brush:jscript\"></pre>");
+        Enricher.normaliseCodeClasses(a);
+        assertTrue(a.selectFirst("pre").hasClass("language-javascript"));
+    }
+
+    @Test
+    void brushShConvertedToBash() {
+        Element a = article("<pre class=\"brush:sh\"></pre>");
+        Enricher.normaliseCodeClasses(a);
+        assertTrue(a.selectFirst("pre").hasClass("language-bash"));
+    }
+
+    @Test
+    void brushCppConvertedToCpp() {
+        Element a = article("<pre class=\"brush:cplusplus\"></pre>");
+        Enricher.normaliseCodeClasses(a);
+        assertTrue(a.selectFirst("pre").hasClass("language-cpp"));
+    }
+
+    @Test
+    void brushClassPropagatedToChildCode() {
+        Element a = article("<pre class=\"brush:java\"><code>foo</code></pre>");
+        Enricher.normaliseCodeClasses(a);
+        assertTrue(a.selectFirst("code").hasClass("language-java"));
+    }
+
+    @Test
+    void preWithoutBrushClassNotTouched() {
+        Element a = article("<pre class=\"someclass\"><code>text</code></pre>");
+        assertEquals(0, Enricher.normaliseCodeClasses(a));
+        assertTrue(a.selectFirst("pre").hasClass("someclass"));
+    }
 }
