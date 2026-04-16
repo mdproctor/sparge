@@ -1,6 +1,7 @@
 package io.sparge.server;
 
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 
@@ -23,6 +24,28 @@ class ScanEndpointTest {
                 "mdproctor.github.io/legacy/posts/mark-proctor"));
     }
 
+    @BeforeEach
+    void activateProject() {
+        if (!kieArchivePresent()) return;
+        // Activate the first project so activeProject.getConfig() is populated in Java
+        try {
+            String id = given()
+                    .when().get("/api/projects")
+                    .then().statusCode(200)
+                    .extract().jsonPath().getString("[0].id");
+
+            if (id != null && !id.isEmpty()) {
+                given()
+                        .contentType("application/json")
+                        .when().post("/api/projects/{id}/activate", id)
+                        .then().statusCode(200);
+                System.out.println("Successfully activated project: " + id);
+            }
+        } catch (Exception e) {
+            System.err.println("Warning: Could not activate project during test setup: " + e.getMessage());
+        }
+    }
+
     @Test
     @EnabledIf("kieArchivePresent")
     void scanEndpointReturns200WithPostState() {
@@ -32,6 +55,7 @@ class ScanEndpointTest {
                 .extract().jsonPath().getString("[0].slug");
 
         given()
+                .contentType("application/json")
                 .when().post("/api/posts/" + slug + "/scan")
                 .then()
                 .statusCode(200)
@@ -48,6 +72,7 @@ class ScanEndpointTest {
                 .extract().jsonPath().getString("[0].slug");
 
         given()
+                .contentType("application/json")
                 .when().post("/api/posts/" + slug + "/scan")
                 .then()
                 .statusCode(200)
@@ -60,6 +85,7 @@ class ScanEndpointTest {
     @EnabledIf("kieArchivePresent")
     void scanUnknownSlugReturns404() {
         given()
+                .contentType("application/json")
                 .when().post("/api/posts/this-slug-does-not-exist-xyz/scan")
                 .then()
                 .statusCode(404);
