@@ -217,23 +217,6 @@ def search(q: str, scope: str) -> str:
 
 
 # ── Posts HTML ────────────────────────────────────────────────────────────────
-def post_html(slug: str) -> str:
-    """Return prettified HTML for editor (text/plain)."""
-    enriched = ENRICHED_DIR / (slug + '.html')
-    original = POSTS_DIR   / (slug + '.html')
-    html_path = enriched if enriched.exists() else original
-    if not html_path.exists():
-        return _err(404, f'HTML not found: {slug}')
-    try:
-        raw = html_path.read_text(encoding='utf-8', errors='replace')
-        from scripts.html_utils import prettify_html as _prettify_html
-        content = _prettify_html(raw)
-        if 'ÃÂÃÂ' in content or ('\xc3\x82' in content):
-            content = raw
-        return _text(content)
-    except Exception as e:
-        return _err(500, str(e))
-
 def post_view(slug: str) -> str:
     """Return raw HTML for iframe rendering (text/html)."""
     enriched = ENRICHED_DIR / (slug + '.html')
