@@ -244,6 +244,26 @@ def post_save_html(slug: str, content: str) -> str:
         return _err(500, str(e))
 
 
+# ── Enrich-only (called by Java PostsResource.scan when enriched copy absent) ──
+def post_enrich_only(slug: str) -> str:
+    """Enrich a post — called by Java PostsResource.scan() when enriched copy absent."""
+    if not _can_enrich:
+        return _ok({'enriched': False, 'reason': 'enrich not available'})
+    html_path = POSTS_DIR / (slug + '.html')
+    if not html_path.exists():
+        return _err(404, f'HTML not found: {slug}')
+    enriched_path = ENRICHED_DIR / (slug + '.html')
+    if enriched_path.exists():
+        return _ok({'enriched': False, 'reason': 'already enriched'})
+    try:
+        github_token = cfg.get('github_token', '')
+        enrich_stats = _enrich_post(html_path, enriched_path, cfg['_assets_dir'], github_token)
+        State.mark_enriched(slug, enrich_stats)
+        return _ok({'enriched': True, **enrich_stats})
+    except Exception as e:
+        return _err(500, str(e))
+
+
 # ── Posts MD ──────────────────────────────────────────────────────────────────
 def post_generate_md(slug: str, dry: bool = False) -> str:
     if not _can_generate:
@@ -349,76 +369,6 @@ def post_accept_staged(slug: str) -> str:
     except Exception as e:
         return _err(500, str(e))
 
-
-# ── HTML issue dismiss ────────────────────────────────────────────────────────
-def post_dismiss_html_check(slug: str, body: str) -> str:
-    try:
-        data = json.loads(body)
-        issue_type = data.get('type', '')
-        if not issue_type:
-            return _err(400, 'type required')
-        State.dismiss_html_check(slug, issue_type)
-        return _ok(State.get(slug))
-    except Exception as e:
-        return _err(400, str(e))
-
-def post_undismiss_html_check(slug: str, issue_type: str) -> str:
-    State.undismiss_html_check(slug, issue_type)
-    return post_scan_html(slug)  # rescan immediately, returns full state
-
-
-# ── Scan HTML + assets ────────────────────────────────────────────────────────
-def post_scan_html(slug: str) -> str:
-    html_path = POSTS_DIR / (slug + '.html')
-    if not html_path.exists():
-        return _err(404, f'HTML not found: {slug}')
-    if not _can_scan:
-        return _err(503, 'scan_html not available')
-    try:
-        enriched_path = ENRICHED_DIR / (slug + '.html')
-
-        if _can_enrich and not enriched_path.exists():
-            github_token = cfg.get('github_token', '')
-            enrich_stats = _enrich_post(
-                html_path, enriched_path, cfg['_assets_dir'], github_token)
-            State.mark_enriched(slug, enrich_stats)
-
-        if enriched_path.exists() and _can_generate:
-            try:
-                from bs4 import BeautifulSoup as _BS
-                from scripts.fix_code_blocks import apply_code_block_fixes as _fix_blocks
-                _soup = _BS(enriched_path.read_text(encoding='utf-8', errors='replace'),
-                            'html.parser')
-                _article = _soup.find('article') or _soup.find('body') or _soup
-                for _pre in _article.find_all('pre'):
-                    for _br in _pre.find_all('br'):
-                        _br.replace_with('\n')
-                if _fix_blocks(_soup):
-                    enriched_path.write_text(str(_soup), encoding='utf-8')
-            except Exception:
-                pass
-
-        scan_path = enriched_path if enriched_path.exists() else html_path
-        raw_issues = _scan_post(scan_path, posts_dir=POSTS_DIR)
-        issues = [
-            {'type': i['type'], 'level': i['level'], 'check': i['type'],
-             'detail': i['detail'], 'selector': i.get('selector')}
-            for i in raw_issues
-        ]
-        State.set_html_issues(slug, issues)
-
-        if _can_scan_assets:
-            asset_result = _scan_assets(scan_path, original_path=html_path)
-            State.update(slug, {'assets': {
-                'total':      asset_result['total'],
-                'localised':  asset_result['localised'],
-                'broken':     asset_result['broken'],
-                'checked_at': datetime.now(timezone.utc).isoformat(),
-            }})
-
-        return _ok(State.get(slug))
-    except Exception as e:
-        return _err(500, str(e))
 
 
 # ── Ingest ────────────────────────────────────────────────────────────────────

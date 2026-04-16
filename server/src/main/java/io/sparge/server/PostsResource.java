@@ -203,7 +203,69 @@ public class PostsResource {
     @POST
     @Path("{slug}/scan")
     public Response scan(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_scan_html", slug));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) {
+            return BridgeResponse.of(bridge.call("bridge.post_scan_html", slug));
+        }
+        try {
+            java.nio.file.Path postsDir    = cfg.postsDir();
+            java.nio.file.Path enrichedDir = cfg.enrichedDir();
+            java.nio.file.Path htmlPath    = postsDir.resolve(slug + ".html");
+
+            if (!java.nio.file.Files.exists(htmlPath)) {
+                return Response.status(404)
+                        .header("Content-Type",                "application/json; charset=utf-8")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .entity("{\"error\":\"HTML not found: " + slug + "\"}").build();
+            }
+
+            java.nio.file.Path enrichedPath = enrichedDir.resolve(slug + ".html");
+
+            // Enrich if not yet enriched — still Python (enrich.py ported in Phase 5)
+            if (!java.nio.file.Files.exists(enrichedPath)) {
+                bridge.call("bridge.post_enrich_only", slug);
+            }
+
+            // Apply code block fixes to enriched copy (Java)
+            java.nio.file.Path scanPath = java.nio.file.Files.exists(enrichedPath) ? enrichedPath : htmlPath;
+            if (java.nio.file.Files.exists(enrichedPath)) {
+                try {
+                    org.jsoup.nodes.Document soup = org.jsoup.Jsoup.parse(
+                            java.nio.file.Files.readString(enrichedPath));
+                    if (CodeBlockFixer.apply(soup)) {
+                        java.nio.file.Files.writeString(enrichedPath, soup.outerHtml());
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // Scan HTML issues (Java)
+            java.util.List<ScanHtml.Issue> rawIssues = ScanHtml.scanPost(scanPath, postsDir);
+            java.util.List<java.util.Map<String, Object>> issues = rawIssues.stream().map(i ->
+                    java.util.Map.<String, Object>of(
+                            "type",     i.type(),
+                            "level",    i.level(),
+                            "check",    i.type(),
+                            "detail",   i.detail(),
+                            "selector", i.selector() != null ? i.selector() : ""
+                    )).collect(java.util.stream.Collectors.toList());
+            stateStore.setHtmlIssues(slug, issues, null, null);
+
+            // Scan assets (Java)
+            try {
+                ScanAssets.Result assets = ScanAssets.scan(scanPath, htmlPath, cfg.serveRoot());
+                stateStore.update(slug, java.util.Map.of("assets", java.util.Map.of(
+                        "total",      assets.total(),
+                        "localised",  assets.localised(),
+                        "broken",     assets.broken(),
+                        "checked_at", java.time.Instant.now().toString().substring(0, 19)
+                )));
+            } catch (Exception ignored) {}
+
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     // ── Dismiss ───────────────────────────────────────────────────────────────
@@ -211,15 +273,29 @@ public class PostsResource {
     @POST
     @Path("{slug}/dismiss-html-check")
     public Response dismiss(@PathParam("slug") String slug, String body) {
-        return BridgeResponse.of(bridge.call("bridge.post_dismiss_html_check", slug,
-                                             body == null ? "{}" : body));
+        try {
+            ObjectNode patch = (body != null && !body.isBlank())
+                    ? (ObjectNode) MAPPER.readTree(body)
+                    : MAPPER.createObjectNode();
+            String issueType = patch.path("type").asText("");
+            if (issueType.isEmpty()) return Response.status(400)
+                    .header("Content-Type",                "application/json; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .entity("{\"error\":\"type required\"}").build();
+            stateStore.dismissHtmlCheck(slug, issueType);
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @DELETE
     @Path("{slug}/dismiss-html-check/{type}")
     public Response undismiss(@PathParam("slug") String slug,
                                @PathParam("type") String type) {
-        return BridgeResponse.of(bridge.call("bridge.post_undismiss_html_check", slug, type));
+        stateStore.undismissHtmlCheck(slug, type);
+        return scan(slug);  // re-scan immediately so the issue reappears
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
