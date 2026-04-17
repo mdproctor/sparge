@@ -360,6 +360,23 @@ public class Enricher {
 
     public Map<String, Integer> enrich(Path htmlPath, Path enrichedPath,
                                        Path assetsDir, String githubToken) throws Exception {
-        throw new UnsupportedOperationException("implemented in Task 7");
+        org.jsoup.nodes.Document soup = Jsoup.parse(htmlPath.toFile(), "UTF-8");
+        Element article = soup.selectFirst("article");
+        if (article == null) article = soup.body();
+        if (article == null) article = soup.root();
+
+        Map<String, Integer> stats = new LinkedHashMap<>();
+        stats.put("youtube_replaced", replaceYoutubeEmbeds(article, assetsDir));
+        int[] gistStats = replaceGistEmbeds(article, githubToken);
+        stats.put("gists_replaced",    gistStats[0]);
+        stats.put("gists_failed",      gistStats[1]);
+        stats.put("pre_br_normalised", normaliseBrToNewlines(article));
+        stats.put("classes_normalised",normaliseCodeClasses(article));
+        stats.put("languages_detected",detectCodeLanguages(article));
+        stats.put("embeds_wrapped",    replaceEmbedFallbacks(article));
+
+        Files.createDirectories(enrichedPath.getParent());
+        Files.writeString(enrichedPath, soup.outerHtml());
+        return stats;
     }
 }
