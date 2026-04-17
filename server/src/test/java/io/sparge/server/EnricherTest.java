@@ -175,4 +175,71 @@ class EnricherTest {
     void noEmbedsReturnsZero() {
         assertEquals(0, Enricher.replaceEmbedFallbacks(article("<p>Clean content</p>")));
     }
+
+    // ── replaceYoutubeEmbeds ──────────────────────────────────────────────────
+
+    @Test
+    void youtubeEmbedIframeReplacedWithFigure(@TempDir Path tempDir) throws Exception {
+        MockEnricher e = new MockEnricher();
+        e.mockBytes("https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+                    new byte[]{1, 2, 3});
+        Path assets = Files.createDirectories(tempDir.resolve("assets"));
+
+        Element a = article("<iframe src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\"></iframe>");
+        int count = e.replaceYoutubeEmbeds(a, assets);
+
+        assertEquals(1, count);
+        assertNull(a.selectFirst("iframe"), "iframe replaced");
+        Element fig = a.selectFirst("figure.video-embed");
+        assertNotNull(fig);
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                     fig.selectFirst("a").attr("href"));
+        assertEquals("yt_dQw4w9WgXcQ.jpg", fig.selectFirst("img").attr("src"));
+        assertTrue(Files.exists(assets.resolve("yt_dQw4w9WgXcQ.jpg")), "thumbnail file saved");
+    }
+
+    @Test
+    void youtubeDownloadFailureResultsInEmptySrc(@TempDir Path tempDir) throws Exception {
+        MockEnricher e = new MockEnricher(); // fetchUrl returns null
+        Path assets = Files.createDirectories(tempDir.resolve("assets"));
+
+        Element a = article("<iframe src=\"https://www.youtube.com/embed/abc123\"></iframe>");
+        e.replaceYoutubeEmbeds(a, assets);
+
+        Element img = a.selectFirst("img");
+        assertNotNull(img);
+        assertEquals("", img.attr("src"), "empty src when thumbnail download fails");
+    }
+
+    @Test
+    void existingThumbnailNotReDownloaded(@TempDir Path tempDir) throws Exception {
+        MockEnricher e = new MockEnricher();
+        Path assets = Files.createDirectories(tempDir.resolve("assets"));
+        Files.write(assets.resolve("yt_existing.jpg"), new byte[]{9, 8, 7});
+
+        Element a = article("<iframe src=\"https://www.youtube.com/embed/existing\"></iframe>");
+        int count = e.replaceYoutubeEmbeds(a, assets);
+
+        assertEquals(1, count);
+        assertEquals(0, e.fetchCallCount, "should not re-download existing thumbnail");
+        assertEquals("yt_existing.jpg", a.selectFirst("img").attr("src"));
+    }
+
+    @Test
+    void nonYoutubeIframeNotReplaced(@TempDir Path tempDir) throws Exception {
+        MockEnricher e = new MockEnricher();
+        Element a = article("<iframe src=\"https://example.com/embed\"></iframe>");
+        assertEquals(0, e.replaceYoutubeEmbeds(a, tempDir));
+        assertNotNull(a.selectFirst("iframe"), "non-youtube iframe untouched");
+    }
+
+    @Test
+    void youtuBeShortLinkParsed(@TempDir Path tempDir) throws Exception {
+        MockEnricher e = new MockEnricher();
+        e.mockBytes("https://img.youtube.com/vi/abc/maxresdefault.jpg", new byte[]{1});
+        Path assets = Files.createDirectories(tempDir.resolve("assets"));
+        Element a = article("<iframe src=\"https://youtu.be/abc\"></iframe>");
+        assertEquals(1, e.replaceYoutubeEmbeds(a, assets));
+        assertEquals("https://www.youtube.com/watch?v=abc", a.selectFirst("a").attr("href"));
+    }
 }

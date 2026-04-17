@@ -168,6 +168,83 @@ public class Enricher {
         return count;
     }
 
+    // ── replaceYoutubeEmbeds ──────────────────────────────────────────────────
+
+    private static String youtubeVideoId(String url) {
+        if (url == null || url.isEmpty()) return null;
+        try {
+            URI uri = URI.create(url);
+            String host = uri.getHost() != null
+                    ? uri.getHost().toLowerCase().replace("www.", "") : "";
+            String path = uri.getPath() != null ? uri.getPath() : "";
+            if ("youtu.be".equals(host)) {
+                String id = path.replaceFirst("^/+", "").split("/")[0];
+                return id.isEmpty() ? null : id;
+            }
+            if ("youtube.com".equals(host) || "youtube-nocookie.com".equals(host)) {
+                if (path.contains("/embed/")) {
+                    String[] parts = path.split("/embed/");
+                    if (parts.length > 1) {
+                        String id = parts[1].split("/")[0].split("\\?")[0];
+                        return id.isEmpty() ? null : id;
+                    }
+                }
+                String query = uri.getRawQuery();
+                if (query != null) {
+                    for (String param : query.split("&")) {
+                        if (param.startsWith("v=")) {
+                            String id = param.substring(2);
+                            return id.isEmpty() ? null : id;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    int replaceYoutubeEmbeds(Element article, Path assetsDir) throws Exception {
+        int replaced = 0;
+        for (Element iframe : article.select("iframe")) {
+            String src = iframe.attr("src");
+            String videoId = youtubeVideoId(src);
+            if (videoId == null) continue;
+
+            String thumbName = downloadThumbnail(videoId, assetsDir);
+            String watchUrl  = "https://www.youtube.com/watch?v=" + videoId;
+
+            Element fig = new Element("figure").addClass("video-embed");
+            Element a   = new Element("a")
+                    .attr("href", watchUrl).attr("target", "_blank").attr("rel", "noopener");
+            a.appendChild(new Element("img")
+                    .attr("src", thumbName != null ? thumbName : "")
+                    .attr("alt", "YouTube video")
+                    .attr("style", "max-width:100%"));
+            a.appendChild(new Element("figcaption").text("\u25B6 Watch on YouTube"));
+            fig.appendChild(a);
+            iframe.replaceWith(fig);
+            replaced++;
+        }
+        return replaced;
+    }
+
+    private String downloadThumbnail(String videoId, Path assetsDir) {
+        Path dest = assetsDir.resolve("yt_" + videoId + ".jpg");
+        if (Files.exists(dest)) return dest.getFileName().toString();
+        for (String quality : new String[]{"maxresdefault", "hqdefault"}) {
+            String url = "https://img.youtube.com/vi/" + videoId + "/" + quality + ".jpg";
+            byte[] body = fetchUrl(url);
+            if (body != null && body.length > 0) {
+                try {
+                    Files.createDirectories(assetsDir);
+                    Files.write(dest, body);
+                    return dest.getFileName().toString();
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
     // ── HTTP helpers (package-private — overridden in MockEnricher) ───────────
 
     byte[] fetchUrl(String url) {
