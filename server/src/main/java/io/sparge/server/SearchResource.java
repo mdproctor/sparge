@@ -5,18 +5,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-@Path("/api/search")
+@jakarta.ws.rs.Path("/api/search")
 @Produces(MediaType.APPLICATION_JSON)
 public class SearchResource {
 
@@ -25,18 +25,20 @@ public class SearchResource {
     @Inject StateStore stateStore;
     @Inject ActiveProject activeProject;
 
-    public SearchResource() {}
-
     @GET
     public Response search(@QueryParam("q")     @DefaultValue("") String q,
                            @QueryParam("scope") @DefaultValue("both") String scope) {
         String query = q.strip().toLowerCase();
-        java.nio.file.Path mdDir = activeProject.isActive() ? activeProject.getConfig().mdDir() : null;
+        Path mdDir = activeProject.isActive() ? activeProject.getConfig().mdDir() : null;
         List<String> slugs = filterSlugs(stateStore.getAll(), query, scope, mdDir);
         try {
             return ok(MAPPER.writeValueAsString(Map.of("slugs", slugs)));
         } catch (Exception e) {
-            return Response.serverError().build();
+            return Response.status(500)
+                    .header("Content-Type",                "application/json; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .entity("{\"error\":\"internal error\"}")
+                    .build();
         }
     }
 
@@ -45,7 +47,7 @@ public class SearchResource {
      * Empty query returns all slugs. Non-empty filters by title and/or MD body content.
      * Mirrors bridge.py search() logic exactly.
      */
-    List<String> filterSlugs(List<ObjectNode> posts, String query, String scope, java.nio.file.Path mdDir) {
+    List<String> filterSlugs(List<ObjectNode> posts, String query, String scope, Path mdDir) {
         List<String> results = new ArrayList<>();
         for (ObjectNode p : posts) {
             String slug = p.path("slug").asText("");
@@ -56,7 +58,7 @@ public class SearchResource {
             boolean inBody  = false;
 
             if (!inTitle && mdDir != null && (scope.equals("body") || scope.equals("both"))) {
-                java.nio.file.Path mdPath = mdDir.resolve(slug + ".md");
+                Path mdPath = mdDir.resolve(slug + ".md");
                 if (Files.exists(mdPath)) {
                     try {
                         inBody = Files.readString(mdPath).toLowerCase().contains(query);
