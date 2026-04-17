@@ -1,6 +1,7 @@
 package io.sparge.server;
 
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -18,6 +19,27 @@ class ConfigResourceTest {
         return Files.isDirectory(Paths.get(
                 System.getProperty("user.home"),
                 "mdproctor.github.io/legacy/posts/mark-proctor"));
+    }
+
+    @AfterEach
+    void cleanupTestKey() {
+        if (!kieArchivePresent()) return;
+        // Remove the synthetic test key if it was written
+        try {
+            String current = given()
+                    .when().get("/api/config")
+                    .then().statusCode(200)
+                    .extract().response().asString();
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode node =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(current);
+            node.remove("_test_roundtrip");
+            given()
+                    .contentType("application/json")
+                    .body(mapper.writeValueAsString(node))
+                    .when().post("/api/config")
+                    .then().statusCode(200);
+        } catch (Exception ignored) {}
     }
 
     @BeforeEach
