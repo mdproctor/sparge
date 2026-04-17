@@ -143,4 +143,36 @@ class EnricherTest {
         assertEquals(0, Enricher.detectCodeLanguages(a));
         assertTrue(a.selectFirst("code").classNames().isEmpty());
     }
+
+    // ── replaceEmbedFallbacks ─────────────────────────────────────────────────
+
+    @Test
+    void iframeWrappedInLiveEmbedFigure() {
+        Element a = article("<iframe src=\"https://example.com/embed\"></iframe>");
+        int count = Enricher.replaceEmbedFallbacks(a);
+        assertEquals(1, count);
+        assertNull(a.selectFirst("iframe"), "iframe replaced");
+        Element fig = a.selectFirst("figure.live-embed");
+        assertNotNull(fig, "live-embed figure present");
+        assertTrue(fig.text().contains("example.com"), "link references original source");
+    }
+
+    @Test
+    void objectTagWrapped() {
+        Element a = article("<object data=\"https://example.com/thing\"></object>");
+        assertEquals(1, Enricher.replaceEmbedFallbacks(a));
+        assertNotNull(a.selectFirst("figure.live-embed"));
+    }
+
+    @Test
+    void iframeWithNoSrcShowsUnknownSource() {
+        Element a = article("<iframe></iframe>");
+        Enricher.replaceEmbedFallbacks(a);
+        assertTrue(a.selectFirst("figure.live-embed").text().contains("unknown source"));
+    }
+
+    @Test
+    void noEmbedsReturnsZero() {
+        assertEquals(0, Enricher.replaceEmbedFallbacks(article("<p>Clean content</p>")));
+    }
 }

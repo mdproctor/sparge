@@ -143,6 +143,31 @@ public class Enricher {
         return count;
     }
 
+    // ── replaceEmbedFallbacks ─────────────────────────────────────────────────
+
+    static int replaceEmbedFallbacks(Element article) {
+        int count = 0;
+        for (Element tag : article.select("iframe, object, embed")) {
+            String src = tag.attr("src");
+            if (src.isEmpty()) src = tag.attr("data");
+
+            Element fig = new Element("figure").addClass("live-embed");
+            Element p   = new Element("p").addClass("archive-note");
+            p.appendText("This embed could not be captured in the archive. Original source: ");
+            if (!src.isEmpty()) {
+                p.appendChild(new Element("a")
+                        .attr("href", src).attr("target", "_blank").attr("rel", "noopener")
+                        .text(src));
+            } else {
+                p.appendText("unknown source");
+            }
+            fig.appendChild(p);
+            tag.replaceWith(fig);
+            count++;
+        }
+        return count;
+    }
+
     // ── HTTP helpers (package-private — overridden in MockEnricher) ───────────
 
     byte[] fetchUrl(String url) {
