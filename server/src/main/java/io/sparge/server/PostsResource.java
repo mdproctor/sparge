@@ -221,9 +221,15 @@ public class PostsResource {
 
             java.nio.file.Path enrichedPath = enrichedDir.resolve(slug + ".html");
 
-            // Enrich if not yet enriched — still Python (enrich.py ported in Phase 5)
+            // Enrich if not yet enriched (Java — Enricher.java, Phase 5)
             if (!java.nio.file.Files.exists(enrichedPath)) {
-                bridge.call("bridge.post_enrich_only", slug);
+                try {
+                    Map<String, Integer> enrichStats = new Enricher().enrich(
+                            htmlPath, enrichedPath, cfg.assetsDir(), cfg.githubToken());
+                    stateStore.markEnriched(slug, new java.util.HashMap<>(enrichStats));
+                } catch (Exception enrichEx) {
+                    System.err.println("Warning: enrichment failed for " + slug + ": " + enrichEx.getMessage());
+                }
             }
 
             // Apply code block fixes to enriched copy (Java)

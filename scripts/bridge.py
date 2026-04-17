@@ -39,7 +39,6 @@ _can_generate     = False; convert_post  = None
 _can_validate     = False; validate_md   = None; refine_md = None
 _can_scan         = False; _scan_post    = None
 _can_scan_assets  = False; _scan_assets  = None
-_can_enrich       = False; _enrich_post  = None
 _can_ingest       = False
 _can_consolidate  = False; _consolidate  = None
 
@@ -58,7 +57,6 @@ def bridge_init() -> str:
     global _can_validate, validate_md, refine_md
     global _can_scan, _scan_post
     global _can_scan_assets, _scan_assets
-    global _can_enrich, _enrich_post
     global _can_ingest
     global _can_consolidate, _consolidate
 
@@ -83,12 +81,6 @@ def bridge_init() -> str:
     try:
         from scripts.scan_assets import scan_assets as _sa
         _scan_assets = _sa; _can_scan_assets = True
-    except ImportError:
-        pass
-
-    try:
-        from scripts.enrich import enrich_post as _ep
-        _enrich_post = _ep; _can_enrich = True
     except ImportError:
         pass
 
@@ -240,26 +232,6 @@ def post_save_html(slug: str, content: str) -> str:
     try:
         html_path.write_text(content, encoding='utf-8')
         return _ok(State.get(slug))
-    except Exception as e:
-        return _err(500, str(e))
-
-
-# ── Enrich-only (called by Java PostsResource.scan when enriched copy absent) ──
-def post_enrich_only(slug: str) -> str:
-    """Enrich a post — called by Java PostsResource.scan() when enriched copy absent."""
-    if not _can_enrich:
-        return _ok({'enriched': False, 'reason': 'enrich not available'})
-    html_path = POSTS_DIR / (slug + '.html')
-    if not html_path.exists():
-        return _err(404, f'HTML not found: {slug}')
-    enriched_path = ENRICHED_DIR / (slug + '.html')
-    if enriched_path.exists():
-        return _ok({'enriched': False, 'reason': 'already enriched'})
-    try:
-        github_token = cfg.get('github_token', '')
-        enrich_stats = _enrich_post(html_path, enriched_path, cfg['_assets_dir'], github_token)
-        State.mark_enriched(slug, enrich_stats)
-        return _ok({'enriched': True, **enrich_stats})
     except Exception as e:
         return _err(500, str(e))
 
