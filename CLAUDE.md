@@ -38,10 +38,17 @@ First-time setup: `resources/python/mac-arm64/bin/pip install jep lxml`
 
 ```bash
 cd ~/claude/sparge
-python3 -m pytest tests/ -q
+python3 -m pytest tests/ -q --ignore=tests/python-legacy
 ```
 
-473 passing, 433 skipped (integration tests skip without running server), 0 pre-existing failures.
+270 passing, 427 skipped (integration tests skip without running server), 0 pre-existing failures. (`tests/python-legacy/` holds retired Python tests for ported modules — not run in CI.)
+
+**Java tests (Quarkus):**
+```bash
+cd ~/claude/sparge/server && mvn test
+```
+
+180 passing (unit + integration), 0 pre-existing failures. `@QuarkusTest` endpoint tests require JEP — skip in CI.
 
 **JS tests (Electron):**
 ```bash
