@@ -245,6 +245,95 @@ public class Enricher {
         return null;
     }
 
+    // ── replaceGistEmbeds ─────────────────────────────────────────────────────
+
+    // Returns [user, gistId] or null if not a valid gist script URL; user may be null.
+    private static String[] gistIdFromSrc(String src) {
+        try {
+            URI uri = URI.create(src);
+            String host = uri.getHost();
+            if (host == null || !host.contains("gist.github.com")) return null;
+            String path = uri.getPath().replaceAll("^/+", "").replaceAll("/+$", "");
+            if (path.isEmpty()) return null;
+            String[] parts = path.split("/");
+            if (parts.length >= 2) {
+                String gid = parts[1].endsWith(".js")
+                        ? parts[1].substring(0, parts[1].length() - 3) : parts[1];
+                return gid.isEmpty() ? null : new String[]{parts[0], gid};
+            }
+            String gid = parts[0].endsWith(".js")
+                    ? parts[0].substring(0, parts[0].length() - 3) : parts[0];
+            return gid.isEmpty() ? null : new String[]{null, gid};
+        } catch (Exception e) { return null; }
+    }
+
+    // Returns [replaced, failed]
+    int[] replaceGistEmbeds(Element article, String githubToken) throws Exception {
+        int replaced = 0, failed = 0;
+        for (Element script : article.select("script")) {
+            String src   = script.attr("src");
+            String[] ids = gistIdFromSrc(src);
+            if (ids == null) continue;
+
+            String user   = ids[0];
+            String gistId = ids[1];
+            String gistUrl = user != null
+                    ? "https://gist.github.com/" + user + "/" + gistId
+                    : "https://gist.github.com/" + gistId;
+
+            String json = fetchJson("https://api.github.com/gists/" + gistId, githubToken);
+            Element fig;
+            if (json == null) {
+                fig = new Element("figure").addClass("gist-embed");
+                Element p = new Element("p").addClass("archive-note");
+                p.appendText("Gist embed could not be retrieved. ");
+                p.appendChild(new Element("a").attr("href", gistUrl)
+                        .attr("target", "_blank").attr("rel", "noopener")
+                        .text("View original on GitHub Gist"));
+                p.appendText(".");
+                fig.appendChild(p);
+                failed++;
+            } else {
+                fig = buildGistFigure(gistUrl, json);
+                replaced++;
+            }
+            script.replaceWith(fig);
+        }
+        return new int[]{replaced, failed};
+    }
+
+    private static Element buildGistFigure(String gistUrl, String json) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode root =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+            com.fasterxml.jackson.databind.JsonNode files = root.path("files");
+            if (!files.isMissingNode() && files.fields().hasNext()) {
+                Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> first =
+                        files.fields().next();
+                String filename = first.getKey();
+                String content  = first.getValue().path("content").asText("");
+                String language = first.getValue().path("language").asText("text").toLowerCase();
+
+                Element fig = new Element("figure").addClass("gist-embed");
+                Element cap = new Element("figcaption");
+                cap.appendChild(new Element("a").attr("href", gistUrl)
+                        .attr("target", "_blank").attr("rel", "noopener")
+                        .text("View on GitHub Gist: " + filename));
+                Element pre  = new Element("pre");
+                Element code = new Element("code").addClass("language-" + language).text(content);
+                pre.appendChild(code);
+                fig.appendChild(cap);
+                fig.appendChild(pre);
+                return fig;
+            }
+        } catch (Exception ignored) {}
+        // Fallback figure if JSON parse fails
+        Element fig = new Element("figure").addClass("gist-embed");
+        fig.appendChild(new Element("p").addClass("archive-note")
+                .text("Gist embed could not be retrieved."));
+        return fig;
+    }
+
     // ── HTTP helpers (package-private — overridden in MockEnricher) ───────────
 
     byte[] fetchUrl(String url) {

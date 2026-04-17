@@ -242,4 +242,57 @@ class EnricherTest {
         assertEquals(1, e.replaceYoutubeEmbeds(a, assets));
         assertEquals("https://www.youtube.com/watch?v=abc", a.selectFirst("a").attr("href"));
     }
+
+    // ── replaceGistEmbeds ─────────────────────────────────────────────────────
+
+    @Test
+    void gistScriptReplacedWithCodeFigure() throws Exception {
+        MockEnricher e = new MockEnricher();
+        e.mockJson("https://api.github.com/gists/abc123",
+                   "{\"files\":{\"Foo.java\":{\"content\":\"System.out.println();\",\"language\":\"Java\"}}}");
+
+        Element a = article("<script src=\"https://gist.github.com/user/abc123.js\"></script>");
+        int[] stats = e.replaceGistEmbeds(a, "");
+
+        assertEquals(1, stats[0], "replaced count");
+        assertEquals(0, stats[1], "failed count");
+        assertNull(a.selectFirst("script"), "script replaced");
+        Element fig = a.selectFirst("figure.gist-embed");
+        assertNotNull(fig);
+        assertTrue(fig.selectFirst("code").hasClass("language-java"));
+        assertTrue(fig.selectFirst("code").text().contains("System.out.println"));
+    }
+
+    @Test
+    void gistApiFailureProducesArchiveNoteFigure() throws Exception {
+        MockEnricher e = new MockEnricher(); // fetchJson returns null
+        Element a = article("<script src=\"https://gist.github.com/user/fail123.js\"></script>");
+        int[] stats = e.replaceGistEmbeds(a, "");
+
+        assertEquals(0, stats[0]);
+        assertEquals(1, stats[1], "failed count");
+        Element fig = a.selectFirst("figure.gist-embed");
+        assertNotNull(fig);
+        assertTrue(fig.text().contains("could not be retrieved"), "archive note on failure");
+    }
+
+    @Test
+    void nonGistScriptNotReplaced() throws Exception {
+        MockEnricher e = new MockEnricher();
+        Element a = article("<script src=\"https://example.com/script.js\"></script>");
+        e.replaceGistEmbeds(a, "");
+        assertNotNull(a.selectFirst("script"), "non-gist script untouched");
+    }
+
+    @Test
+    void gistWithoutUserParsedCorrectly() throws Exception {
+        MockEnricher e = new MockEnricher();
+        e.mockJson("https://api.github.com/gists/nouserid",
+                   "{\"files\":{\"a.txt\":{\"content\":\"hello\",\"language\":\"Text\"}}}");
+        Element a = article("<script src=\"https://gist.github.com/nouserid.js\"></script>");
+        int[] stats = e.replaceGistEmbeds(a, "");
+        assertEquals(1, stats[0]);
+        assertTrue(a.selectFirst("figure.gist-embed").selectFirst("a").attr("href")
+                    .contains("nouserid"), "link uses gist id");
+    }
 }
