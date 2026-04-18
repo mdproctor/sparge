@@ -131,17 +131,42 @@ public class ProjectsResource {
     @POST
     @Path("{id}/activate")
     public Response activate(@PathParam("id") String id) {
-        // Python updates its cfg singleton and calls State.init_from_source()
-        String bridgeResult = bridge.call("bridge.projects_activate", id);
-        // Also update Java's view so ConfigResource can serve the correct config
+        // Update Java-native state first — this is sufficient for all native endpoints
+        boolean javaActivated = false;
         try {
             java.nio.file.Path projectDir = store.getProjectDir(id);
             java.nio.file.Path configPath = projectDir.resolve("config.json");
             if (Files.exists(configPath)) {
                 activeProject.set(id, SpargeConfig.load(configPath, projectDir), projectDir);
+                javaActivated = true;
             }
         } catch (Exception ignored) {}
-        return BridgeResponse.of(bridgeResult);
+
+        // Best-effort: also notify the Python bridge (needed for State.init_from_source()).
+        // Catch RuntimeException in case bridge init fails (e.g. JEP not available).
+        String bridgeResult = null;
+        try {
+            bridgeResult = bridge.call("bridge.projects_activate", id);
+        } catch (RuntimeException e) {
+            // Bridge unavailable (init failure) — Java-side activation still succeeded
+        }
+
+        // If Java activation succeeded but bridge failed, return 200
+        if (bridgeResult == null && javaActivated) {
+            return ok("{\"id\":\"" + id + "\",\"activated\":true,\"bridge\":false}");
+        }
+        if (bridgeResult != null) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node =
+                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(bridgeResult);
+                if (node.get("status").asInt() != 200 && javaActivated) {
+                    return ok("{\"id\":\"" + id + "\",\"activated\":true,\"bridge\":false}");
+                }
+            } catch (Exception ignored) {}
+        }
+
+        return BridgeResponse.of(bridgeResult != null ? bridgeResult :
+                "{\"status\":500,\"body\":{\"error\":\"activation failed\"}}");
     }
 
     @POST

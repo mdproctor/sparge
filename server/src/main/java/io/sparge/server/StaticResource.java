@@ -1,7 +1,5 @@
 package io.sparge.server;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PathParam;
@@ -10,6 +8,8 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLConnection;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -19,19 +19,16 @@ import java.nio.file.Paths;
  * Serves three categories:
  *   GET /               → redirect to /ui/projects.html
  *   GET /ui/{path}      → ../ui/{path} on disk
- *   GET /{anything}     → blog asset from SERVE_ROOT (via bridge.static_resolve)
+ *   GET /{anything}     → blog asset from SERVE_ROOT via native path resolution
  */
 @jakarta.ws.rs.Path("/")
 public class StaticResource {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    @Inject PythonBridge bridge;
+    @Inject ActiveProject activeProject;
 
     private final Path uiDir;
 
     public StaticResource() {
-        // server/ is CWD when Quarkus runs; ui/ is a sibling directory
         Path serverDir = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
         this.uiDir = serverDir.getParent().resolve("ui");
     }
@@ -51,16 +48,22 @@ public class StaticResource {
     @GET
     @jakarta.ws.rs.Path("{path:.*}")
     public Response serveStatic(@PathParam("path") String path) {
-        String json = bridge.call("bridge.static_resolve", "/" + path);
-        try {
-            JsonNode node = MAPPER.readTree(json);
-            if (node.get("status").asInt() != 200) {
-                return Response.status(404).build();
-            }
-            return serveFile(Paths.get(node.get("file_path").asText()));
-        } catch (Exception e) {
-            return Response.serverError().build();
+        // RESTEasy Reactive may route GET / here with path="" when {path:.*} wins over the
+        // bare @GET root() method — redirect to the projects page in that case.
+        if (path == null || path.isEmpty()) {
+            return root();
         }
+        if (!activeProject.isActive()) {
+            return Response.status(404).build();
+        }
+        Path serveRoot = activeProject.getConfig().serveRoot().toAbsolutePath().normalize();
+        String decoded = URLDecoder.decode(path, StandardCharsets.UTF_8);
+        String rel     = decoded.startsWith("/") ? decoded.substring(1) : decoded;
+        Path   file    = serveRoot.resolve(rel).normalize();
+        if (!file.startsWith(serveRoot)) {
+            return Response.status(403).build();
+        }
+        return serveFile(file);
     }
 
     private Response serveFile(Path file) {
@@ -69,9 +72,9 @@ public class StaticResource {
             String mime = URLConnection.guessContentTypeFromName(file.toString());
             if (mime == null) mime = "application/octet-stream";
             return Response.ok(data)
-                .header("Content-Type",                mime)
-                .header("Access-Control-Allow-Origin", "*")
-                .build();
+                    .header("Content-Type",                mime)
+                    .header("Access-Control-Allow-Origin", "*")
+                    .build();
         } catch (NoSuchFileException e) {
             return Response.status(404).build();
         } catch (IOException e) {
