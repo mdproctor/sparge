@@ -58,8 +58,11 @@ public class StaticResource {
         }
         Path serveRoot = activeProject.getConfig().serveRoot().toAbsolutePath().normalize();
         String decoded = URLDecoder.decode(path, StandardCharsets.UTF_8);
-        String rel     = decoded.startsWith("/") ? decoded.substring(1) : decoded;
-        Path   file    = serveRoot.resolve(rel).normalize();
+        if (decoded.contains("..")) {
+            return Response.status(403).build();
+        }
+        String rel  = decoded.startsWith("/") ? decoded.substring(1) : decoded;
+        Path   file = serveRoot.resolve(rel).normalize();
         if (!file.startsWith(serveRoot)) {
             return Response.status(403).build();
         }

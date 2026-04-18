@@ -140,7 +140,9 @@ public class ProjectsResource {
                 activeProject.set(id, SpargeConfig.load(configPath, projectDir), projectDir);
                 javaActivated = true;
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            System.err.println("[activate] Java activation failed for '" + id + "': " + e.getMessage());
+        }
 
         // Best-effort: also notify the Python bridge (needed for State.init_from_source()).
         // Catch RuntimeException in case bridge init fails (e.g. JEP not available).
@@ -158,7 +160,7 @@ public class ProjectsResource {
         if (bridgeResult != null) {
             try {
                 com.fasterxml.jackson.databind.JsonNode node =
-                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(bridgeResult);
+                        MAPPER.readTree(bridgeResult);
                 if (node.get("status").asInt() != 200 && javaActivated) {
                     return ok("{\"id\":\"" + id + "\",\"activated\":true,\"bridge\":false}");
                 }
