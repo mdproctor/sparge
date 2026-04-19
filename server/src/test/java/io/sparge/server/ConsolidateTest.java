@@ -43,15 +43,15 @@ class ConsolidateTest {
     void uniquePath_conflict_appendsSuffix(@TempDir Path tmp) throws Exception {
         Files.writeString(tmp.resolve("logo.png"), "x");
         Path result = Consolidate.uniquePath(tmp, "logo.png");
-        assertEquals(tmp.resolve("logo_1.png"), result);
+        assertEquals(tmp.resolve("logo-2.png"), result);
     }
 
     @Test
     void uniquePath_multipleConflicts_incrementsSuffix(@TempDir Path tmp) throws Exception {
         Files.writeString(tmp.resolve("logo.png"),   "x");
-        Files.writeString(tmp.resolve("logo_1.png"), "x");
+        Files.writeString(tmp.resolve("logo-2.png"), "x");
         Path result = Consolidate.uniquePath(tmp, "logo.png");
-        assertEquals(tmp.resolve("logo_2.png"), result);
+        assertEquals(tmp.resolve("logo-3.png"), result);
     }
 
     // ── consolidate — no duplicates ───────────────────────────────────────────
@@ -110,9 +110,14 @@ class ConsolidateTest {
         assertEquals(1, r.promoted());
         assertEquals(1, r.duplicates().size());
         assertTrue(Files.isDirectory(assets.resolve("global")));
-        assertEquals(1, Files.list(assets.resolve("global")).count());
-        long remaining = (Files.isDirectory(assets.resolve("posts/post-a")) ? Files.list(assets.resolve("posts/post-a")).count() : 0)
-                       + (Files.isDirectory(assets.resolve("posts/post-b")) ? Files.list(assets.resolve("posts/post-b")).count() : 0);
+        try (var globalList = Files.list(assets.resolve("global"))) {
+            assertEquals(1, globalList.count());
+        }
+        long remaining;
+        try (var listA = Files.isDirectory(assets.resolve("posts/post-a")) ? Files.list(assets.resolve("posts/post-a")) : java.util.stream.Stream.<Path>empty();
+             var listB = Files.isDirectory(assets.resolve("posts/post-b")) ? Files.list(assets.resolve("posts/post-b")) : java.util.stream.Stream.<Path>empty()) {
+            remaining = listA.count() + listB.count();
+        }
         assertEquals(0, remaining);
     }
 
@@ -130,7 +135,17 @@ class ConsolidateTest {
 
         Consolidate.Result r = Consolidate.consolidate(assets, tmp.resolve("cleaned"));
         assertEquals(1, r.promoted());
-        assertEquals(1, Files.list(assets.resolve("global")).count());
+        try (var globalList = Files.list(assets.resolve("global"))) {
+            assertEquals(1, globalList.count());
+        }
+        // All three originals should be gone (primary moved, two deleted)
+        long remaining;
+        try (var la = Files.list(assets.resolve("posts/post-a"));
+             var lb = Files.list(assets.resolve("posts/post-b"));
+             var lc = Files.list(assets.resolve("posts/post-c"))) {
+            remaining = la.count() + lb.count() + lc.count();
+        }
+        assertEquals(0, remaining);
     }
 
     // ── HTML rewriting ────────────────────────────────────────────────────────
@@ -234,5 +249,66 @@ class ConsolidateTest {
         int result = Consolidate.rewriteHtmlReferences(missing,
                 Map.of(tmp.resolve("old.png"), tmp.resolve("new.png")), tmp);
         assertEquals(0, result);
+    }
+
+    @Test
+    void rewriteHtmlReferences_caseInsensitiveMatch(@TempDir Path tmp) throws Exception {
+        // Upper-case path variant in HTML should still be rewritten
+        Path assets  = tmp.resolve("assets");
+        Path cleaned = tmp.resolve("cleaned");
+        Files.createDirectories(assets.resolve("posts/post-a"));
+        Files.createDirectories(assets.resolve("posts/post-b"));
+        Files.createDirectories(cleaned);
+
+        byte[] shared = "img".getBytes();
+        Files.write(assets.resolve("posts/post-a/hero.png"), shared);
+        Files.write(assets.resolve("posts/post-b/hero.png"), shared);
+
+        // HTML uses mixed-case path
+        Path html = cleaned.resolve("post.html");
+        Files.writeString(html, "<img src=\"/Assets/Posts/Post-A/Hero.png\">");
+
+        Consolidate.consolidate(assets, cleaned);
+
+        String rewritten = Files.readString(html);
+        assertTrue(rewritten.contains("/assets/global/"),
+                "Case-insensitive match should rewrite mixed-case HTML path: " + rewritten);
+    }
+
+    // ── integration: filename collision during promotion ──────────────────────
+
+    @Test
+    void consolidate_twoGroupsSameFilename_uniqueNamesInGlobal(@TempDir Path tmp) throws Exception {
+        // Two hash groups both have files named "logo.png" — second should get logo-2.png
+        Path assets  = tmp.resolve("assets");
+        Path cleaned = tmp.resolve("cleaned");
+        Files.createDirectories(assets.resolve("posts/post-a"));
+        Files.createDirectories(assets.resolve("posts/post-b"));
+        Files.createDirectories(assets.resolve("posts/post-c"));
+        Files.createDirectories(assets.resolve("posts/post-d"));
+        Files.createDirectories(cleaned);
+
+        // Group 1: post-a and post-b share "logo.png" with content "red"
+        Files.write(assets.resolve("posts/post-a/logo.png"), "red".getBytes());
+        Files.write(assets.resolve("posts/post-b/logo.png"), "red".getBytes());
+
+        // Group 2: post-c and post-d share "logo.png" with content "blue"
+        Files.write(assets.resolve("posts/post-c/logo.png"), "blue".getBytes());
+        Files.write(assets.resolve("posts/post-d/logo.png"), "blue".getBytes());
+
+        Consolidate.Result r = Consolidate.consolidate(assets, cleaned);
+
+        assertEquals(2, r.promoted());
+        // Both groups promoted — global/ should have logo.png AND logo-2.png
+        assertEquals(2, dirCount(assets.resolve("global")));
+        assertTrue(Files.exists(assets.resolve("global/logo.png")));
+        assertTrue(Files.exists(assets.resolve("global/logo-2.png")));
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static long dirCount(Path dir) throws Exception {
+        if (!Files.isDirectory(dir)) return 0;
+        try (var s = Files.list(dir)) { return s.count(); }
     }
 }

@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -94,8 +96,6 @@ public final class Consolidate {
                 }
             }
 
-            saveIndex(indexFile, index);
-
             Map<String, Object> dup = new LinkedHashMap<>();
             dup.put("hash",        hash.substring(0, 12));
             dup.put("files",       paths.stream().map(Path::toString).collect(Collectors.toList()));
@@ -103,14 +103,21 @@ public final class Consolidate {
             duplicates.add(dup);
         }
 
+        if (promoted > 0) {
+            saveIndex(indexFile, index);
+        }
         int updatedHtml = rewriteHtmlReferences(cleanedDir, globalMap, assetsRoot);
         return new Result(promoted, updatedHtml, duplicates);
     }
 
     /** SHA-256 hex of a file — matches Python's file_hash(). */
     static String fileHash(Path file) throws Exception {
-        byte[] bytes  = Files.readAllBytes(file);
-        byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        try (var in = new DigestInputStream(Files.newInputStream(file), md)) {
+            byte[] buf = new byte[65536];
+            while (in.read(buf) != -1) { /* drain */ }
+        }
+        byte[] digest = md.digest();
         StringBuilder sb = new StringBuilder();
         for (byte b : digest) sb.append(String.format("%02x", b));
         return sb.toString();
@@ -122,8 +129,8 @@ public final class Consolidate {
         if (!Files.exists(candidate)) return candidate;
         String base = filename.contains(".") ? filename.substring(0, filename.lastIndexOf('.')) : filename;
         String ext  = filename.contains(".") ? filename.substring(filename.lastIndexOf('.'))    : "";
-        for (int i = 1; i < 1000; i++) {
-            candidate = dir.resolve(base + "_" + i + ext);
+        for (int i = 2; i < 1000; i++) {
+            candidate = dir.resolve(base + "-" + i + ext);
             if (!Files.exists(candidate)) return candidate;
         }
         throw new IOException("Could not find unique name for: " + filename);
@@ -136,18 +143,21 @@ public final class Consolidate {
     static int rewriteHtmlReferences(Path cleanedDir, Map<Path, Path> globalMap, Path assetsRoot) throws IOException {
         if (!Files.isDirectory(cleanedDir) || globalMap.isEmpty()) return 0;
 
-        Map<String, String> pathRemap = new LinkedHashMap<>();
+        Map<String, String> pathRemap    = new LinkedHashMap<>();
+        Map<String, String> pathRemapLC  = new LinkedHashMap<>(); // lowercase keys for case-insensitive lookup
         for (Map.Entry<Path, Path> entry : globalMap.entrySet()) {
             try {
                 String oldRel = "/assets/" + assetsRoot.relativize(entry.getKey()).toString().replace('\\', '/');
                 String newRel = "/assets/" + assetsRoot.relativize(entry.getValue()).toString().replace('\\', '/');
                 pathRemap.put(oldRel, newRel);
+                pathRemapLC.put(oldRel.toLowerCase(), newRel);
             } catch (IllegalArgumentException ignored) {}
         }
         if (pathRemap.isEmpty()) return 0;
 
         Pattern regex = Pattern.compile(
-                pathRemap.keySet().stream().map(Pattern::quote).collect(Collectors.joining("|")));
+                pathRemap.keySet().stream().map(Pattern::quote).collect(Collectors.joining("|")),
+                Pattern.CASE_INSENSITIVE);
 
         int updated = 0;
         List<Path> htmlFiles;
@@ -156,10 +166,10 @@ public final class Consolidate {
                               .collect(Collectors.toList());
         }
         for (Path htmlFile : htmlFiles) {
-            String text    = Files.readString(htmlFile);
-            String newText = regex.matcher(text).replaceAll(m -> pathRemap.get(m.group(0)));
+            String text    = Files.readString(htmlFile, StandardCharsets.UTF_8);
+            String newText = regex.matcher(text).replaceAll(m -> pathRemapLC.get(m.group(0).toLowerCase()));
             if (!newText.equals(text)) {
-                Files.writeString(htmlFile, newText);
+                Files.writeString(htmlFile, newText, StandardCharsets.UTF_8);
                 updated++;
             }
         }
