@@ -167,13 +167,82 @@ public class PostsResource {
                                 @QueryParam("dry") @DefaultValue("") String dryParam) {
         // Accept ?dry=1 (Python server convention) and ?dry=true (JAX-RS convention)
         boolean dry = "1".equals(dryParam) || "true".equalsIgnoreCase(dryParam);
-        return BridgeResponse.of(bridge.call("bridge.post_generate_md", slug, dry));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
+        try {
+            // Prefer enriched HTML, fall back to original
+            java.nio.file.Path enriched = cfg.enrichedDir().resolve(slug + ".html");
+            java.nio.file.Path original  = cfg.postsDir().resolve(slug + ".html");
+            java.nio.file.Path htmlPath  = java.nio.file.Files.exists(enriched) ? enriched : original;
+            if (!java.nio.file.Files.exists(htmlPath)) {
+                return Response.status(404)
+                        .header("Content-Type",                "application/json; charset=utf-8")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .entity("{\"error\":\"HTML not found: " + slug + "\"}").build();
+            }
+            // Sidecar JSON lives in the original posts dir (not enriched)
+            java.nio.file.Path jsonPath = cfg.postsDir().resolve(slug + ".json");
+            java.nio.file.Path jsonArg  = java.nio.file.Files.exists(jsonPath) ? jsonPath : null;
+
+            String content = ConvertPost.convert(htmlPath, jsonArg);
+            if (content == null) return err(500, "No article element found in HTML");
+
+            if (dry) {
+                try {
+                    return ok("{\"content\":" + MAPPER.writeValueAsString(content) + "}");
+                } catch (Exception e) {
+                    return err(e.getMessage());
+                }
+            }
+
+            // Write MD file
+            java.nio.file.Path mdPath = cfg.mdDir().resolve(slug + ".md");
+            java.nio.file.Files.createDirectories(mdPath.getParent());
+            java.nio.file.Files.writeString(mdPath, content, java.nio.charset.StandardCharsets.UTF_8);
+            stateStore.markMdGenerated(slug, htmlPath);
+
+            // Run validation
+            java.util.List<MdIssue> issues = MdValidator.validate(content, slug, htmlPath);
+            stateStore.setMdIssues(slug, issues.stream()
+                .<java.util.Map<String, Object>>map(i -> java.util.Map.of("check", i.check(), "level", i.level(), "detail", i.detail()))
+                .collect(java.util.stream.Collectors.toList()));
+
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @POST
     @Path("{slug}/validate-md")
     public Response validateMd(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_validate_md", slug));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
+        try {
+            java.nio.file.Path mdPath = cfg.mdDir().resolve(slug + ".md");
+            if (!java.nio.file.Files.exists(mdPath)) {
+                return Response.status(404)
+                        .header("Content-Type",                "application/json; charset=utf-8")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .entity("{\"error\":\"MD not generated yet\"}").build();
+            }
+            String content  = java.nio.file.Files.readString(mdPath, java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Path enriched = cfg.enrichedDir().resolve(slug + ".html");
+            java.nio.file.Path original  = cfg.postsDir().resolve(slug + ".html");
+            java.nio.file.Path htmlPath  = java.nio.file.Files.exists(enriched) ? enriched : original;
+
+            java.util.List<MdIssue> issues = MdValidator.validate(content, slug,
+                    java.nio.file.Files.exists(htmlPath) ? htmlPath : null);
+            stateStore.setMdIssues(slug, issues.stream()
+                .<java.util.Map<String, Object>>map(i -> java.util.Map.of("check", i.check(), "level", i.level(), "detail", i.detail()))
+                .collect(java.util.stream.Collectors.toList()));
+
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @POST
