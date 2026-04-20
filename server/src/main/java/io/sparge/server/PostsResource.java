@@ -187,7 +187,9 @@ public class PostsResource {
             java.nio.file.Files.createDirectories(mdPath.getParent());
             java.nio.file.Files.writeString(mdPath,
                     body == null ? "" : body, java.nio.charset.StandardCharsets.UTF_8);
-            java.nio.file.Path htmlPath = cfg.postsDir().resolve(slug + ".html");
+            java.nio.file.Path enrichedHtml = cfg.enrichedDir().resolve(slug + ".html");
+            java.nio.file.Path originalHtml = cfg.postsDir().resolve(slug + ".html");
+            java.nio.file.Path htmlPath = java.nio.file.Files.exists(enrichedHtml) ? enrichedHtml : originalHtml;
             stateStore.markMdGenerated(slug,
                     java.nio.file.Files.exists(htmlPath) ? htmlPath : null);
             ObjectNode post = stateStore.get(slug);
