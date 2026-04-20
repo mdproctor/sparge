@@ -51,7 +51,7 @@ class PostsResourceStagingTest {
     @EnabledIf("kieArchivePresent")
     void stagedGet_noStagedFile_returns404() {
         String slug = firstSlug();
-        given().when().post("/api/posts/{slug}/reject-staged", slug); // ensure clean
+        given().when().post("/api/posts/{slug}/reject-staged", slug).then().statusCode(200); // ensure clean
 
         given()
                 .when().get("/api/posts/{slug}/staged", slug)
@@ -139,7 +139,7 @@ class PostsResourceStagingTest {
     @EnabledIf("kieArchivePresent")
     void acceptStaged_noStagedFile_returns404() {
         String slug = firstSlug();
-        given().when().post("/api/posts/{slug}/reject-staged", slug); // ensure clean
+        given().when().post("/api/posts/{slug}/reject-staged", slug).then().statusCode(200); // ensure clean
 
         given()
                 .when().post("/api/posts/{slug}/accept-staged", slug)

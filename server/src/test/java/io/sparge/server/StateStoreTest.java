@@ -282,6 +282,37 @@ class StateStoreTest {
     }
 
     @Test
+    void acceptStaged_enrichedDirFirst_usesEnrichedHtmlForHash(@TempDir Path tmp) throws Exception {
+        Path mdDir       = tmp.resolve("md");
+        Path postsDir    = tmp.resolve("posts");
+        Path enrichedDir = tmp.resolve("enriched");
+        Files.createDirectories(mdDir);
+        Files.createDirectories(postsDir);
+        Files.createDirectories(enrichedDir);
+
+        // Write a staged file
+        Files.writeString(mdDir.resolve("my-post.md.staged"), "# Accepted");
+
+        // Both original and enriched HTML exist with different content
+        Files.writeString(postsDir.resolve("my-post.html"),    "<html>original</html>");
+        Files.writeString(enrichedDir.resolve("my-post.html"), "<html>enriched</html>");
+
+        StateStore store = new StateStore(tmp.resolve("state.json"));
+        store.acceptStaged("my-post", mdDir, postsDir, enrichedDir);
+
+        // The html_hash should match the ENRICHED file, not the original
+        String enrichedHash = StateStore.hash(enrichedDir.resolve("my-post.html"));
+        String originalHash = StateStore.hash(postsDir.resolve("my-post.html"));
+
+        ObjectNode post = store.get("my-post");
+        String storedHash = post.path("md").path("html_hash").asText();
+        assertEquals(enrichedHash, storedHash,
+                "Should use enriched HTML for hash, not original");
+        assertNotEquals(originalHash, storedHash,
+                "Should not use original HTML when enriched exists");
+    }
+
+    @Test
     void rejectStagedReturnsFalseWhenNoStagedFile() {
         assertFalse(store.rejectStaged("ghost", dir));
     }

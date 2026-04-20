@@ -282,7 +282,13 @@ public class StateStore {
         update(slug, Map.of("md", Map.of("staged", true, "staged_at", now())));
     }
 
+    /** Original 3-arg form — no enriched dir (used by tests that don't need enriched-first). */
     public synchronized boolean acceptStaged(String slug, Path mdDir, Path postsDir) {
+        return acceptStaged(slug, mdDir, postsDir, null);
+    }
+
+    /** Enriched-first form — mirrors Python accept_staged behaviour. */
+    public synchronized boolean acceptStaged(String slug, Path mdDir, Path postsDir, Path enrichedDir) {
         Path staged = mdDir.resolve(slug + ".md.staged");
         if (!Files.exists(staged)) return false;
         try {
@@ -290,7 +296,9 @@ public class StateStore {
             Files.delete(staged);
         } catch (IOException e) { throw new RuntimeException(e); }
         String h = null;
-        Path htmlFile = postsDir.resolve(slug + ".html");
+        Path htmlFile = (enrichedDir != null && Files.exists(enrichedDir.resolve(slug + ".html")))
+                ? enrichedDir.resolve(slug + ".html")
+                : postsDir.resolve(slug + ".html");
         if (Files.exists(htmlFile)) { try { h = hash(htmlFile); } catch (Exception ignored) {} }
         update(slug, Map.of("md", Map.of(
                 "staged", false, "staged_at", "",

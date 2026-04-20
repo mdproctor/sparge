@@ -158,7 +158,7 @@ public class PostsResource {
     @Produces(MediaType.TEXT_PLAIN)
     public Response stagedGet(@PathParam("slug") String slug) {
         SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
-        if (cfg == null) return err(404, "no active project");
+        if (cfg == null) return err(400, "no active project");
         java.nio.file.Path staged = cfg.mdDir().resolve(slug + ".md.staged");
         if (!java.nio.file.Files.exists(staged)) return err(404, "no staged version");
         try {
@@ -193,8 +193,8 @@ public class PostsResource {
     @Consumes(MediaType.WILDCARD)
     public Response acceptStaged(@PathParam("slug") String slug) {
         SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
-        if (cfg == null) return err(404, "no active project");
-        boolean accepted = stateStore.acceptStaged(slug, cfg.mdDir(), cfg.postsDir());
+        if (cfg == null) return err(400, "no active project");
+        boolean accepted = stateStore.acceptStaged(slug, cfg.mdDir(), cfg.postsDir(), cfg.enrichedDir());
         if (!accepted) return Response.status(404)
                 .entity("{\"error\":\"no staged version to accept\"}")
                 .header("Content-Type",                "application/json; charset=utf-8")
