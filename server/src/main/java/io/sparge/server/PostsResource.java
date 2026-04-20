@@ -18,6 +18,11 @@ public class PostsResource {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static final java.util.regex.Pattern ARCHIVE_HEADER_RE =
+            java.util.regex.Pattern.compile(
+                    "<header\\s[^>]*class=\"[^\"]*archive-header[^\"]*\"[^>]*>.*?</header>",
+                    java.util.regex.Pattern.DOTALL | java.util.regex.Pattern.CASE_INSENSITIVE);
+
     @Inject PythonBridge  bridge;
     @Inject StateStore    stateStore;
     @Inject ActiveProject activeProject;
@@ -82,10 +87,7 @@ public class PostsResource {
     @Produces(MediaType.TEXT_PLAIN)
     public Response html(@PathParam("slug") String slug) {
         SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
-        if (cfg == null) {
-            // No active project — fall back to bridge
-            return BridgeResponse.of(bridge.call("bridge.post_html", slug));
-        }
+        if (cfg == null) return err(400, "no active project");
         try {
             java.nio.file.Path enriched = cfg.enrichedDir().resolve(slug + ".html");
             java.nio.file.Path original  = cfg.postsDir().resolve(slug + ".html");
@@ -115,15 +117,46 @@ public class PostsResource {
     @Path("{slug}/view")
     @Produces(MediaType.TEXT_HTML)
     public Response view(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_view", slug));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
+        try {
+            java.nio.file.Path enriched = cfg.enrichedDir().resolve(slug + ".html");
+            java.nio.file.Path original  = cfg.postsDir().resolve(slug + ".html");
+            java.nio.file.Path htmlPath  = java.nio.file.Files.exists(enriched) ? enriched : original;
+            if (!java.nio.file.Files.exists(htmlPath)) {
+                return Response.status(404)
+                        .header("Content-Type",                "application/json; charset=utf-8")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .entity("{\"error\":\"HTML not found: " + slug + "\"}").build();
+            }
+            String content = java.nio.file.Files.readString(htmlPath,
+                    java.nio.charset.StandardCharsets.UTF_8);
+            content = ARCHIVE_HEADER_RE.matcher(content).replaceAll("");
+            return Response.ok(content)
+                    .header("Content-Type",                "text/html; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .build();
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @POST
     @Path("{slug}/save-html")
     @Consumes({MediaType.TEXT_PLAIN, MediaType.TEXT_HTML, MediaType.WILDCARD})
     public Response saveHtml(@PathParam("slug") String slug, String body) {
-        return BridgeResponse.of(bridge.call("bridge.post_save_html", slug,
-                                             body == null ? "" : body));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
+        try {
+            java.nio.file.Path enrichedDir = cfg.enrichedDir();
+            java.nio.file.Files.createDirectories(enrichedDir);
+            java.nio.file.Files.writeString(enrichedDir.resolve(slug + ".html"),
+                    body == null ? "" : body, java.nio.charset.StandardCharsets.UTF_8);
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     // ── Markdown ──────────────────────────────────────────────────────────────
@@ -147,8 +180,21 @@ public class PostsResource {
     @Path("{slug}/save-md")
     @Consumes(MediaType.TEXT_PLAIN)
     public Response saveMd(@PathParam("slug") String slug, String body) {
-        return BridgeResponse.of(bridge.call("bridge.post_save_md", slug,
-                                             body == null ? "" : body));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
+        try {
+            java.nio.file.Path mdPath = cfg.mdDir().resolve(slug + ".md");
+            java.nio.file.Files.createDirectories(mdPath.getParent());
+            java.nio.file.Files.writeString(mdPath,
+                    body == null ? "" : body, java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Path htmlPath = cfg.postsDir().resolve(slug + ".html");
+            stateStore.markMdGenerated(slug,
+                    java.nio.file.Files.exists(htmlPath) ? htmlPath : null);
+            ObjectNode post = stateStore.get(slug);
+            return ok(post != null ? post.toString() : "{}");
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     // ── Staged workflow ───────────────────────────────────────────────────────
