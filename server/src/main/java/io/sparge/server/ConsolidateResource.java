@@ -38,8 +38,7 @@ public class ConsolidateResource {
             ));
             return ok(body);
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "unknown";
-            return err(500, msg);
+            return err(500, e.getMessage());
         }
     }
 
@@ -51,8 +50,9 @@ public class ConsolidateResource {
     }
 
     private static Response err(int status, String msg) {
+        String escaped = msg == null ? "error" : msg.replace("\\", "\\\\").replace("\"", "\\\"");
         return Response.status(status)
-                .entity("{\"error\":\"" + msg + "\"}")
+                .entity("{\"error\":\"" + escaped + "\"}")
                 .header("Content-Type",                "application/json; charset=utf-8")
                 .header("Access-Control-Allow-Origin", "*")
                 .build();
