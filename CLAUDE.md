@@ -16,23 +16,18 @@ Sparge is a blog migration tool — ingests HTML posts from live blog URLs, enri
 cd ~/claude/sparge
 python3 server.py             # Python server, browser mode (port 9000)
 npm start                     # Electron app — Python server by default
-SPARGE_SERVER=java npm start  # Electron app — Quarkus JEP server
+SPARGE_SERVER=java npm start  # Electron app — Quarkus native Java server
 ```
 
 Browser mode (Python) serves on port 9000. Electron mode allocates a dynamic port. Project data lives in `~/sparge-projects/` (configured via `~/.sparge/config.json`).
 
-**Quarkus server (Phase 0 — delegates all calls to Python via JEP):**
+**Quarkus server (fully native Java — no Python/JEP required):**
 ```bash
 cd ~/claude/sparge/server
 mvn package -DskipTests    # build jar → target/quarkus-app/quarkus-run.jar
-# Runtime env vars required:
-export PYTHONHOME=$HOME/claude/sparge/resources/python/mac-arm64
-export DYLD_LIBRARY_PATH=$HOME/claude/sparge/resources/python/mac-arm64/lib:$DYLD_LIBRARY_PATH
-java -Djava.library.path=$HOME/claude/sparge/resources/python/mac-arm64/lib/python3.12/site-packages/jep \
-     -Dquarkus.http.port=9000 \
+java -Dquarkus.http.port=9000 \
      -jar target/quarkus-app/quarkus-run.jar
 ```
-First-time setup: `resources/python/mac-arm64/bin/pip install jep lxml`
 
 ## Testing
 
@@ -48,7 +43,7 @@ python3 -m pytest tests/ -q --ignore=tests/python-legacy
 cd ~/claude/sparge/server && mvn test
 ```
 
-180 passing (unit + integration), 0 pre-existing failures. `@QuarkusTest` endpoint tests require JEP — skip in CI.
+346 passing (unit + integration), 0 pre-existing failures. `@QuarkusTest` endpoint tests skip via `@EnabledIf("kieArchivePresent")` when the KIE archive is absent.
 
 **JS tests (Electron):**
 ```bash
@@ -61,8 +56,8 @@ E2E tests require `resources/python/` (run `node scripts/fetch-python.js` once) 
 ## Key directories — this repo
 
 - `scripts/` — core logic (ingest, scan, enrich, state, config, asset_store, consolidate)
-- `scripts/bridge.py` — JEP bridge: all handler logic exposed as JSON-returning functions for Quarkus
-- `server/` — Quarkus 3.34 Maven project (Phase 0: delegates to Python via JEP)
+- `scripts/bridge.py` — dead code (JEP bridge retired; all endpoints ported to native Java)
+- `server/` — Quarkus 3.34 Maven project (fully native Java — no Python/JEP dependency)
 - `ui/` — single-file frontend (index.html, projects.html, browse-utils.js)
 - `electron-tests/` — Jest unit/integration + Playwright E2E tests for the Electron wrapper
 - `main.js`, `preload.js`, `python-server.js` — Electron entry point and Python process manager
