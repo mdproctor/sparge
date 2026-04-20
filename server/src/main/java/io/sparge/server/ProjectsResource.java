@@ -25,6 +25,7 @@ public class ProjectsResource {
     @Inject ProjectsStore store;
     @Inject ActiveProject activeProject;
     @Inject SpargeHome    spargeHome;
+    @Inject IngestService ingestService;
 
     // ── Java implementations ──────────────────────────────────────────────────
 
@@ -174,8 +175,24 @@ public class ProjectsResource {
     @POST
     @Path("{id}/ingest/run")
     public Response projectIngestRun(@PathParam("id") String id, String body) {
-        return BridgeResponse.of(bridge.call("bridge.project_ingest_run",
-                id, body == null ? "{}" : body));
+        // Activate the project in Java, then start ingest
+        try {
+            java.nio.file.Path projectDir = store.getProjectDir(id);
+            java.nio.file.Path configPath = projectDir.resolve("config.json");
+            if (!java.nio.file.Files.exists(configPath)) return err("project not found: " + id);
+            activeProject.set(id, SpargeConfig.load(configPath, projectDir), projectDir);
+        } catch (Exception e) { return err("failed to activate project: " + e.getMessage()); }
+        try {
+            var data = MAPPER.readTree(body == null ? "{}" : body);
+            java.util.List<String> urls = new java.util.ArrayList<>();
+            for (var u : data.path("urls")) urls.add(u.asText());
+            String author = data.path("author_filter").asText(null);
+            if (urls.isEmpty()) return Response.status(400)
+                    .entity("{\"error\":\"urls required\"}")
+                    .header("Content-Type",                "application/json; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*").build();
+            return ok(MAPPER.writeValueAsString(ingestService.startIngest(urls, author)));
+        } catch (Exception e) { return err(e.getMessage()); }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
