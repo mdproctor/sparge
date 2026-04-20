@@ -342,9 +342,7 @@ public class PostsResource {
     @Path("{slug}/scan")
     public Response scan(@PathParam("slug") String slug) {
         SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
-        if (cfg == null) {
-            return BridgeResponse.of(bridge.call("bridge.post_scan_html", slug));
-        }
+        if (cfg == null) return err(400, "no active project");
         try {
             java.nio.file.Path postsDir    = cfg.postsDir();
             java.nio.file.Path enrichedDir = cfg.enrichedDir();
