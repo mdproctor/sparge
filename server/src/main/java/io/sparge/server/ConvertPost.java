@@ -115,6 +115,28 @@ public final class ConvertPost {
         removeWpDiscuzAddToAny(article);
         removeAuthorChrome(article, meta);
         removeChromeHeadings(article);
+
+        // Unwrap links inside headings — preserves text, removes href
+        // (nav links inside headings render as [Section](url) in MD — unwanted)
+        for (Element h : article.select("h1, h2, h3, h4, h5, h6")) {
+            for (Element a : new ArrayList<>(h.select("a"))) {
+                a.unwrap();
+            }
+        }
+
+        // Remove h3 headings that duplicate the post title (CMS template artifact)
+        String titleStart = meta.path("title").asText("").toLowerCase();
+        if (titleStart.length() >= 12) {
+            String prefix = titleStart.substring(0, Math.min(12, titleStart.length()));
+            for (Element h3 : new ArrayList<>(article.select("h3"))) {
+                if (h3.text().strip().toLowerCase().startsWith(prefix)) h3.remove();
+            }
+        }
+
+        // Remove repeated nav links — same href appearing 5+ times is navigation chrome
+        // (blog.athico.com archive has nav section repeated 119 times in some posts)
+        removeRepeatedNavLinks(article);
+
         removeMetaElements(article);
         fixImagePaths(article);
         fixLinkPaths(article);
@@ -197,6 +219,21 @@ public final class ConvertPost {
         }
     }
 
+    private static void removeRepeatedNavLinks(Element article) {
+        // Count how many times each href appears
+        Map<String, Long> hrefCounts = article.select("a[href]").stream()
+            .collect(Collectors.groupingBy(
+                a -> a.attr("href"), Collectors.counting()));
+        // Remove any <a> whose href appears 5+ times (nav template chrome)
+        for (Map.Entry<String, Long> entry : hrefCounts.entrySet()) {
+            if (entry.getValue() >= 5) {
+                for (Element a : new ArrayList<>(article.select("a[href=\"" + entry.getKey() + "\"]"))) {
+                    a.unwrap(); // keep text content, strip the link
+                }
+            }
+        }
+    }
+
     private static void removeChromeHeadings(Element article) {
         for (Element h : new ArrayList<>(article.select("h2, h3"))) {
             if (CHROME_HEADINGS.contains(h.text().trim().toLowerCase())) {
@@ -269,7 +306,7 @@ public final class ConvertPost {
             Element code = pre.selectFirst("code");
             if (code == null) continue;
             String lang = extractLang(code);
-            String text = code.wholeText();
+            String text = code.wholeText().replace('\u00a0', ' ');
             String key  = String.format("@@CODEBLOCK_%03d@@", idx++);
             blocks.put(key, new String[]{lang, text});
             Element placeholder = Jsoup.parseBodyFragment("<p>" + key + "</p>").selectFirst("p");
@@ -278,11 +315,20 @@ public final class ConvertPost {
     }
 
     private static String extractLang(Element code) {
+        String lang = "";
         for (String cls : code.classNames()) {
-            if (cls.startsWith("language-")) return cls.substring("language-".length());
-            if (KNOWN_LANGUAGES.contains(cls.toLowerCase())) return cls.toLowerCase();
+            if (cls.startsWith("language-")) { lang = cls.substring("language-".length()); break; }
+            if (KNOWN_LANGUAGES.contains(cls.toLowerCase())) { lang = cls.toLowerCase(); break; }
         }
-        return "";
+        // Remap sql→java when content looks like Java (mirrors Python's heuristic)
+        if ("sql".equals(lang)) {
+            String text = code.wholeText().toLowerCase();
+            if (text.contains("public ") || text.contains("class ")
+                    || text.contains("void ") || text.contains("import ")) {
+                lang = "java";
+            }
+        }
+        return lang;
     }
 
     private static int maxBacktickRun(String text) {
@@ -309,6 +355,9 @@ public final class ConvertPost {
         body = EMPTY_LINK_PREFIX.matcher(body).replaceAll("");
         body = SETEXT_H1.matcher(body).replaceAll("# $1");
         body = SETEXT_H2.matcher(body).replaceAll("## $1");
+        // Convert === visual separators to blank + --- HR
+        // (Blogger posts use ===... lines as visual section dividers)
+        body = body.replaceAll("(?m)^={4,}\\s*$", "\n---");
         body = TRIPLE_NEWLINES.matcher(body).replaceAll("\n\n");
         return body.strip();
     }

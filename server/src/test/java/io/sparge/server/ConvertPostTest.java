@@ -229,6 +229,126 @@ class ConvertPostTest {
         assertFalse(md.contains("\n\n\n\n"), "Should not have 4+ consecutive newlines");
     }
 
+    // ── Fix 1: NBSP normalization ─────────────────────────────────────────────
+
+    @Test
+    void codeBlock_nonBreakingSpaces_normalized(@TempDir Path tmp) throws Exception {
+        writeJson(tmp, "post.json", sidecar("Post", "2024-01-01T00:00:00Z"));
+        // HTML with non-breaking space (U+00A0) inside code
+        writeHtml(tmp, "post.html", "<html><body><article>"
+            + "<pre><code>int\u00a0x\u00a0=\u00a01;</code></pre>"
+            + "<p>Content after.</p>"
+            + "</article></body></html>");
+
+        String md = ConvertPost.convert(tmp.resolve("post.html"), null);
+
+        assertTrue(md.contains("int x = 1;"),
+                "Non-breaking spaces in code should be normalized to regular spaces");
+        assertFalse(md.contains("\u00a0"), "No NBSP should remain in output");
+    }
+
+    // ── Fix 2: Heading-link unwrapping ───────────────────────────────────────
+
+    @Test
+    void heading_withLink_linkStripped(@TempDir Path tmp) throws Exception {
+        writeJson(tmp, "post.json", sidecar("Post", "2024-01-01T00:00:00Z"));
+        writeHtml(tmp, "post.html", "<html><body><article>"
+            + "<h2><a href=\"https://example.com/section\">Section Title</a></h2>"
+            + "<p>Content here.</p>"
+            + "</article></body></html>");
+
+        String md = ConvertPost.convert(tmp.resolve("post.html"), null);
+
+        assertTrue(md.contains("## Section Title"),
+                "Heading should contain plain text, not a link");
+        // The link inside the heading should be removed (heading as anchor is chrome)
+        // At minimum the heading text should appear
+        assertTrue(md.contains("Section Title"), "Heading text should be preserved");
+    }
+
+    // ── Fix 3: Duplicate h3 title removal ────────────────────────────────────
+
+    @Test
+    void duplicateH3Title_removed(@TempDir Path tmp) throws Exception {
+        writeJson(tmp, "post.json", sidecar("Introduction to Drools", "2024-01-01T00:00:00Z"));
+        writeHtml(tmp, "post.html", "<html><body><article>"
+            + "<h3>Introduction to Drools</h3>"
+            + "<p>Real content here.</p>"
+            + "</article></body></html>");
+
+        String md = ConvertPost.convert(tmp.resolve("post.html"), null);
+
+        // The h3 that duplicates the title should be removed
+        // Count occurrences — title in front matter + duplicate h3 = 2 would be wrong
+        long headingCount = md.lines()
+            .filter(l -> l.startsWith("### Introduction to Drools"))
+            .count();
+        assertEquals(0, headingCount,
+                "H3 that duplicates the post title should be removed from body");
+    }
+
+    // ── Fix 4: SQL→Java language remap ───────────────────────────────────────
+
+    @Test
+    void codeBlock_sqlTagWithJavaContent_remappedToJava(@TempDir Path tmp) throws Exception {
+        writeJson(tmp, "post.json", sidecar("Post", "2024-01-01T00:00:00Z"));
+        writeHtml(tmp, "post.html", "<html><body><article>"
+            + "<pre><code class=\"language-sql\">public class Foo {\n"
+            + "    void bar() {}\n"
+            + "}</code></pre>"
+            + "<p>Content.</p>"
+            + "</article></body></html>");
+
+        String md = ConvertPost.convert(tmp.resolve("post.html"), null);
+
+        assertTrue(md.contains("```java"),
+                "SQL tag with Java-looking content should be remapped to java");
+        assertFalse(md.contains("```sql"),
+                "SQL language tag should be removed when content is Java");
+    }
+
+    // ── Fix 5: === separator → --- ────────────────────────────────────────────
+
+    @Test
+    void equalsSeparator_convertedToHr(@TempDir Path tmp) throws Exception {
+        writeJson(tmp, "post.json", sidecar("Post", "2024-01-01T00:00:00Z"));
+        writeHtml(tmp, "post.html", "<html><body><article>"
+            + "<p>Section one content here.</p>"
+            + "<p>=====================================</p>"
+            + "<p>Section two content here.</p>"
+            + "</article></body></html>");
+
+        String md = ConvertPost.convert(tmp.resolve("post.html"), null);
+
+        assertFalse(md.contains("====="),
+                "=== separator lines should be converted, not left as-is");
+    }
+
+    // ── Fix 6: Nav-link dedup ─────────────────────────────────────────────────
+
+    @Test
+    void navLinks_repeatedHref_unwrapped(@TempDir Path tmp) throws Exception {
+        writeJson(tmp, "post.json", sidecar("Post", "2024-01-01T00:00:00Z"));
+        // Simulate repeated nav links (same href appearing 5+ times)
+        StringBuilder navLinks = new StringBuilder();
+        for (int i = 0; i < 10; i++) {
+            navLinks.append("<a href=\"https://blog.example.com/nav\">Navigate</a> ");
+        }
+        writeHtml(tmp, "post.html", "<html><body><article>"
+            + "<p>Real article content.</p>"
+            + "<div>" + navLinks + "</div>"
+            + "<p>More article content.</p>"
+            + "</article></body></html>");
+
+        String md = ConvertPost.convert(tmp.resolve("post.html"), null);
+
+        long navLinkCount = md.lines()
+            .filter(l -> l.contains("blog.example.com/nav"))
+            .count();
+        assertTrue(navLinkCount <= 2,
+                "Repeated nav links (10x same href) should be collapsed, found " + navLinkCount + " lines with nav link");
+    }
+
     // ── Integration: real KIE post ─────────────────────────────────────────────
 
     @Test
