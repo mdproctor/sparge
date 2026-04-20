@@ -14,8 +14,6 @@
     <quarkus.platform.version>3.34.3</quarkus.platform.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <jep.version>4.3.1</jep.version>
-    <jep.library.path>${project.basedir}/../resources/python/mac-arm64/lib/python3.12/site-packages/jep</jep.library.path>
   </properties>
 
   <dependencyManagement>
@@ -38,11 +36,6 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>black.ninia</groupId>
-      <artifactId>jep</artifactId>
-      <version>${jep.version}</version>
     </dependency>
     <!-- DOM manipulation — replaces BeautifulSoup -->
     <dependency>
@@ -91,11 +84,6 @@
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.3.1</version>
-        <configuration>
-          <systemPropertyVariables>
-            <java.library.path>${jep.library.path}</java.library.path>
-          </systemPropertyVariables>
-        </configuration>
       </plugin>
     </plugins>
   </build>

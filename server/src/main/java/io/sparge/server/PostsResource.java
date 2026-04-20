@@ -23,7 +23,6 @@ public class PostsResource {
                     "<header\\s[^>]*class=\"[^\"]*archive-header[^\"]*\"[^>]*>.*?</header>",
                     java.util.regex.Pattern.DOTALL | java.util.regex.Pattern.CASE_INSENSITIVE);
 
-    @Inject PythonBridge  bridge;
     @Inject StateStore    stateStore;
     @Inject ActiveProject activeProject;
 

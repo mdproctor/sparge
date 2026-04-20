@@ -21,7 +21,6 @@ public class ProjectsResource {
     private static final ObjectMapper MAPPER  = new ObjectMapper();
     private static final Pattern      SLUG_STRIP = Pattern.compile("[^a-z0-9]+");
 
-    @Inject PythonBridge  bridge;
     @Inject ProjectsStore store;
     @Inject ActiveProject activeProject;
     @Inject SpargeHome    spargeHome;
