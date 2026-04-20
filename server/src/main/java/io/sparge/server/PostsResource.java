@@ -157,17 +157,27 @@ public class PostsResource {
     @Path("{slug}/staged")
     @Produces(MediaType.TEXT_PLAIN)
     public Response stagedGet(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_staged_get", slug));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(404, "no active project");
+        java.nio.file.Path staged = cfg.mdDir().resolve(slug + ".md.staged");
+        if (!java.nio.file.Files.exists(staged)) return err(404, "no staged version");
+        try {
+            return Response.ok(java.nio.file.Files.readString(staged))
+                    .header("Content-Type",                "text/plain; charset=utf-8")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .build();
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
     }
 
     @POST
     @Path("{slug}/stage")
-    @Consumes(MediaType.TEXT_PLAIN)
+    @Consumes({MediaType.TEXT_PLAIN, MediaType.WILDCARD})
     public Response stage(@PathParam("slug") String slug, String body) {
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
         try {
-            SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
-            if (cfg == null) return BridgeResponse.of(bridge.call("bridge.post_stage", slug,
-                    body == null ? "" : body));
             java.nio.file.Files.writeString(cfg.mdDir().resolve(slug + ".md.staged"),
                     body == null ? "" : body);
             stateStore.stage(slug);
@@ -180,16 +190,27 @@ public class PostsResource {
 
     @POST
     @Path("{slug}/accept-staged")
+    @Consumes(MediaType.WILDCARD)
     public Response acceptStaged(@PathParam("slug") String slug) {
-        return BridgeResponse.of(bridge.call("bridge.post_accept_staged", slug));
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(404, "no active project");
+        boolean accepted = stateStore.acceptStaged(slug, cfg.mdDir(), cfg.postsDir());
+        if (!accepted) return Response.status(404)
+                .entity("{\"error\":\"no staged version to accept\"}")
+                .header("Content-Type",                "application/json; charset=utf-8")
+                .header("Access-Control-Allow-Origin", "*")
+                .build();
+        ObjectNode post = stateStore.get(slug);
+        return ok(post != null ? post.toString() : "{}");
     }
 
     @POST
     @Path("{slug}/reject-staged")
+    @Consumes(MediaType.WILDCARD)
     public Response rejectStaged(@PathParam("slug") String slug) {
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
         try {
-            SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
-            if (cfg == null) return BridgeResponse.of(bridge.call("bridge.post_reject_staged", slug));
             stateStore.rejectStaged(slug, cfg.mdDir());
             ObjectNode post = stateStore.get(slug);
             return ok(post != null ? post.toString() : "{}");
@@ -316,6 +337,15 @@ public class PostsResource {
     private Response err(String msg) {
         String escaped = msg == null ? "error" : msg.replace("\"", "\\\"");
         return Response.serverError()
+                .header("Content-Type",                "application/json; charset=utf-8")
+                .header("Access-Control-Allow-Origin", "*")
+                .entity("{\"error\":\"" + escaped + "\"}")
+                .build();
+    }
+
+    private Response err(int status, String msg) {
+        String escaped = msg == null ? "error" : msg.replace("\"", "\\\"");
+        return Response.status(status)
                 .header("Content-Type",                "application/json; charset=utf-8")
                 .header("Access-Control-Allow-Origin", "*")
                 .entity("{\"error\":\"" + escaped + "\"}")
