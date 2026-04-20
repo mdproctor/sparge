@@ -144,7 +144,7 @@ public final class MdValidator {
     static List<MdIssue> chkBalancedFences(String md) {
         boolean inFence = false;
         int openLen = 0;
-        for (String line : md.split("\n", -1)) {
+        for (String line : body(md).split("\n", -1)) {
             String t = line.strip();
             if (t.startsWith("`")) {
                 int len = 0;
@@ -289,10 +289,14 @@ public final class MdValidator {
     static List<MdIssue> crossCodeBlockCount(String md, String slug, Element article) {
         long htmlPres = article.select("pre").size();
         long mdFences = Pattern.compile("(?m)^`{3,}").matcher(md).results().count() / 2;
-        if (htmlPres > 0 && mdFences < htmlPres * 0.5)
-            return List.of(new MdIssue("code_block_count", "WARN",
+        List<MdIssue> issues = new ArrayList<>();
+        if (htmlPres > 0 && mdFences == 0)
+            issues.add(new MdIssue("code_block_count", "ERROR",
+                    "All " + htmlPres + " HTML code blocks dropped from MD"));
+        else if (htmlPres > 0 && Math.abs(htmlPres - mdFences) > 1)
+            issues.add(new MdIssue("code_block_count", "WARN",
                     "HTML " + htmlPres + " <pre> vs MD " + mdFences + " fences"));
-        return List.of();
+        return issues;
     }
 
     static List<MdIssue> crossHeadingMatch(String md, String slug, Element article) {
@@ -301,7 +305,10 @@ public final class MdValidator {
         for (Element h : article.select("h2, h3")) {
             String text = h.text().strip().toLowerCase();
             if (text.length() < 3) continue;
-            if (!bodyLower.contains(text)) missing.add(h.text());
+            // Match on first 4 words only — mirrors Python strategy to survive minor formatting diffs
+            String[] words = text.split("\\s+");
+            String firstFour = String.join(" ", Arrays.asList(words).subList(0, Math.min(4, words.length)));
+            if (!firstFour.isEmpty() && !bodyLower.contains(firstFour)) missing.add(h.text());
         }
         if (!missing.isEmpty())
             return List.of(new MdIssue("heading_match", "WARN",
@@ -314,8 +321,17 @@ public final class MdValidator {
         for (int i = paras.size() - 1; i >= 0; i--) {
             String text = paras.get(i).text().strip();
             if (text.length() > 30) {
-                String snippet = text.substring(0, Math.min(40, text.length())).toLowerCase();
-                if (!body(md).toLowerCase().contains(snippet))
+                // Normalize both sides: strip URLs, strip punctuation, collapse whitespace
+                String normalise = text.toLowerCase()
+                        .replaceAll("https?://\\S+", "")
+                        .replaceAll("[^\\w\\s]", " ")
+                        .replaceAll("\\s+", " ").strip();
+                String snippet = normalise.substring(0, Math.min(40, normalise.length()));
+                String mdNorm = body(md).toLowerCase()
+                        .replaceAll("https?://\\S+", "")
+                        .replaceAll("[^\\w\\s]", " ")
+                        .replaceAll("\\s+", " ");
+                if (!snippet.isEmpty() && !mdNorm.contains(snippet))
                     return List.of(new MdIssue("last_section_present", "WARN",
                             "Last HTML paragraph missing from MD: '"
                             + text.substring(0, Math.min(60, text.length())) + "'"));
@@ -338,6 +354,7 @@ public final class MdValidator {
     }
 
     private static String removeFences(String md) {
-        return Pattern.compile("(?s)```[^\n]*\n.*?```").matcher(md).replaceAll("");
+        // Handle variable-length fences (3, 4, 5+ backticks used when code contains backticks)
+        return Pattern.compile("(?s)`{3,}[^\n]*\n.*?`{3,}").matcher(md).replaceAll("");
     }
 }

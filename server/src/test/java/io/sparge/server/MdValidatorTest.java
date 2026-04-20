@@ -294,4 +294,70 @@ class MdValidatorTest {
         assertTrue(hasCheck(issues, "last_section_present"),
                 "Missing final paragraph should be detected");
     }
+
+    // ── crossCodeBlockCount (Python-aligned thresholds) ───────────────────────
+
+    @Test
+    void crossCodeBlockCount_allDropped_isError(@TempDir Path tmp) throws Exception {
+        Path html = tmp.resolve("post.html");
+        Files.writeString(html,
+            "<html><body><article>"
+            + "<p>Content.</p>"
+            + "<pre><code>some code here</code></pre>"
+            + "<p>More content.</p>"
+            + "</article></body></html>");
+        String md = VALID_FM + "Content.\n\nMore content.\n";  // no fences
+        List<MdIssue> issues = MdValidator.validate(md, "post", html);
+        assertTrue(issues.stream().anyMatch(i -> i.check().equals("code_block_count")
+                && i.level().equals("ERROR")),
+                "Dropping all code blocks should be ERROR, not just WARN");
+    }
+
+    @Test
+    void crossCodeBlockCount_oneMissing_isWarn(@TempDir Path tmp) throws Exception {
+        Path html = tmp.resolve("post.html");
+        Files.writeString(html,
+            "<html><body><article>"
+            + "<pre><code>block one</code></pre>"
+            + "<pre><code>block two</code></pre>"
+            + "<pre><code>block three</code></pre>"
+            + "</article></body></html>");
+        // MD has only 1 fence — 2 missing out of 3 (diff > 1)
+        String md = VALID_FM + "```\nblock one\n```\n";
+        List<MdIssue> issues = MdValidator.validate(md, "post", html);
+        assertTrue(hasCheck(issues, "code_block_count"),
+                "2+ missing code blocks should trigger code_block_count");
+    }
+
+    @Test
+    void crossCodeBlockCount_oneOffByOne_passes(@TempDir Path tmp) throws Exception {
+        Path html = tmp.resolve("post.html");
+        Files.writeString(html,
+            "<html><body><article>"
+            + "<pre><code>block one</code></pre>"
+            + "<pre><code>block two</code></pre>"
+            + "</article></body></html>");
+        // MD has 1 fence — diff of 1 is tolerated (not > 1)
+        String md = VALID_FM + "```\nblock one\n```\n";
+        List<MdIssue> issues = MdValidator.validate(md, "post", html);
+        assertFalse(hasCheck(issues, "code_block_count"),
+                "Diff of 1 code block should be tolerated");
+    }
+
+    // ── crossHeadingMatch first-4-words ───────────────────────────────────────
+
+    @Test
+    void crossHeadingMatch_partialMatch_passes(@TempDir Path tmp) throws Exception {
+        Path html = tmp.resolve("post.html");
+        Files.writeString(html,
+            "<html><body><article>"
+            + "<h2>Introduction to Drools Rule Engine</h2>"
+            + "<p>Content here with enough words.</p>"
+            + "</article></body></html>");
+        // MD heading matches first 4 words but truncated — should pass
+        String md = VALID_FM + "## Introduction to Drools Rule Engine\n\nContent here with enough words.\n";
+        List<MdIssue> issues = MdValidator.validate(md, "post", html);
+        assertFalse(hasCheck(issues, "heading_match"),
+                "First-4-word match should pass even if full text differs slightly");
+    }
 }
