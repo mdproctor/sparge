@@ -29,8 +29,14 @@ public class StaticResource {
     private final Path uiDir;
 
     public StaticResource() {
-        Path serverDir = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
-        this.uiDir = serverDir.getParent().resolve("ui");
+        String uiProp = System.getProperty("sparge.ui.dir");
+        if (uiProp != null) {
+            this.uiDir = Paths.get(uiProp).toAbsolutePath();
+        } else {
+            // fallback: direct java -jar from server/ directory
+            Path serverDir = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
+            this.uiDir = serverDir.getParent().resolve("ui");
+        }
     }
 
     @GET

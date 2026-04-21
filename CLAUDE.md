@@ -46,7 +46,7 @@ cd ~/claude/sparge/server && mvn test
 
 **JS tests (Electron):**
 ```bash
-npm run test:unit        # 47 passing — Jest unit tests (mocked)
+npm run test:unit        # 49 passing — Jest unit tests (mocked)
 npm run test:integration # 4 passing — real JavaServer process tests
 npm run test:e2e         # 4 passing — Playwright full app tests
 ```

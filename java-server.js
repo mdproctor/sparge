@@ -49,6 +49,13 @@ function getJarPath(isPackaged, resourcesPath) {
   return path.join(__dirname, 'server', 'target', 'sparge-server-runner.jar');
 }
 
+function getUiPath(isPackaged, resourcesPath) {
+  if (isPackaged) {
+    return path.join(resourcesPath, 'app', 'ui');
+  }
+  return path.join(__dirname, 'ui');
+}
+
 class JavaServer extends EventEmitter {
   constructor({ isPackaged = false, resourcesPath = '' } = {}) {
     super();
@@ -77,7 +84,12 @@ class JavaServer extends EventEmitter {
 
   _doSpawn() {
     const jarPath = getJarPath(this._isPackaged, this._resourcesPath);
-    const jvmArgs = [`-Dquarkus.http.port=${this._port}`, '-jar', jarPath];
+    const uiPath  = getUiPath(this._isPackaged, this._resourcesPath);
+    const jvmArgs = [
+      `-Dquarkus.http.port=${this._port}`,
+      `-Dsparge.ui.dir=${uiPath}`,
+      '-jar', jarPath,
+    ];
     this._process = spawn('java', jvmArgs, { env: { ...process.env } });
     this._process.stdout.on('data', d => this._appendLog(d.toString()));
     this._process.stderr.on('data', d => this._appendLog(d.toString()));
