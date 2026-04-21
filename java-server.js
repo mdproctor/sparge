@@ -49,26 +49,6 @@ function getJarPath(isPackaged, resourcesPath) {
   return path.join(__dirname, 'server', 'target', 'quarkus-app', 'quarkus-run.jar');
 }
 
-function getJepLibPath(isPackaged, resourcesPath) {
-  const base = isPackaged
-    ? path.join(resourcesPath, 'python')
-    : path.join(__dirname, 'resources', 'python', 'mac-arm64');
-  return path.join(base, 'lib', 'python3.12', 'site-packages', 'jep');
-}
-
-function getPythonLibPath(isPackaged, resourcesPath) {
-  const base = isPackaged
-    ? path.join(resourcesPath, 'python')
-    : path.join(__dirname, 'resources', 'python', 'mac-arm64');
-  return path.join(base, 'lib');
-}
-
-function getPythonHomePath(isPackaged, resourcesPath) {
-  return isPackaged
-    ? path.join(resourcesPath, 'python')
-    : path.join(__dirname, 'resources', 'python', 'mac-arm64');
-}
-
 class JavaServer extends EventEmitter {
   constructor({ isPackaged = false, resourcesPath = '' } = {}) {
     super();
@@ -96,25 +76,9 @@ class JavaServer extends EventEmitter {
   }
 
   _doSpawn() {
-    const jarPath    = getJarPath(this._isPackaged, this._resourcesPath);
-    const jepLib     = getJepLibPath(this._isPackaged, this._resourcesPath);
-    const pythonLib  = getPythonLibPath(this._isPackaged, this._resourcesPath);
-    const pythonHome = getPythonHomePath(this._isPackaged, this._resourcesPath);
-
-    const jvmArgs = [
-      `-Djava.library.path=${jepLib}`,
-      `-Dquarkus.http.port=${this._port}`,
-      '-jar', jarPath,
-    ];
-
-    const env = {
-      ...process.env,
-      PYTHONHOME:        pythonHome,
-      DYLD_LIBRARY_PATH: `${pythonLib}${path.delimiter}${process.env.DYLD_LIBRARY_PATH || ''}`,
-      LD_LIBRARY_PATH:   `${pythonLib}${path.delimiter}${process.env.LD_LIBRARY_PATH   || ''}`,
-    };
-
-    this._process = spawn('java', jvmArgs, { env });
+    const jarPath = getJarPath(this._isPackaged, this._resourcesPath);
+    const jvmArgs = [`-Dquarkus.http.port=${this._port}`, '-jar', jarPath];
+    this._process = spawn('java', jvmArgs, { env: { ...process.env } });
     this._process.stdout.on('data', d => this._appendLog(d.toString()));
     this._process.stderr.on('data', d => this._appendLog(d.toString()));
     this._process.on('exit', (code, signal) => this._onExit(code, signal));
