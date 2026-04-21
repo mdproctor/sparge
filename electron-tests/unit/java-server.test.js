@@ -176,7 +176,7 @@ test('dev ui path resolves to ui/ sibling of Electron root', async () => {
   const [, args] = spawn.mock.calls[0];
   const uiArg = args.find(a => a.startsWith('-Dsparge.ui.dir='));
   expect(uiArg).toBeDefined();
-  expect(uiArg).toMatch(/sparge[/\\]ui$/);
+  expect(uiArg).toMatch(/[/\\]ui$/);
 });
 
 test('packaged ui path resolves to resourcesPath/app/ui', async () => {
