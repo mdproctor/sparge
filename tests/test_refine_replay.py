@@ -1,7 +1,7 @@
 import pytest
 from scripts.refine_replay import (
     _normalise, _fingerprint, _similarity,
-    _parse_fences, _find_fence, apply_language_tag, replay,
+    _parse_fences, _find_fence, apply_language_tag, apply_prose_extraction, replay,
     RefinementRule,
 )
 
@@ -101,3 +101,23 @@ def test_replay_conflict_on_no_match():
     assert len(conflicts) == 1
     assert 'language_tag_missing' in conflicts[0]
     assert result == MD_SIMPLE  # unchanged
+
+def test_apply_prose_extraction_moves_prose_before_fence():
+    fences = _parse_fences(MD_PROSE_IN_CODE)
+    assert len(fences) == 1
+    result = apply_prose_extraction(MD_PROSE_IN_CODE, fences[0])
+    # Prose lines should appear before the fence
+    fence_pos = result.index('```')
+    assert 'This is a sentence' in result[:fence_pos]
+    # Original code line should still be in a fence
+    assert 'System.out.println' in result
+
+def test_replay_applies_prose_in_code_rule():
+    fences = _parse_fences(MD_PROSE_IN_CODE)
+    fp = _fingerprint(fences[0]['content'])
+    rule = RefinementRule('prose_in_code', 0, fp, fences[0]['content'][:128], {})
+    result, conflicts = replay(MD_PROSE_IN_CODE, [rule])
+    assert conflicts == []
+    # The prose should now appear before the code block
+    fence_pos = result.index('```')
+    assert 'This is a sentence' in result[:fence_pos]

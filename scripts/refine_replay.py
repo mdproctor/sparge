@@ -88,8 +88,14 @@ def apply_language_tag(md: str, fence: dict, language: str) -> str:
     return md[:fence['start']] + new_block + md[fence['end']:]
 
 
-def apply_prose_extraction(md: str, fence: dict, extracted_text: str) -> str:
-    """Move prose lines out of a fenced code block, placing them before it."""
+def apply_prose_extraction(md: str, fence: dict) -> str:
+    """Move prose lines out of a fenced code block, placing them before it.
+
+    Classifies lines via heuristic: a line is prose if it is long (>20 chars),
+    starts with an uppercase letter, contains a space, and does not start with
+    a code comment marker. If the heuristic would leave an empty code block,
+    the fence is returned unchanged.
+    """
     lines = fence['content'].split('\n')
     prose_lines, code_lines = [], []
     for line in lines:
@@ -104,6 +110,9 @@ def apply_prose_extraction(md: str, fence: dict, extracted_text: str) -> str:
             prose_lines.append(line)
         else:
             code_lines.append(line)
+    # Guard: if all lines were classified as prose, keep the fence unchanged
+    if not any(l.strip() for l in code_lines):
+        return md
     new_content = '\n'.join(code_lines)
     prose_block = '\n'.join(prose_lines) + '\n\n' if prose_lines else ''
     lang = fence['language']
@@ -131,8 +140,7 @@ def replay(md: str, rules: List[RefinementRule]) -> Tuple[str, List[str]]:
             if language:
                 current_md = apply_language_tag(current_md, fence, language)
         elif rule.check == 'prose_in_code':
-            extracted = rule.fix.get('extracted_text', '')
-            current_md = apply_prose_extraction(current_md, fence, extracted)
+            current_md = apply_prose_extraction(current_md, fence)
 
         # Re-parse after each application so offsets stay accurate
         fences = _parse_fences(current_md)
