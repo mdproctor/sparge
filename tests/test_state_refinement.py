@@ -40,3 +40,4 @@ def test_clear_refinement(store):
     p = store.get('test-slug')
     assert p['refinement']['accepted'] == []
     assert p['refinement']['replay_conflicts'] == []
+    assert p['refinement']['refined_at'] is None

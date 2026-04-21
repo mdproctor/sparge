@@ -182,12 +182,12 @@ def set_md_issues(slug: str, issues: list[dict]):
     update(slug, {'md': {'issues': issues, 'validated_at': _now()}})
 
 
-def set_md_suggestions(slug, suggestions):
+def set_md_suggestions(slug: str, suggestions: list[dict]) -> None:
     """Store refinement suggestions (from refine()) in state.md.suggestions."""
     update(slug, {'md': {'suggestions': suggestions, 'suggestions_at': _now()}})
 
 
-def set_refinement(slug, accepted, replay_conflicts):
+def set_refinement(slug: str, accepted: list[dict], replay_conflicts: list) -> None:
     """Store accepted refinement rules and any replay conflicts."""
     update(slug, {'refinement': {
         'accepted': accepted,
@@ -196,7 +196,7 @@ def set_refinement(slug, accepted, replay_conflicts):
     }})
 
 
-def clear_refinement(slug):
+def clear_refinement(slug: str) -> None:
     """Reset refinement state (e.g., after user discards all rules)."""
     update(slug, {'refinement': {
         'accepted': [],
