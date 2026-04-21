@@ -41,7 +41,7 @@ test('GET /api/posts returns an array', async () => {
   expect(Array.isArray(result)).toBe(true);
 });
 
-test('app quits cleanly with no zombie Python process', async () => {
+test('app quits cleanly with no zombie Java process', async () => {
   await app.close();
   app = null;
   const app2    = await electron.launch({ args: [path.join(__dirname, '..', '..', 'main.js')] });
