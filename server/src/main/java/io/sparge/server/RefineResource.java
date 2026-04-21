@@ -222,7 +222,7 @@ public class RefineResource {
         if (detail == null) return -1;
         var m = java.util.regex.Pattern.compile("fence\\s+(\\d+)").matcher(detail);
         if (m.find()) return Integer.parseInt(m.group(1));
-        return 0; // list-level issue: apply to first fence
+        return -1; // non-fence issue: no fence data
     }
 
     private static Map<String, String> inferFix(String check,

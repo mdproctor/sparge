@@ -405,14 +405,17 @@ public final class MdValidator {
     }
 
     private static List<MdIssue> checkMissingLanguageTags(String md) {
-        List<String> untagged = new ArrayList<>();
+        List<MdIssue> issues = new ArrayList<>();
         boolean inFence = false;
         int fenceIdx = 0;
         for (String line : md.split("\n")) {
             if (line.startsWith("```")) {
                 if (!inFence) {
                     String lang = line.substring(3).trim();
-                    if (lang.isEmpty()) untagged.add("fence " + fenceIdx);
+                    if (lang.isEmpty()) {
+                        issues.add(new MdIssue("language_tag_missing", "WARN",
+                            "fence " + fenceIdx + ": no language annotation"));
+                    }
                     fenceIdx++;
                     inFence = true;
                 } else {
@@ -420,10 +423,7 @@ public final class MdValidator {
                 }
             }
         }
-        if (untagged.isEmpty()) return List.of();
-        return List.of(new MdIssue("language_tag_missing", "WARN",
-            untagged.size() + " code fence(s) have no language annotation: "
-            + String.join(", ", untagged)));
+        return issues;
     }
 
     private static List<MdIssue> crossYoutubeCount(String md, Element article) {

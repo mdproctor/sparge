@@ -66,6 +66,27 @@ class RefineResourceTest {
         assertEquals(MD_WITH_UNTAGGED, refined);
     }
 
+    static final String MD_TWO_UNTAGGED = """
+            # Post
+
+            ```
+            System.out.println("first");
+            ```
+
+            ```
+            int x = 2;
+            String y = "hello";
+            ```
+            """;
+
+    @Test void computeSuggestions_finds_all_untagged_fences() {
+        var suggestions = RefineResource.computeSuggestions(MD_TWO_UNTAGGED, "slug", null);
+        long untaggedCount = suggestions.stream()
+            .filter(s -> "language_tag_missing".equals(s.get("check")))
+            .count();
+        assertEquals(2, untaggedCount, "Should find one suggestion per untagged fence");
+    }
+
     @Test void buildRules_creates_rule_from_suggestion() {
         var suggestions = RefineResource.computeSuggestions(MD_WITH_UNTAGGED, "slug", null);
         var langSugg = suggestions.stream()
