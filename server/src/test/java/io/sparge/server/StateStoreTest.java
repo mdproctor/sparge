@@ -328,4 +328,64 @@ class StateStoreTest {
         assertFalse(Files.exists(mdDir.resolve("post.md.staged")));
         assertFalse(store.get("post").path("md").path("staged").asBoolean());
     }
+
+    // ── Refinement state ──────────────────────────────────────────────────────
+
+    @Test
+    void setMdSuggestions_stores_in_md_sub_dict() {
+        store.update("post", Map.of("title", "My Post"));
+        var suggestions = List.of(Map.<String, Object>of(
+            "check", "language_tag_missing", "level", "WARN", "detail", "2 fences"));
+        store.setMdSuggestions("post", suggestions);
+        ObjectNode md = (ObjectNode) store.get("post").path("md");
+        assertFalse(md.path("suggestions").isMissingNode(), "suggestions must be stored in md sub-dict");
+        assertTrue(md.path("suggestions").isArray(), "suggestions must be an array");
+        assertEquals(1, md.path("suggestions").size());
+        assertEquals("language_tag_missing", md.path("suggestions").get(0).path("check").asText());
+        assertFalse(md.path("suggestions_at").isMissingNode(), "suggestions_at timestamp must be set");
+    }
+
+    @Test
+    void setMdSuggestions_preserves_existing_md_keys() {
+        store.update("post", Map.of("md", Map.of("generated_at", "2026-01-01", "staged", false)));
+        store.setMdSuggestions("post", List.of());
+        assertEquals("2026-01-01", store.get("post").path("md").path("generated_at").asText(),
+            "existing md keys must survive setMdSuggestions");
+    }
+
+    @Test
+    void setRefinement_stores_accepted_and_conflicts() {
+        store.update("post", Map.of("title", "My Post"));
+        var accepted = List.of(Map.<String, Object>of("fix", "add_language_tag", "slug", "post"));
+        var conflicts = List.of("conflict-slug-1");
+        store.setRefinement("post", accepted, conflicts);
+        ObjectNode refinement = (ObjectNode) store.get("post").path("refinement");
+        assertFalse(refinement.isMissingNode(), "refinement sub-dict must exist");
+        assertTrue(refinement.path("accepted").isArray());
+        assertEquals(1, refinement.path("accepted").size());
+        assertEquals("add_language_tag", refinement.path("accepted").get(0).path("fix").asText());
+        assertTrue(refinement.path("replay_conflicts").isArray());
+        assertEquals(1, refinement.path("replay_conflicts").size());
+        assertEquals("conflict-slug-1", refinement.path("replay_conflicts").get(0).asText());
+        assertFalse(refinement.path("refined_at").isMissingNode(), "refined_at timestamp must be set");
+    }
+
+    @Test
+    void setRefinement_deep_merges_with_existing_refinement_keys() {
+        store.update("post", Map.of("refinement", Map.of("extra_key", "keep_me")));
+        store.setRefinement("post", List.of(), List.of());
+        assertEquals("keep_me", store.get("post").path("refinement").path("extra_key").asText(),
+            "existing refinement keys must survive setRefinement deep-merge");
+    }
+
+    @Test
+    void clearRefinement_resets_to_empty() {
+        var accepted = List.of(Map.<String, Object>of("fix", "something"));
+        store.setRefinement("post", accepted, List.of("c1"));
+        store.clearRefinement("post");
+        ObjectNode refinement = (ObjectNode) store.get("post").path("refinement");
+        assertEquals(0, refinement.path("accepted").size(), "accepted must be empty after clear");
+        assertEquals(0, refinement.path("replay_conflicts").size(), "replay_conflicts must be empty after clear");
+        assertEquals("", refinement.path("refined_at").asText(), "refined_at must be empty string after clear");
+    }
 }

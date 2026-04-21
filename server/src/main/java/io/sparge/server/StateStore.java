@@ -96,7 +96,7 @@ public class StateStore {
         for (Map.Entry<String, Object> kv : patch.entrySet()) {
             String key = kv.getKey();
             Object val = kv.getValue();
-            if ((key.equals("html") || key.equals("md") || key.equals("assets"))
+            if ((key.equals("html") || key.equals("md") || key.equals("assets") || key.equals("refinement"))
                     && val instanceof Map) {
                 ObjectNode sub = entry.has(key)
                         ? (ObjectNode) entry.get(key)
@@ -239,6 +239,35 @@ public class StateStore {
         update(slug, Map.of("md", Map.of(
                 "issues",       issues,
                 "validated_at", now()
+        )));
+    }
+
+    // ── MD suggestions ────────────────────────────────────────────────────────
+
+    public synchronized void setMdSuggestions(String slug, List<Map<String, Object>> suggestions) {
+        update(slug, Map.of("md", Map.of(
+                "suggestions",    suggestions,
+                "suggestions_at", now()
+        )));
+    }
+
+    // ── Refinement state ──────────────────────────────────────────────────────
+
+    public synchronized void setRefinement(String slug,
+                                            List<Map<String, Object>> accepted,
+                                            List<String> replayConflicts) {
+        update(slug, Map.of("refinement", Map.of(
+                "accepted",         accepted,
+                "replay_conflicts", replayConflicts,
+                "refined_at",       now()
+        )));
+    }
+
+    public synchronized void clearRefinement(String slug) {
+        update(slug, Map.of("refinement", Map.of(
+                "accepted",         List.of(),
+                "replay_conflicts", List.of(),
+                "refined_at",       ""
         )));
     }
 
