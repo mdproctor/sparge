@@ -357,4 +357,85 @@ public final class MdValidator {
         // Handle variable-length fences (3, 4, 5+ backticks used when code contains backticks)
         return Pattern.compile("(?s)`{3,}[^\n]*\n.*?`{3,}").matcher(md).replaceAll("");
     }
+
+    // ── Public refinement API ─────────────────────────────────────────────────
+
+    public static List<MdIssue> refine(String md, String slug, Path htmlPath) {
+        List<MdIssue> suggestions = new ArrayList<>();
+        suggestions.addAll(checkProseInCode(md));
+        suggestions.addAll(checkMissingLanguageTags(md));
+        if (htmlPath != null && Files.exists(htmlPath)) {
+            try {
+                String html = Files.readString(htmlPath, StandardCharsets.UTF_8);
+                Element article = loadArticle(html);
+                if (article != null) suggestions.addAll(crossYoutubeCount(md, article));
+            } catch (Exception ignored) {
+                // refinement failures are silent — not critical path
+            }
+        }
+        return suggestions;
+    }
+
+    // ── Private refinement checks ─────────────────────────────────────────────
+
+    private static List<MdIssue> checkProseInCode(String md) {
+        List<MdIssue> issues = new ArrayList<>();
+        var fenceBlock = Pattern.compile("(?m)^(```+)(\\w*)\\n(.*?)^\\1\\s*$",
+            java.util.regex.Pattern.DOTALL);
+        var m = fenceBlock.matcher(md);
+        int fenceIdx = 0;
+        while (m.find()) {
+            String body = m.group(3);
+            long proseLines = Arrays.stream(body.split("\n"))
+                .map(String::trim)
+                .filter(l -> l.length() > 20)
+                .filter(l -> !l.isEmpty() && Character.isUpperCase(l.charAt(0)))
+                .filter(l -> l.contains(" "))
+                .filter(l -> !l.startsWith("//") && !l.startsWith("*")
+                          && !l.startsWith("#") && !l.startsWith("@")
+                          && !l.startsWith("<") && !l.startsWith("/*"))
+                .count();
+            if (proseLines >= 2) {
+                issues.add(new MdIssue("prose_in_code", "WARN",
+                    "fence " + fenceIdx + ": " + proseLines + " prose-like line(s) inside code block"));
+            }
+            fenceIdx++;
+        }
+        return issues;
+    }
+
+    private static List<MdIssue> checkMissingLanguageTags(String md) {
+        List<String> untagged = new ArrayList<>();
+        boolean inFence = false;
+        int fenceIdx = 0;
+        for (String line : md.split("\n")) {
+            if (line.startsWith("```")) {
+                if (!inFence) {
+                    String lang = line.substring(3).trim();
+                    if (lang.isEmpty()) untagged.add("fence " + fenceIdx);
+                    fenceIdx++;
+                    inFence = true;
+                } else {
+                    inFence = false;
+                }
+            }
+        }
+        if (untagged.isEmpty()) return List.of();
+        return List.of(new MdIssue("language_tag_missing", "WARN",
+            untagged.size() + " code fence(s) have no language annotation: "
+            + String.join(", ", untagged)));
+    }
+
+    private static List<MdIssue> crossYoutubeCount(String md, Element article) {
+        long htmlYt = article.select(
+            "iframe[src*=youtube], iframe[src*=youtu.be], a[href*=youtube.com/watch]").size();
+        long mdYt = Pattern.compile("youtube\\.com/watch|youtu\\.be/")
+            .matcher(md).results().count();
+        if (htmlYt > 0 && mdYt < htmlYt) {
+            return List.of(new MdIssue("youtube_count", "WARN",
+                htmlYt + " YouTube embed(s) in HTML, " + mdYt + " reference(s) in MD"
+                + " — verify figures render correctly"));
+        }
+        return List.of();
+    }
 }
