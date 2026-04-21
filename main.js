@@ -4,19 +4,12 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path            = require('path');
 const log             = require('electron-log');
 const { autoUpdater } = require('electron-updater');
-const { findFreePort } = require('./python-server');
+const { findFreePort } = require('./java-server');
 const { createServer } = require('./server-factory');
 
 function makeServer() {
-  const usePython = process.env.SPARGE_SERVER === 'python';
-  log.info(usePython ? 'Using PythonServer (SPARGE_SERVER=python)' : 'Using JavaServer (default)');
-  return createServer({
-    env:          process.env,
-    isPackaged:   app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    pythonExe:    usePython ? getPythonExe() : null,
-    serverScript: usePython ? getServerScript() : null,
-  });
+  log.info('Using JavaServer');
+  return createServer({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath });
 }
 
 autoUpdater.logger               = log;
@@ -24,30 +17,6 @@ autoUpdater.autoDownload         = true;
 autoUpdater.autoInstallOnAppQuit = false;
 
 let mainWindow = null;
-
-function getPythonExe() {
-  const platform = process.platform;
-  const arch     = process.arch;
-  const dirMap   = {
-    'darwin-arm64': 'mac-arm64',
-    'darwin-x64':   'mac-x64',
-    'win32-x64':    'win-x64',
-    'linux-x64':    'linux-x64',
-  };
-  const dir = dirMap[`${platform}-${arch}`];
-  if (!dir) throw new Error(`Unsupported platform: ${platform}-${arch}`);
-  const exe = platform === 'win32' ? 'python.exe' : 'python3';
-  if (app.isPackaged) {
-    // electron-builder strips the platform subdir when copying extraResources
-    return path.join(process.resourcesPath, 'python', 'bin', exe);
-  }
-  return path.join(__dirname, 'resources', 'python', dir, 'bin', exe);
-}
-
-function getServerScript() {
-  const base = app.isPackaged ? path.join(process.resourcesPath, 'app') : __dirname;
-  return path.join(base, 'server.py');
-}
 
 const server = makeServer();
 

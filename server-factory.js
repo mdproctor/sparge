@@ -1,12 +1,8 @@
 // server-factory.js
 'use strict';
-const { PythonServer } = require('./python-server');
-const { JavaServer }   = require('./java-server');
+const { JavaServer } = require('./java-server');
 
-function createServer({ env = process.env, isPackaged = false, resourcesPath = '', pythonExe = null, serverScript = null } = {}) {
-  if (env.SPARGE_SERVER === 'python') {
-    return new PythonServer({ pythonExe, serverScript });
-  }
+function createServer({ env = process.env, isPackaged = false, resourcesPath = '' } = {}) {
   return new JavaServer({ isPackaged, resourcesPath });
 }
 

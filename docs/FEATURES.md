@@ -21,7 +21,7 @@ state of every post across sessions so you can work incrementally.
 - Paths in config are relative to `serve_root` except `serve_root` itself
 - Config panel accessible via ⚙ Config button (top-right of top bar)
 - Changes to config require a server restart to take effect (paths are loaded once at startup)
-- Start the server: `python3 blog-migrator/server.py` from the repo root
+- Start the server: `npm start` (Electron, Java server) or `python3 server.py` (browser mode)
 - UI opens at `http://localhost:{port}/ui/`
 
 ---
