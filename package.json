@@ -29,10 +29,13 @@
     "productName": "Sparge",
     "files": [
       "main.js",
+      "java-server.js",
+      "server-factory.js",
       "python-server.js",
       "preload.js"
     ],
     "extraResources": [
+      { "from": "server/target/sparge-server-runner.jar", "to": "sparge-server-runner.jar" },
       { "from": "server.py", "to": "app/server.py" },
       { "from": "scripts", "to": "app/scripts", "filter": ["**/*", "!fetch-python.js"] },
       { "from": "ui", "to": "app/ui" }

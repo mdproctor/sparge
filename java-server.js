@@ -46,7 +46,7 @@ function getJarPath(isPackaged, resourcesPath) {
   if (isPackaged) {
     return path.join(resourcesPath, 'sparge-server-runner.jar');
   }
-  return path.join(__dirname, 'server', 'target', 'quarkus-app', 'quarkus-run.jar');
+  return path.join(__dirname, 'server', 'target', 'sparge-server-runner.jar');
 }
 
 class JavaServer extends EventEmitter {

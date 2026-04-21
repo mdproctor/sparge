@@ -1,6 +1,7 @@
 // electron-tests/unit/java-server.test.js
 'use strict';
 const { EventEmitter } = require('events');
+const path             = require('path');
 jest.mock('child_process');
 
 const { spawn }      = require('child_process');
@@ -164,7 +165,24 @@ test('_doSpawn JVM args are exactly [-Dquarkus.http.port, -jar, jarPath]', async
   expect(args).toHaveLength(3);
   expect(args[0]).toBe('-Dquarkus.http.port=19013');
   expect(args[1]).toBe('-jar');
-  expect(args[2]).toMatch(/quarkus-run\.jar$/);
+  expect(args[2]).toMatch(/sparge-server-runner\.jar$/);
+});
+
+test('dev jar path resolves to sparge-server-runner.jar inside server/target', async () => {
+  spawn.mockReturnValue(makeMockProcess());
+  const server = makeServer(); // isPackaged: false
+  await server.spawnServer(19015);
+  const [, args] = spawn.mock.calls[0];
+  expect(args[2]).toMatch(/server[/\\]target[/\\]sparge-server-runner\.jar$/);
+});
+
+test('packaged jar path resolves to sparge-server-runner.jar inside resourcesPath', async () => {
+  spawn.mockReturnValue(makeMockProcess());
+  const server = new JavaServer({ isPackaged: true, resourcesPath: '/fake/resources' });
+  server._pollFn = jest.fn().mockResolvedValue(undefined);
+  await server.spawnServer(19016);
+  const [, args] = spawn.mock.calls[0];
+  expect(args[2]).toBe(path.join('/fake/resources', 'sparge-server-runner.jar'));
 });
 
 test('_doSpawn JVM args contain no java.library.path flag', async () => {

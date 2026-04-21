@@ -24,9 +24,9 @@ Browser mode (Python) serves on port 9000. Electron mode allocates a dynamic por
 **Quarkus server (fully native Java — no Python/JEP required):**
 ```bash
 cd ~/claude/sparge/server
-mvn package -DskipTests    # build jar → target/quarkus-app/quarkus-run.jar
+mvn package -DskipTests    # build uber-jar → target/sparge-server-runner.jar
 java -Dquarkus.http.port=9000 \
-     -jar target/quarkus-app/quarkus-run.jar
+     -jar target/sparge-server-runner.jar
 ```
 
 ## Testing
@@ -47,7 +47,7 @@ cd ~/claude/sparge/server && mvn test
 
 **JS tests (Electron):**
 ```bash
-npm run test:unit        # 55 passing — Jest unit tests (mocked)
+npm run test:unit        # 57 passing — Jest unit tests (mocked)
 npm run test:integration # 8 passing — real server process tests (Python + Java)
 npm run test:e2e         # 4 passing — Playwright full app tests
 ```
