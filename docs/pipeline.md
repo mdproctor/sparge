@@ -247,6 +247,36 @@ blog-migrator/projects/{project-id}/
 
 ---
 
+## Stage 4 — Refine (optional)
+
+**Reads:** `{output.md_dir}/{slug}.md` (generated MD)  
+**Writes:** `{output.md_dir}/{slug}.md` (refined MD, in place)  
+**State fields set:** `md.suggestions`, `refinement.accepted`, `refinement.replay_conflicts`, `refinement.refined_at`
+
+Stage 4 surfaces content quality improvements detected by `MdValidator.refine()` and lets users selectively apply them. Accepted suggestions are stored as typed rules with content anchors (`fence_index` + `fingerprint` + `content_sample`); they replay automatically the next time MD is regenerated via the `RefinementReplay` engine.
+
+### Refinement checks
+
+| Check | Level | What it detects | Auto-fix |
+|-------|-------|-----------------|----------|
+| `prose_in_code` | WARN | Prose sentences (≥2) inside fenced code blocks | Move prose before fence |
+| `language_tag_missing` | WARN | Code fences with no language annotation (one issue per fence) | Add heuristic-detected language tag |
+| `youtube_count` | WARN | YouTube embeds in HTML not represented in MD | Verification only — manual |
+
+### Replay engine
+
+Accepted rules store `fence_index` (position hint) and `fingerprint` (sha256[:16] of normalised content). On replay after regeneration: exact fingerprint match at `fence_index`; slide ±2 fences if needed; fallback to 85% content-sample similarity. Unmatched rules stored as `replay_conflicts`, shown amber in the UI.
+
+### UI
+
+The pipeline toggle button (≡ HTML→MD / ≡ MD→Refined) switches the split view between two stage pairs. In MD→Refined mode:
+- **Left panel:** original MD (read-only)  
+- **Right panel:** refined MD diff (green adds, red deletions, using existing diff engine)  
+- **Suggestions panel:** third column with Add/Remove per-row buttons and bulk Add all / Remove all  
+- **Accept Refined:** writes refined MD to disk and stores accepted rules to state
+
+---
+
 ## What is NOT yet in Sparge (planned)
 
 These capabilities exist in the original `scripts/` tools and will be migrated in future sub-projects:
