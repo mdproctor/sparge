@@ -22,6 +22,12 @@ test('app launches and main window appears', async () => {
   expect(url).toContain('/ui/');
 });
 
+test('projects page renders UI — not a white screen', async () => {
+  await expect(window.locator('#topbar')).toBeVisible({ timeout: 5000 });
+  await expect(window.locator('#logo-name')).toHaveText('Sparge');
+  await expect(window.locator('#proj-list')).toBeAttached();
+});
+
 test('projects.html loads without JS errors', async () => {
   const errors = [];
   window.on('pageerror', err => errors.push(err.message));

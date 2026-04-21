@@ -48,7 +48,7 @@ cd ~/claude/sparge/server && mvn test
 ```bash
 npm run test:unit        # 49 passing — Jest unit tests (mocked)
 npm run test:integration # 4 passing — real JavaServer process tests
-npm run test:e2e         # 4 passing — Playwright full app tests
+npm run test:e2e         # 9 passing — Playwright full app tests (5 app + 4 delete)
 ```
 E2E tests require the Electron binary (run `node node_modules/electron/install.js` once).
 
