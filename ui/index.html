@@ -225,7 +225,7 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 .tab:hover { color:var(--ink); }
 .tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
 
-#panels { flex:1; display:flex; overflow:hidden; min-height:0; }
+#panels { flex:1; display:flex; overflow:hidden; min-height:0; position:relative; }
 #divider { width:4px; background:var(--border); cursor:col-resize; flex-shrink:0; }
 #divider:hover { background:var(--accent); }
 .panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
@@ -290,6 +290,52 @@ button.warn { background:#f4e8e0; border-color:var(--warn); color:var(--warn); }
 .irow.highlighted.err  { background:rgba(138,42,42,.13); outline:1px solid rgba(138,42,42,.4); }
 .irow.highlighted.warn { background:rgba(200,112,32,.13); outline:1px solid rgba(200,112,32,.4); }
 .no-iss { padding:6px 12px; font-size:11px; color:var(--muted); font-style:italic; }
+
+/* ── Refine panel ── */
+#refine-panel {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 300px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  font-size: 13px;
+  overflow: hidden;
+}
+#refine-panel.hidden { display: none; }
+#refine-panel-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+#refine-bulk-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+#refine-bulk-row button { flex: 1; padding: 4px 8px; font-size: 11px; border-radius: 4px; }
+#refine-suggestion-list { flex: 1; overflow-y: auto; }
+.refine-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); transition: opacity 0.15s; }
+.refine-row.removed { opacity: 0.4; }
+.refine-row-btn { padding: 2px 7px; font-size: 10px; border-radius: 3px; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+.refine-row-btn.added  { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e55; }
+.refine-row-btn.removed-btn { background: #3a3a5e; color: #6060a0; border: 1px solid #3a3a5e; }
+.refine-check { font-size: 11px; color: var(--muted); font-family: monospace; }
+.refine-detail { font-size: 12px; color: var(--text); margin-top: 2px; }
+.refine-conflict-note { font-size: 11px; color: #f59e0b; margin-top: 2px; }
 .md-absent-marker { border-top:2px dashed var(--error); border-bottom:2px dashed var(--error);
                     padding:3px 12px; margin:6px 0; background:rgba(138,42,42,.04);
                     font-size:10px; color:var(--error); font-style:italic; cursor:default; }
@@ -560,6 +606,7 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
         </div>
         <div class="ph">Converted Markdown
           <span class="ph-badge" id="ph-md-badge" style="display:none"></span>
+          <span class="ph-badge" id="ph-refine-badge" style="display:none"></span>
           <button id="btn-edit-md" onclick="toggleEditMode()"
             style="margin-left:auto;background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer"
             title="Edit Markdown directly">✎ Edit</button>
@@ -589,6 +636,18 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
               <button class="success" onclick="generateMd()" style="margin-top:4px">↺ Generate MD</button>
             </div>
           </div>
+        </div>
+        <!-- Refine panel — overlays right side of #panels -->
+        <div id="refine-panel" class="hidden">
+          <div id="refine-panel-hdr">
+            <span>Refinements</span>
+            <button onclick="closeRefinePanel()" style="background:none;border:none;color:var(--muted);padding:2px 6px;cursor:pointer">✕</button>
+          </div>
+          <div id="refine-bulk-row">
+            <button onclick="addAllSuggestions()" id="btn-add-all">⊕ Add all</button>
+            <button onclick="removeAllSuggestions()" id="btn-remove-all">⊖ Remove all</button>
+          </div>
+          <div id="refine-suggestion-list"></div>
         </div>
       </div>
       <!-- Issue panel -->
@@ -1683,6 +1742,24 @@ function renderPanelBadges(p) {
   // Show/hide the Review Staged button
   const stagedBtn=$('btn-staged');
   if (stagedBtn) { stagedBtn.style.display=p.md?.staged?'':'none'; }
+  // Refinement badge
+  const rb = $('ph-refine-badge');
+  if (rb) {
+    const refinement = p.refinement || {};
+    const replayConflicts = refinement.replay_conflicts || [];
+    const accepted = refinement.accepted || [];
+    if (replayConflicts.length > 0) {
+      rb.style.cssText='display:inline;background:#f4e8e0;color:#f59e0b;border-radius:3px;padding:1px 6px;font-size:10px';
+      rb.textContent=`⚠ ${replayConflicts.length} conflict${replayConflicts.length!==1?'s':''}`;
+      rb.title=`${replayConflicts.length} refinement replay conflict${replayConflicts.length!==1?'s':''} — resolve manually`;
+    } else if (accepted.length > 0) {
+      rb.style.cssText='display:inline;background:var(--approve-bg);color:var(--approve);border-radius:3px;padding:1px 6px;font-size:10px';
+      rb.textContent='✨ Refined';
+      rb.title=`${accepted.length} refinement${accepted.length!==1?'s':''} accepted`;
+    } else {
+      rb.style.display='none';
+    }
+  }
 }
 
 async function loadMd(p) {
@@ -2376,12 +2453,15 @@ async function enterRefineMode() {
       accepted_checks: new Set((data.suggestions || []).map(s => s.check)),
     };
     await renderRefineMode();
+    renderRefinePanel();
+    openRefinePanel();
   } catch (e) {
     alert('Refine mode error: ' + e.message);
   }
 }
 
 function exitRefineMode() {
+  closeRefinePanel();
   refineData = null;
   // Restore normal panels
   $('orig-frame').src = `/api/posts/${currentSlug}/view?v=${Date.now()}`;
@@ -2417,6 +2497,130 @@ function renderRefineDiff(originalMd, refinedMd) {
         <div style="flex:1;overflow:auto;font-family:monospace;font-size:12px">${right}</div>
       </div>
     </div>`;
+  }
+}
+
+function openRefinePanel()  { $('refine-panel').classList.remove('hidden'); }
+function closeRefinePanel() { $('refine-panel').classList.add('hidden'); }
+
+function renderRefinePanel() {
+  if (!refineData) return;
+  const post = allPosts.find(x => x.slug === currentSlug);
+  const conflicts = post?.refinement?.replay_conflicts || [];
+
+  if (refineData.suggestions.length === 0) {
+    $('refine-suggestion-list').innerHTML =
+      '<div style="padding:12px;color:var(--muted);font-size:12px">No refinements detected for this post.</div>';
+    $('btn-accept-refined').disabled = true;
+    return;
+  }
+
+  const rows = refineData.suggestions.map(s => {
+    const added   = refineData.accepted_checks.has(s.check);
+    const isConfl = conflicts.some(c => c.startsWith(s.check + '@fence_' + s.fence_index));
+    const btnCls  = added ? 'added' : 'removed-btn';
+    const btnLbl  = added ? '− Remove' : '+ Add';
+    const rowCls  = added ? '' : ' removed';
+    const conflHtml = isConfl
+      ? `<div class="refine-conflict-note">⚠ replay conflict — resolve manually</div>` : '';
+    const fenceLabel = s.fence_index >= 0 ? ` (fence ${s.fence_index})` : '';
+    return `<div class="refine-row${rowCls}" data-check="${esc(s.check)}" data-fence="${s.fence_index}">
+      <button class="refine-row-btn ${btnCls}" onclick="toggleSuggestion('${esc(s.check)}', ${s.fence_index})">${btnLbl}</button>
+      <div style="flex:1;min-width:0">
+        <div class="refine-check">${esc(s.check)}${fenceLabel}</div>
+        <div class="refine-detail">${esc(s.detail)}</div>
+        ${conflHtml}
+      </div>
+    </div>`;
+  });
+
+  $('refine-suggestion-list').innerHTML = rows.join('');
+  $('btn-accept-refined').disabled = refineData.accepted_checks.size === 0;
+}
+
+async function toggleSuggestion(check, fenceIndex) {
+  if (!refineData) return;
+  const key = check + '@' + fenceIndex;
+  // Use per-suggestion key (check + fenceIndex) to allow toggling individual fences
+  if (!refineData.accepted_keys) refineData.accepted_keys = new Set(
+    [...refineData.accepted_checks].map(c => {
+      const matching = refineData.suggestions.filter(s => s.check === c);
+      return matching.map(s => s.check + '@' + s.fence_index);
+    }).flat()
+  );
+  if (refineData.accepted_keys.has(key)) {
+    refineData.accepted_keys.delete(key);
+  } else {
+    refineData.accepted_keys.add(key);
+  }
+  // Rebuild accepted_checks from accepted_keys
+  refineData.accepted_checks = new Set(
+    [...refineData.accepted_keys].map(k => k.split('@')[0])
+  );
+  await refreshRefineDiff();
+  renderRefinePanel();
+}
+
+async function addAllSuggestions() {
+  if (!refineData) return;
+  refineData.accepted_checks = new Set(refineData.suggestions.map(s => s.check));
+  refineData.accepted_keys   = new Set(refineData.suggestions.map(s => s.check + '@' + s.fence_index));
+  await refreshRefineDiff();
+  renderRefinePanel();
+}
+
+async function removeAllSuggestions() {
+  if (!refineData) return;
+  refineData.accepted_checks = new Set();
+  refineData.accepted_keys   = new Set();
+  await refreshRefineDiff();
+  renderRefinePanel();
+}
+
+async function refreshRefineDiff() {
+  if (!refineData || !currentSlug) return;
+  try {
+    const acceptedChecks = [...(refineData.accepted_checks || new Set())];
+    const res = await fetch(`/api/posts/${currentSlug}/refine`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({accepted_checks: acceptedChecks}),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    refineData.refined_md = data.refined_md;
+    const rawRes = await fetch(`/api/posts/${currentSlug}/md-raw`);
+    const originalMd = rawRes.ok ? await rawRes.text() : '';
+    renderRefineDiff(originalMd, refineData.refined_md);
+  } catch (e) {
+    console.warn('refreshRefineDiff error:', e);
+  }
+}
+
+async function acceptRefined() {
+  if (!refineData || !currentSlug) return;
+  const accepted = refineData.suggestions
+    .filter(s => refineData.accepted_checks.has(s.check));
+  if (accepted.length === 0) return;
+  try {
+    const res = await fetch(`/api/posts/${currentSlug}/refine/accept`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({accepted}),
+    });
+    if (!res.ok) { alert('Accept failed: ' + res.status); return; }
+    const post = await res.json();
+    const idx = allPosts.findIndex(x => x.slug === currentSlug);
+    if (idx >= 0) allPosts[idx] = post;
+    pipelineView = 'html-md';
+    $('btn-pipeline').textContent = '≡ HTML→MD';
+    $('btn-pipeline').classList.remove('active');
+    $('btn-accept-refined').style.display = 'none';
+    closeRefinePanel();
+    exitRefineMode();
+    renderPanelBadges(post);
+  } catch (e) {
+    alert('Accept error: ' + e.message);
   }
 }
 
