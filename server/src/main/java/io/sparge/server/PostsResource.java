@@ -206,6 +206,38 @@ public class PostsResource {
                 .<java.util.Map<String, Object>>map(i -> java.util.Map.of("check", i.check(), "level", i.level(), "detail", i.detail()))
                 .collect(java.util.stream.Collectors.toList()));
 
+            // Auto-replay any previously accepted refinement rules
+            ObjectNode existingState = stateStore.get(slug);
+            if (existingState != null && existingState.has("refinement")) {
+                com.fasterxml.jackson.databind.JsonNode acceptedNode =
+                    existingState.get("refinement").path("accepted");
+                if (acceptedNode.isArray() && acceptedNode.size() > 0) {
+                    java.util.List<java.util.Map<String, Object>> accepted = new java.util.ArrayList<>();
+                    acceptedNode.forEach(n -> {
+                        var m = new java.util.LinkedHashMap<String, Object>();
+                        n.fields().forEachRemaining(e -> {
+                            if (e.getValue().isObject()) {
+                                var inner = new java.util.LinkedHashMap<String, String>();
+                                e.getValue().fields().forEachRemaining(ie ->
+                                    inner.put(ie.getKey(), ie.getValue().asText()));
+                                m.put(e.getKey(), inner);
+                            } else if (e.getValue().isInt()) {
+                                m.put(e.getKey(), e.getValue().intValue());
+                            } else {
+                                m.put(e.getKey(), e.getValue().asText());
+                            }
+                        });
+                        accepted.add(m);
+                    });
+                    RefinementReplay.ReplayResult replay = autoReplay(content, accepted);
+                    if (!replay.refinedMd().equals(content) || !replay.conflicts().isEmpty()) {
+                        java.nio.file.Files.writeString(mdPath, replay.refinedMd(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                        stateStore.setRefinement(slug, accepted, replay.conflicts());
+                    }
+                }
+            }
+
             ObjectNode post = stateStore.get(slug);
             return ok(post != null ? post.toString() : "{}");
         } catch (Exception e) {
@@ -437,6 +469,20 @@ public class PostsResource {
                                @PathParam("type") String type) {
         stateStore.undismissHtmlCheck(slug, type);
         return scan(slug);  // re-scan immediately so the issue reappears
+    }
+
+    // ── Auto-replay ───────────────────────────────────────────────────────────
+
+    /**
+     * Re-apply stored refinement rules after MD regeneration.
+     * Called from generateMd() when state.refinement.accepted is non-empty.
+     */
+    static RefinementReplay.ReplayResult autoReplay(String md,
+                                                     java.util.List<java.util.Map<String, Object>> accepted) {
+        if (accepted == null || accepted.isEmpty())
+            return new RefinementReplay.ReplayResult(md, java.util.List.of());
+        java.util.List<RefinementRule> rules = RefineResource.buildRules(md, accepted);
+        return RefinementReplay.replay(md, rules);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
