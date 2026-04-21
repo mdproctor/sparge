@@ -1,57 +1,54 @@
-# Handover — 2026-04-17
+# Handover — 2026-04-21
 
-**Branch:** `main` (clean, not yet pushed)
+**Branch:** `main` (clean)
 
-## ⚠️ Current migration status — read this first
+## ⚠️ Current state — read this first
 
-**Phases 0–5 are COMPLETE. The next work is Phase 6.**
+**Phase 6 is COMPLETE. The JEP dependency is removed. Quarkus server is fully native Java.**
 
-JEP call count progress:
-- Phase 0 (JEP bridge): 35 calls — DONE
-- Phase 1 (config/home): 35→32 — DONE
-- Phase 2 (state.py): 32→27 — DONE
-- Phase 3 (html_utils, fix_code_blocks): 27→26 — DONE
-- Phase 4 (scan_html, scan_assets): 26→23 — DONE
-- Phase 5 (enrich.py): 23→22 — DONE ← **we are here**
-- Phase 6 (???): 22→? — **NEXT**
+JEP call count: 22 → 0  
+Java tests: 180 → 346 passing, 0 failures  
+`bridge.call()` occurrences: 0 (confirmed via grep)
 
-## State right now
+## What was done this session
 
-- Tests: 270 pytest passing (`--ignore=tests/python-legacy`), 180 JUnit passing, 0 failing
-- Issues #56–58 all closed; `main` is clean (not pushed)
-- `tests/python-legacy/test_enrich.py` — 20 enrich tests retired here
-- Blog: 6 diary entries written (Phases 0–5), diagrams in `docs/blog-images/`
-- 4 garden entries submitted: URI gotchas + MockEnricher technique
+- **6a** (4 calls): ConfigResource, SearchResource, StaticResource — native Java. `StartupActivation` bean added to mirror Python's auto-activation at startup.
+- **6b** (5 calls): Consolidate.java (hash dedup, 18 unit tests), staging endpoints — TDD caught `@Consumes` 415 bug and missing enriched-first hash in `acceptStaged`.
+- **6c** (6 calls): ConvertPost.java (port of convert_post.py, jsoup + flexmark), MdValidator.java (14 MD checks + 5 cross-checks) — TDD caught 3 correctness gaps in cross-checks.
+- **6d** (7 calls): IngestService.java (port of 1,095-line ingest.py, HttpClient + jsoup), IngestJobState (thread-safe, concurrency-tested).
+- **+2**: Removed scan() JEP fallback and projects_activate JEP call.
+- **JEP removed from pom.xml**. No `PYTHONHOME`, `DYLD_LIBRARY_PATH`, or `java.library.path` needed.
 
-## Java files added this session (Phase 5)
+## What's still Python
 
-`Enricher` (Phase 5) — in `server/src/main/java/io/sparge/server/`
+The Quarkus server is Python-free. The **Electron app** is not:
+- `npm start` → `python-server.js` → `python3 server.py` (default)
+- `java-server.js` still sets stale JEP env vars (PYTHONHOME, DYLD_LIBRARY_PATH) — dead config
+- `server.py` still bundled in `extraResources`
+- Python runtime still bundled in `resources/python/`
 
-All prior phases: `SpargeHome`, `SpargeConfig`, `ProjectsStore`, `ActiveProject` (1), `StateStore` (2), `DrlReformatter`, `HtmlUtils`, `CodeBlockFixer` (3), `SpargeConstants`, `ScanHtml`, `ScanAssets` (4)
+**Phase 1** (next epic): flip Electron default to Java, remove Python bundling, clean up `java-server.js`, package Quarkus JAR into Electron distribution.
 
-## Session housekeeping done
+## Issues / Epic state
 
-- Deleted stale `HANDOVER.md` (superseded by `HANDOFF.md`)
-- Fixed hook template (`install-skills/SKILL.md`) and installed hook (`~/.claude/hooks/check_project_setup.sh`) to look for `HANDOFF.md` not `HANDOVER.md`
+- Epic #59 (Phase 6): all 4 child issues (6a #60, 6b #61, 6c #62, 6d #63) closed ✅
+- Epic #59 all checkboxes ticked ✅
 
-## Next: Phase 6
+## Next: Phase 1 (Electron packaging)
 
-Decide which of the remaining 22 JEP calls to port next. Candidates:
-- **convert pipeline** — `post_generate_md`, `post_validate_md`, `post_save_md`, `post_html`, `post_view`, `post_save_html` (6 calls, touches convert_post.py + html_prettify.py)
-- **staging workflow** — `post_staged_get`, `post_stage`, `post_accept_staged`, `post_reject_staged` (4 calls)
-- **search** — `search` (1 call, scripts/state.py query)
-- **ingest pipeline** — `ingest_detect`, `ingest_discover`, `ingest_preview`, `ingest_run`, `ingest_cancel`, `ingest_status`, `project_ingest_run` (7 calls, complex async logic)
-- **consolidate** — `consolidate` (1 call)
-- **config** — `config_get`, `config_post` (2 calls)
-- **static_resolve** — `static_resolve` (1 call)
+- Update `main.js` to default to `JavaServer` instead of `PythonServer`
+- Remove `PYTHONHOME`/`DYLD_LIBRARY_PATH`/JEP setup from `java-server.js`
+- Remove `server.py`, `scripts/`, `resources/python/` from `extraResources` in `package.json`
+- Package Quarkus JAR into Electron distribution
+- Retire `python-server.js` once Java is default and stable
 
-**To start:** create GitHub issue, write plan with `superpowers:writing-plans`, execute with subagent-driven dev. Same TDD pattern as Phases 1–5.
+**To start:** create GitHub issue for Phase 1, write plan, execute. Same TDD + subagent pattern.
 
 ## References
 
 | Context | Where |
 |---|---|
 | Migration design spec | `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md` |
-| Phase 5 plan (pattern reference) | `docs/superpowers/plans/2026-04-17-quarkus-phase5.md` |
-| CLAUDE.md (run commands, test counts) | `CLAUDE.md` (auto-loaded) |
-| Blog series | `docs/_posts/2026-04-17-mdp01-quarkus-phase5.md` |
+| Phase 6 design spec | `docs/superpowers/specs/2026-04-17-phase6-design.md` |
+| Blog entry (this session) | `docs/_posts/2026-04-21-mdp01-phase6-jep-gone.md` |
+| Java server code | `server/src/main/java/io/sparge/server/` |
