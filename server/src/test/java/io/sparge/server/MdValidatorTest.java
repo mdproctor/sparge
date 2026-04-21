@@ -360,4 +360,42 @@ class MdValidatorTest {
         assertFalse(hasCheck(issues, "heading_match"),
                 "First-4-word match should pass even if full text differs slightly");
     }
+
+    // ── Refinement checks ─────────────────────────────────────────────────────────
+
+    @Test void refine_detects_prose_in_code() {
+        String md = "# Post\n\n```\nThis is a prose sentence about the algorithm.\n" +
+                    "Another full sentence here, explaining what happens.\n" +
+                    "A third prose sentence describing the outcome.\n" +
+                    "System.out.println(\"hi\");\n```\n";
+        var issues = MdValidator.refine(md, "slug", null);
+        assertTrue(issues.stream().anyMatch(i -> i.check().equals("prose_in_code")),
+            "Should detect prose inside code block");
+    }
+
+    @Test void refine_clean_code_block_no_prose_flag() {
+        String md = "# Post\n\n```java\nSystem.out.println(\"hi\");\nint x = 1;\n```\n";
+        var issues = MdValidator.refine(md, "slug", null);
+        assertTrue(issues.stream().noneMatch(i -> i.check().equals("prose_in_code")),
+            "Pure code block should not be flagged");
+    }
+
+    @Test void refine_detects_missing_language_tag() {
+        String md = "# Post\n\n```\nSystem.out.println(\"hi\");\n```\n";
+        var issues = MdValidator.refine(md, "slug", null);
+        assertTrue(issues.stream().anyMatch(i -> i.check().equals("language_tag_missing")),
+            "Untagged fence should be flagged");
+    }
+
+    @Test void refine_no_flag_when_all_fences_tagged() {
+        String md = "# Post\n\n```java\nSystem.out.println(\"hi\");\n```\n";
+        var issues = MdValidator.refine(md, "slug", null);
+        assertTrue(issues.stream().noneMatch(i -> i.check().equals("language_tag_missing")));
+    }
+
+    @Test void refine_returns_empty_for_plain_prose() {
+        String md = "# Post\n\nJust some plain prose text, no code blocks.\n";
+        var issues = MdValidator.refine(md, "slug", null);
+        assertTrue(issues.isEmpty(), "Plain prose with no code should have no refinements");
+    }
 }

@@ -89,11 +89,11 @@ def get(slug: str) -> dict | None:
 
 
 def update(slug: str, patch: dict):
-    """Shallow-merge patch into the top-level entry, deep-merge 'html'/'md'/'assets'."""
+    """Shallow-merge patch into the top-level entry, deep-merge 'html'/'md'/'assets'/'refinement'."""
     state = _load()
     entry = state.setdefault(slug, {'slug': slug})
     for key, val in patch.items():
-        if key in ('html', 'md', 'assets') and isinstance(val, dict):
+        if key in ('html', 'md', 'assets', 'refinement') and isinstance(val, dict):
             entry.setdefault(key, {}).update(val)
         else:
             entry[key] = val
@@ -180,6 +180,29 @@ def set_html_issues(slug: str, issues: list[dict]):
 def set_md_issues(slug: str, issues: list[dict]):
     """Replace MD issue list."""
     update(slug, {'md': {'issues': issues, 'validated_at': _now()}})
+
+
+def set_md_suggestions(slug: str, suggestions: list[dict]) -> None:
+    """Store refinement suggestions (from refine()) in state.md.suggestions."""
+    update(slug, {'md': {'suggestions': suggestions, 'suggestions_at': _now()}})
+
+
+def set_refinement(slug: str, accepted: list[dict], replay_conflicts: list) -> None:
+    """Store accepted refinement rules and any replay conflicts."""
+    update(slug, {'refinement': {
+        'accepted': accepted,
+        'replay_conflicts': replay_conflicts,
+        'refined_at': _now(),
+    }})
+
+
+def clear_refinement(slug: str) -> None:
+    """Reset refinement state (e.g., after user discards all rules)."""
+    update(slug, {'refinement': {
+        'accepted': [],
+        'replay_conflicts': [],
+        'refined_at': None,
+    }})
 
 
 def mark_md_generated(slug: str):

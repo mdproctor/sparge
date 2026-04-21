@@ -35,7 +35,7 @@ cd ~/claude/sparge
 python3 -m pytest tests/ -q --ignore=tests/python-legacy
 ```
 
-270 passing, 427 skipped (integration tests skip without running server), 0 pre-existing failures. (`tests/python-legacy/` holds retired Python tests for ported modules — not run in CI.)
+288 passing, 427 skipped (integration tests skip without running server), 0 pre-existing failures. (`tests/python-legacy/` holds retired Python tests for ported modules — not run in CI.)
 
 **Java tests (Quarkus):**
 ```bash
@@ -46,9 +46,9 @@ cd ~/claude/sparge/server && mvn test
 
 **JS tests (Electron):**
 ```bash
-npm run test:unit        # 49 passing — Jest unit tests (mocked)
+npm run test:unit        # 73 passing — Jest unit tests (mocked)
 npm run test:integration # 4 passing — real JavaServer process tests
-npm run test:e2e         # 9 passing — Playwright full app tests (5 app + 4 delete)
+npm run test:e2e         # 19 passing (5 app + 4 delete + 10 refine)
 ```
 E2E tests require the Electron binary (run `node node_modules/electron/install.js` once).
 
