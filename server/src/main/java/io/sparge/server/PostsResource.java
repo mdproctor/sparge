@@ -276,6 +276,25 @@ public class PostsResource {
         }
     }
 
+    @GET
+    @Path("{slug}/md-raw")
+    @Produces("text/plain; charset=utf-8")
+    public Response getMdRaw(@PathParam("slug") String slug) {
+        SpargeConfig.ResolvedConfig cfg = activeProject.getConfig();
+        if (cfg == null) return err(400, "no active project");
+        java.nio.file.Path mdPath = cfg.mdDir().resolve(slug + ".md");
+        try {
+            if (!java.nio.file.Files.exists(mdPath)) return Response.status(404)
+                .header("Access-Control-Allow-Origin", "*").build();
+            String content = java.nio.file.Files.readString(mdPath,
+                java.nio.charset.StandardCharsets.UTF_8);
+            return Response.ok(content)
+                .header("Access-Control-Allow-Origin", "*").build();
+        } catch (Exception e) {
+            return err(e.getMessage());
+        }
+    }
+
     @POST
     @Path("{slug}/save-md")
     @Consumes(MediaType.TEXT_PLAIN)

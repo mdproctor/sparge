@@ -549,6 +549,8 @@ body[data-editor-theme="light"] .cm-quote  { color: #8a6a3a; font-style: italic;
         <button onclick="toggleIssues()" id="btn-issues" title="Show/hide issue panel">⚡ Issues</button>
         <button onclick="toggleSync()" id="btn-sync" class="active" title="Sync scroll between panels">⟺ Sync</button>
         <button onclick="toggleLayout()" id="btn-layout" title="Toggle split / single panel">☰ Single</button>
+        <button onclick="togglePipeline()" id="btn-pipeline" title="Switch between HTML→MD and MD→Refined view" style="display:none">≡ HTML→MD</button>
+        <button class="success" onclick="acceptRefined()" id="btn-accept-refined" style="display:none" title="Apply refinements and write to disk" disabled>✨ Accept Refined</button>
       </div>
       <div id="panel-heads">
         <div class="ph">Original Archive HTML
@@ -713,6 +715,8 @@ let _searchDebounce = null;
 let currentAuthor = '';
 let htmlBreakdownOpen = false, mdBreakdownOpen = false;
 let layout = 'split', activeTab = 'orig', issuesOpen = false;
+let pipelineView = 'html-md';   // 'html-md' or 'md-refined'
+let refineData   = null;        // {suggestions, refined_md, accepted_checks}
 let currentHighlightSelector = null, currentHighlightRow = null;
 
 // ── Scroll sync ─────────────────────────────────────────────────────
@@ -1620,6 +1624,14 @@ async function selectPost(slug) {
   // never reflected edits saved via save-html.
   $('orig-frame').src=`/api/posts/${slug}/view?v=${Date.now()}`;
   renderPanelBadges(p);
+  const hasMd = p.md && p.md.generated_at;
+  $('btn-pipeline').style.display = hasMd ? '' : 'none';
+  if (!hasMd && pipelineView === 'md-refined') {
+    pipelineView = 'html-md';
+    $('btn-pipeline').textContent = '≡ HTML→MD';
+    $('btn-pipeline').classList.remove('active');
+    $('btn-accept-refined').style.display = 'none';
+  }
   await loadMd(p);
   const mdBody=$('md-panel-body');
   mdBody.scrollTop=saved?saved.md:0;
@@ -2337,6 +2349,77 @@ function toggleLayout() {
     switchPanelTab(activeTab, false);
   }
 }
+function togglePipeline() {
+  if (!currentSlug) return;
+  pipelineView = pipelineView === 'html-md' ? 'md-refined' : 'html-md';
+  const btn = $('btn-pipeline');
+  btn.textContent = pipelineView === 'html-md' ? '≡ HTML→MD' : '≡ MD→Refined';
+  btn.classList.toggle('active', pipelineView === 'md-refined');
+  $('btn-accept-refined').style.display = pipelineView === 'md-refined' ? '' : 'none';
+  if (pipelineView === 'md-refined') {
+    enterRefineMode();
+  } else {
+    exitRefineMode();
+  }
+}
+
+async function enterRefineMode() {
+  const p = allPosts.find(x => x.slug === currentSlug);
+  if (!p) return;
+  try {
+    const res = await fetch(`/api/posts/${currentSlug}/refine`);
+    if (!res.ok) { alert('Could not load refinements: ' + res.status); return; }
+    const data = await res.json();
+    refineData = {
+      suggestions:    data.suggestions || [],
+      refined_md:     data.refined_md  || '',
+      accepted_checks: new Set((data.suggestions || []).map(s => s.check)),
+    };
+    await renderRefineMode();
+  } catch (e) {
+    alert('Refine mode error: ' + e.message);
+  }
+}
+
+function exitRefineMode() {
+  refineData = null;
+  // Restore normal panels
+  $('orig-frame').src = `/api/posts/${currentSlug}/view?v=${Date.now()}`;
+  const p = allPosts.find(x => x.slug === currentSlug);
+  if (p) loadMd(p);
+}
+
+async function renderRefineMode() {
+  if (!refineData || !currentSlug) return;
+  try {
+    const rawRes = await fetch(`/api/posts/${currentSlug}/md-raw`);
+    const originalMd = rawRes.ok ? await rawRes.text() : '';
+    renderRefineDiff(originalMd, refineData.refined_md);
+    // Show original MD in left panel as plain text
+    $('orig-frame').srcdoc = `<!DOCTYPE html><html><body style="margin:0;padding:12px;font-family:monospace;font-size:12px;white-space:pre-wrap;background:#0d0d1a;color:#c8c8e0;overflow:auto">${esc(originalMd)}</body></html>`;
+  } catch (e) {
+    console.warn('renderRefineMode error:', e);
+  }
+}
+
+function renderRefineDiff(originalMd, refinedMd) {
+  const diff = computeDiff(originalMd, refinedMd);
+  const {left, right} = buildSideBySide(diff, 5);
+  const mdWrap = $('md-wrap');
+  if (mdWrap) {
+    mdWrap.innerHTML = `<div style="display:flex;height:100%;overflow:hidden">
+      <div style="flex:1;overflow:auto;border-right:1px solid #2a2a3e;display:flex;flex-direction:column">
+        <div style="padding:4px 8px;background:#12121e;font-size:11px;color:#6060a0;border-bottom:1px solid #2a2a3e;flex-shrink:0">Original MD</div>
+        <div style="flex:1;overflow:auto;font-family:monospace;font-size:12px">${left}</div>
+      </div>
+      <div style="flex:1;overflow:auto;display:flex;flex-direction:column">
+        <div style="padding:4px 8px;background:#12121e;font-size:11px;color:#6060a0;border-bottom:1px solid #2a2a3e;flex-shrink:0">Refined MD</div>
+        <div style="flex:1;overflow:auto;font-family:monospace;font-size:12px">${right}</div>
+      </div>
+    </div>`;
+  }
+}
+
 function switchPanelTab(tab, updateActive=true) {
   if (updateActive) activeTab=tab;
   $('ptab-orig').className='tab'+(tab==='orig'?' active':'');
