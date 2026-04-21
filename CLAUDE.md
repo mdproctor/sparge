@@ -14,9 +14,9 @@ Sparge is a blog migration tool — ingests HTML posts from live blog URLs, enri
 
 ```bash
 cd ~/claude/sparge
-python3 server.py             # Python server, browser mode (port 9000)
-npm start                     # Electron app — Python server by default
-SPARGE_SERVER=java npm start  # Electron app — Quarkus native Java server
+python3 server.py               # Python server, browser mode (port 9000)
+npm start                       # Electron app — Java server (default)
+SPARGE_SERVER=python npm start  # Electron app — Python server (opt-out)
 ```
 
 Browser mode (Python) serves on port 9000. Electron mode allocates a dynamic port. Project data lives in `~/sparge-projects/` (configured via `~/.sparge/config.json`).
@@ -47,8 +47,8 @@ cd ~/claude/sparge/server && mvn test
 
 **JS tests (Electron):**
 ```bash
-npm run test:unit        # 38 passing — Jest unit tests (mocked)
-npm run test:integration # 4 passing — real Python process tests
+npm run test:unit        # 55 passing — Jest unit tests (mocked)
+npm run test:integration # 8 passing — real server process tests (Python + Java)
 npm run test:e2e         # 4 passing — Playwright full app tests
 ```
 E2E tests require `resources/python/` (run `node scripts/fetch-python.js` once) and the Electron binary (run `node node_modules/electron/install.js` once).
@@ -60,8 +60,10 @@ E2E tests require `resources/python/` (run `node scripts/fetch-python.js` once) 
 - `server/` — Quarkus 3.34 Maven project (fully native Java — no Python/JEP dependency)
 - `ui/` — single-file frontend (index.html, projects.html, browse-utils.js)
 - `electron-tests/` — Jest unit/integration + Playwright E2E tests for the Electron wrapper
-- `main.js`, `preload.js`, `python-server.js` — Electron entry point and Python process manager
-- `java-server.js` — Electron JVM process manager (mirrors python-server.js, used when `SPARGE_SERVER=java`)
+- `main.js`, `preload.js` — Electron entry point
+- `server-factory.js` — routes `SPARGE_SERVER` env var to Java (default) or Python server
+- `java-server.js` — Electron JVM process manager (default)
+- `python-server.js` — Electron Python process manager (opt-out via `SPARGE_SERVER=python`)
 - `tests/` — pytest test suite
 - `docs/adr/` — architecture decision records
 - `docs/_posts/` — development diary entries (Jekyll blog posts)

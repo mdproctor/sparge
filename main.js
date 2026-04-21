@@ -4,19 +4,19 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path            = require('path');
 const log             = require('electron-log');
 const { autoUpdater } = require('electron-updater');
-const { PythonServer, findFreePort } = require('./python-server');
-const { JavaServer } = require('./java-server');
+const { findFreePort } = require('./python-server');
+const { createServer } = require('./server-factory');
 
-function createServer() {
-  if (process.env.SPARGE_SERVER === 'java') {
-    log.info('Using JavaServer (SPARGE_SERVER=java)');
-    return new JavaServer({
-      isPackaged:    app.isPackaged,
-      resourcesPath: process.resourcesPath,
-    });
-  }
-  log.info('Using PythonServer (default)');
-  return new PythonServer({ pythonExe: getPythonExe(), serverScript: getServerScript() });
+function makeServer() {
+  const usePython = process.env.SPARGE_SERVER === 'python';
+  log.info(usePython ? 'Using PythonServer (SPARGE_SERVER=python)' : 'Using JavaServer (default)');
+  return createServer({
+    env:          process.env,
+    isPackaged:   app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    pythonExe:    usePython ? getPythonExe() : null,
+    serverScript: usePython ? getServerScript() : null,
+  });
 }
 
 autoUpdater.logger               = log;
@@ -49,7 +49,7 @@ function getServerScript() {
   return path.join(base, 'server.py');
 }
 
-const server = createServer();
+const server = makeServer();
 
 function showErrorWindow(message) {
   const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
