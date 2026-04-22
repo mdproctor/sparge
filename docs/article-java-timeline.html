@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Java Closing the Gap — Feature Timeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    padding: 40px 32px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 36px;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Version header */
+  .timeline-wrap {
+    overflow-x: auto;
+  }
+  .timeline {
+    min-width: 900px;
+    position: relative;
+  }
+
+  .version-header {
+    display: grid;
+    grid-template-columns: 160px repeat(8, 1fr);
+    margin-bottom: 8px;
+    padding-left: 0;
+  }
+
+  .version-label {
+    text-align: center;
+    padding: 8px 4px 6px;
+    position: relative;
+  }
+  .version-label .ver {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e2e8f0;
+    display: block;
+  }
+  .version-label .date {
+    font-size: 10px;
+    color: #64748b;
+    display: block;
+    margin-top: 2px;
+  }
+  .version-label .lts-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    background: #1e3a5f;
+    color: #60a5fa;
+    border: 1px solid #2563eb44;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-top: 4px;
+  }
+  .version-label.speculative .ver {
+    color: #64748b;
+  }
+  .version-label.speculative .date {
+    font-style: italic;
+  }
+
+  /* Divider line */
+  .speculative-divider {
+    grid-column: 7 / span 3;
+    border-left: 2px dashed #334155;
+    position: relative;
+    margin-left: -1px;
+  }
+
+  /* Gap lanes */
+  .gap-lane {
+    display: grid;
+    grid-template-columns: 160px repeat(8, 1fr);
+    margin-bottom: 6px;
+    min-height: 64px;
+    align-items: center;
+  }
+
+  .gap-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    padding-right: 16px;
+    line-height: 1.3;
+  }
+  .gap-label .icon {
+    font-size: 14px;
+    margin-right: 4px;
+  }
+
+  .cell {
+    padding: 3px 4px;
+    min-height: 58px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    position: relative;
+    border-left: 1px solid #1e293b;
+  }
+  .cell:first-of-type {
+    border-left: none;
+  }
+
+  /* Feature chips */
+  .chip {
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  /* Status colours */
+  .chip.stable   { background: #14532d; color: #86efac; border: 1px solid #16a34a44; }
+  .chip.preview  { background: #1c3a5e; color: #93c5fd; border: 1px solid #3b82f644; }
+  .chip.closed   { background: #065f46; color: #6ee7b7; border: 1px solid #10b98144; font-weight: 700; }
+  .chip.spec     { background: #1e1b2e; color: #a78bfa; border: 1px dashed #7c3aed55; }
+  .chip.spec-closed { background: #2d1f4e; color: #c4b5fd; border: 2px dashed #7c3aed88; font-weight: 700; }
+  .chip.ecosystem { background: #292524; color: #d6d3d1; border: 1px solid #57534e44; }
+  .chip.eco-spec  { background: #1c1917; color: #78716c; border: 1px dashed #57534e55; }
+
+  /* Closed marker that spans across cells */
+  .gap-closed-marker {
+    font-size: 10px;
+    font-weight: 700;
+    color: #22c55e;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+  .gap-closed-marker.spec {
+    color: #a78bfa;
+  }
+
+  /* Horizontal connector lines */
+  .progress-bar {
+    height: 3px;
+    border-radius: 2px;
+    margin: 2px 0;
+  }
+  .progress-bar.stable   { background: #16a34a; }
+  .progress-bar.preview  { background: #3b82f6; }
+  .progress-bar.spec     { background: repeating-linear-gradient(90deg,#7c3aed 0,#7c3aed 4px,transparent 4px,transparent 8px); }
+
+  /* Section separator for speculative */
+  .spec-section {
+    position: relative;
+  }
+  .spec-section::before {
+    content: 'SPECULATIVE →';
+    position: absolute;
+    top: -22px;
+    left: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #4c1d95;
+    background: #0f1117;
+    padding: 0 6px;
+  }
+
+  /* Row separator */
+  .lane-sep {
+    grid-column: 1 / -1;
+    height: 1px;
+    background: #1e293b;
+    margin: 4px 0;
+  }
+
+  /* Watermark for speculative columns */
+  .cell.speculative {
+    background: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 8px,
+      #ffffff04 8px,
+      #ffffff04 9px
+    );
+  }
+
+  /* Notes section */
+  .notes {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .note-box {
+    background: #1e293b;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #94a3b8;
+    border-left: 3px solid #334155;
+  }
+  .note-box.green  { border-left-color: #16a34a; }
+  .note-box.purple { border-left-color: #7c3aed; }
+  .note-box strong { color: #e2e8f0; }
+
+  .footnote {
+    margin-top: 20px;
+    font-size: 11px;
+    color: #475569;
+    font-style: italic;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<h1>Java Closing the Gap on Python's Domain Advantages</h1>
+<p class="subtitle">A timeline of shipped features, ongoing work, and the projected path to full parity — by gap category</p>
+
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#16a34a"></div>
+    Stable / shipped
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#3b82f6"></div>
+    Preview (shipping)
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#7c3aed; border: 1px dashed #a78bfa"></div>
+    Speculative (JEP in progress)
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#057a55; border: 2px solid #6ee7b7"></div>
+    Gap closed
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#78716c; border: 1px dashed #a8a29e"></div>
+    Ecosystem / cultural (slower)
+  </div>
+</div>
+
+<div class="timeline-wrap">
+<div class="timeline">
+
+  <!-- Version header -->
+  <div class="version-header">
+    <div></div>
+
+    <div class="version-label">
+      <span class="ver">Java 21</span>
+      <span class="date">Sept 2023</span>
+      <span class="lts-badge">LTS</span>
+    </div>
+    <div class="version-label">
+      <span class="ver">Java 22</span>
+      <span class="date">Mar 2024</span>
+    </div>
+    <div class="version-label">
+      <span class="ver">Java 23</span>
+      <span class="date">Sept 2024</span>
+    </div>
+    <div class="version-label">
+      <span class="ver">Java 24</span>
+      <span class="date">Mar 2025</span>
+    </div>
+    <div class="version-label">
+      <span class="ver">Java 25</span>
+      <span class="date">Sept 2025</span>
+      <span class="lts-badge">LTS</span>
+    </div>
+    <div class="version-label">
+      <span class="ver">Java 26</span>
+      <span class="date">Mar 2026</span>
+    </div>
+    <div class="version-label speculative">
+      <span class="ver">Java 27</span>
+      <span class="date">Sept 2026 ⋯</span>
+    </div>
+    <div class="version-label speculative">
+      <span class="ver">Java 28</span>
+      <span class="date">Mar 2027 ⋯</span>
+    </div>
+  </div>
+
+  <!-- ── GAP 1: Language Verbosity ── -->
+  <div class="gap-lane">
+    <div class="gap-label"><span class="icon">✍️</span>Language<br>Verbosity</div>
+
+    <!-- Java 21 -->
+    <div class="cell">
+      <div class="chip stable">Pattern matching</div>
+      <div class="chip stable">Record patterns</div>
+    </div>
+    <!-- Java 22 -->
+    <div class="cell">
+      <div class="chip stable">Unnamed vars</div>
+    </div>
+    <!-- Java 23 -->
+    <div class="cell">
+      <div class="chip preview">Flexible ctors</div>
+    </div>
+    <!-- Java 24 -->
+    <div class="cell">
+      <div class="chip stable">Stream gatherers</div>
+    </div>
+    <!-- Java 25 -->
+    <div class="cell">
+      <div class="chip stable">Unnamed classes</div>
+      <div class="chip stable">Module imports</div>
+    </div>
+    <!-- Java 26 -->
+    <div class="cell">
+      <div class="chip spec">String templates</div>
+      <div class="chip closed">✓ Verbosity gap closed</div>
+    </div>
+    <!-- Java 27 speculative -->
+    <div class="cell speculative"></div>
+    <!-- Java 28 speculative -->
+    <div class="cell speculative"></div>
+  </div>
+
+  <!-- ── GAP 2: Native Library Access ── -->
+  <div class="gap-lane">
+    <div class="gap-label"><span class="icon">🔗</span>Native Library<br>Access (C/Fortran)</div>
+
+    <!-- Java 21 -->
+    <div class="cell">
+      <div class="chip preview">Panama preview</div>
+    </div>
+    <!-- Java 22 -->
+    <div class="cell">
+      <div class="chip closed">✓ Panama FFM<br>API stable</div>
+    </div>
+    <!-- Java 23-28 -->
+    <div class="cell"><div class="gap-closed-marker">CLOSED</div></div>
+    <div class="cell"><div class="gap-closed-marker">CLOSED</div></div>
+    <div class="cell"><div class="gap-closed-marker">CLOSED</div></div>
+    <div class="cell"><div class="gap-closed-marker">CLOSED</div></div>
+    <div class="cell speculative"><div class="gap-closed-marker">CLOSED</div></div>
+    <div class="cell speculative"><div class="gap-closed-marker">CLOSED</div></div>
+  </div>
+
+  <!-- ── GAP 3: Numerical Performance ── -->
+  <div class="gap-lane">
+    <div class="gap-label"><span class="icon">⚡</span>Numerical<br>Performance<br>(no boxing)</div>
+
+    <!-- Java 21-24 -->
+    <div class="cell"><div class="chip preview">Valhalla<br>incubating</div></div>
+    <div class="cell"></div>
+    <div class="cell"></div>
+    <div class="cell"><div class="chip preview">Primitive<br>patterns preview</div></div>
+    <!-- Java 25 -->
+    <div class="cell">
+      <div class="chip spec">Value classes<br>preview (JEP 401)</div>
+    </div>
+    <!-- Java 26 -->
+    <div class="cell speculative">
+      <div class="chip spec">Value classes<br>preview 2</div>
+    </div>
+    <!-- Java 27 -->
+    <div class="cell speculative">
+      <div class="chip spec-closed">✓ Value classes<br>stable (likely)</div>
+    </div>
+    <!-- Java 28 -->
+    <div class="cell speculative">
+      <div class="chip spec-closed">✓ Full Valhalla<br>Gap closed</div>
+    </div>
+  </div>
+
+  <!-- ── GAP 4: Python Interop (GraalPy) ── -->
+  <div class="gap-lane">
+    <div class="gap-label"><span class="icon">🐍</span>Python Interop<br><span style="font-weight:400;font-size:10px">(GraalVM teams)</span></div>
+
+    <!-- Java 21 -->
+    <div class="cell">
+      <div class="chip stable">GraalVM CE<br>open source</div>
+    </div>
+    <!-- Java 22 -->
+    <div class="cell">
+      <div class="chip stable">GraalPy<br>available</div>
+    </div>
+    <!-- Java 23-24 -->
+    <div class="cell"><div class="chip preview">GraalPy<br>maturing</div></div>
+    <div class="cell"><div class="chip preview">GraalPy<br>maturing</div></div>
+    <!-- Java 25 -->
+    <div class="cell">
+      <div class="chip preview">GraalPy<br>production<br>track</div>
+    </div>
+    <!-- Java 26 -->
+    <div class="cell speculative">
+      <div class="chip spec">GraalPy<br>prod-ready?</div>
+    </div>
+    <!-- Java 27-28 speculative -->
+    <div class="cell speculative"><div class="chip spec-closed">✓ Mature</div></div>
+    <div class="cell speculative"><div class="chip spec-closed">✓ Gap closed<br>(GraalVM users)</div></div>
+  </div>
+
+  <!-- ── GAP 5: ML/Data Science Ecosystem ── -->
+  <div class="gap-lane">
+    <div class="gap-label"><span class="icon">📊</span>ML Inference<br>Ecosystem</div>
+
+    <!-- Java 21 -->
+    <div class="cell">
+      <div class="chip ecosystem">DJL (inference)</div>
+      <div class="chip ecosystem">ONNX Runtime</div>
+    </div>
+    <!-- Java 22-24 -->
+    <div class="cell"><div class="chip ecosystem">Growing</div></div>
+    <div class="cell"><div class="chip ecosystem">Growing</div></div>
+    <div class="cell"><div class="chip ecosystem">Growing</div></div>
+    <!-- Java 25 -->
+    <div class="cell">
+      <div class="chip ecosystem">Expanding</div>
+    </div>
+    <!-- Java 26 -->
+    <div class="cell speculative">
+      <div class="chip eco-spec">Valhalla enables<br>native libs</div>
+    </div>
+    <!-- Java 27-28 -->
+    <div class="cell speculative"><div class="chip eco-spec">Java-native<br>sci libs emerge</div></div>
+    <div class="cell speculative"><div class="chip eco-spec">Ecosystem<br>growing ↗</div></div>
+  </div>
+
+  <!-- ── GAP 6: Exploration Tooling ── -->
+  <div class="gap-lane">
+    <div class="gap-label"><span class="icon">🔬</span>Exploration<br>Tooling<br><span style="font-weight:400;font-size:10px">(Jupyter / REPL)</span></div>
+
+    <!-- Java 21 -->
+    <div class="cell">
+      <div class="chip stable">JShell</div>
+      <div class="chip ecosystem">Jupyter kernel</div>
+    </div>
+    <!-- Java 22-25 -->
+    <div class="cell"><div class="chip ecosystem">Partial</div></div>
+    <div class="cell"><div class="chip ecosystem">Partial</div></div>
+    <div class="cell"><div class="chip ecosystem">Partial</div></div>
+    <!-- Java 25 -->
+    <div class="cell">
+      <div class="chip ecosystem">Improving</div>
+    </div>
+    <!-- Java 26+ speculative -->
+    <div class="cell speculative"><div class="chip eco-spec">GraalPy<br>notebooks?</div></div>
+    <div class="cell speculative"><div class="chip eco-spec">Converging</div></div>
+    <div class="cell speculative"><div class="chip eco-spec">Viable for<br>most uses</div></div>
+  </div>
+
+</div><!-- end timeline -->
+</div><!-- end timeline-wrap -->
+
+<!-- Notes -->
+<div class="notes">
+  <div class="note-box green">
+    <strong>Already complete (Java 22, standard OpenJDK):</strong><br>
+    Project Panama (JEP 454) closes the native library access gap entirely. Java can now call C, C++, and Fortran code — the numerical foundation beneath NumPy and SciPy — without JNI boilerplate. No special JVM required.
+  </div>
+  <div class="note-box purple">
+    <strong>The Valhalla inflection point (~Java 27–28):</strong><br>
+    Value types eliminate object boxing overhead, enabling contiguous memory arrays of primitives. This is the performance primitive that makes NumPy-class Java libraries possible. Preview expected Java 25–26; stable Java 27–28.
+  </div>
+  <div class="note-box" style="border-left-color:#3b82f6">
+    <strong>GraalVM and GraalPy:</strong><br>
+    GraalVM CE (open source) is already the foundation of Quarkus native compilation — widely adopted in production. GraalPy (Python on GraalVM) is available to these teams today and is maturing toward production readiness for Python interop workloads.
+  </div>
+  <div class="note-box" style="border-left-color:#94a3b8">
+    <strong>What remains after Java 28:</strong><br>
+    The scientific exploration culture — Jupyter-native workflows, the breadth of scikit-learn, data science pedagogy — has inertia beyond technical capability. The segmentation model (data scientists keep Python for exploration; Java dominates for applied application development) may persist as a rational division of labour even after technical parity is achieved.
+  </div>
+</div>
+
+<p class="footnote">
+  ⋯ Java 27 (September 2026) and Java 28 (March 2027) timelines are indicative based on the standard 6-month release cadence.
+  Features marked speculative reflect JEPs in active development; versions may shift by one release.
+  Java 21 and Java 25 are Long-Term Support releases.
+</p>
+
+</body>
+</html>
