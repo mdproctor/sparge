@@ -25,7 +25,7 @@ The five systems that will form the empirical basis:
 | claudony | [TBD] | |
 | qhorus | [TBD] | |
 | ledger | Financial ledger | |
-| workitems | Work item tracking | |
+| work | Work item tracking | |
 
 All developed concurrently, LLM-first, Java/Quarkus from inception. Integration points to be mapped and documented.
 

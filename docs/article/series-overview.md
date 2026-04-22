@@ -47,7 +47,7 @@ The future argument. What Java 22–28 closes and when (Panama already complete;
 ### Part 5 — Parallel Design and Spec-Led Development at Scale: An Empirical Study *(forthcoming)*
 *When the Machine Codes: Parallel Design and Spec-Led Development at Scale — An Empirical Study*
 
-Use case two. GitHub history analysis across casehub, claudony, qhorus, ledger, workitems and their integration points. Empirical examination of parallel LLM-first development velocity, integration coherence, and the role of static typing across a multi-system ecosystem. Where Part 3 shows that the migration worked, Part 5 shows that the model scales. The empirical basis for claims in Part 2 about parallel development coherence.
+Use case two. GitHub history analysis across casehub, claudony, qhorus, ledger, work and their integration points. Empirical examination of parallel LLM-first development velocity, integration coherence, and the role of static typing across a multi-system ecosystem. Where Part 3 shows that the migration worked, Part 5 shows that the model scales. The empirical basis for claims in Part 2 about parallel development coherence.
 
 **Status:** Placeholder. Data collection and analysis pending.
 
@@ -84,6 +84,6 @@ A single shared appendix carrying six technical supporting arguments, cross-refe
 
 - Parts may be published independently on LinkedIn, Medium, or a personal blog
 - The timeline diagram (`article-java-timeline.html` / `.png` / `@2x.png`) accompanies Part 4 primarily but is relevant to Parts 1 and 2
-- Part 5 requires a GitHub analysis phase before drafting — allow time for data collection across casehub, claudony, qhorus, ledger, workitems
+- Part 5 requires a GitHub analysis phase before drafting — allow time for data collection across casehub, claudony, qhorus, ledger, work
 - All parts should carry the series header: **When the Machine Codes**
 - Cross-references between parts should use the format: *"examined in full in Part N of this series"*
