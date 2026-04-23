@@ -83,6 +83,18 @@ End with a summary section: **Overall Assessment** — what are the 3 most serio
 
 ## Instructions
 
+**13. The LLM default-generation asymmetry claim (new argument added post-review)**
+
+The series now argues in Part 2 Section 2: "LLMs do not currently default to generating Pydantic-typed Python. When asked to implement a Python service, an LLM will produce plain dicts, untyped function signatures, and loosely annotated code unless the human architect explicitly instructs otherwise."
+
+Challenge this claim directly:
+- Is it actually true that LLMs default to untyped Python? Many modern Python tutorials, GitHub repos, and FastAPI documentation examples use Pydantic extensively — this is well-represented in training data. Does the series have evidence that LLM-generated Python is predominantly untyped in practice?
+- Could the same argument be made about Java? LLMs generating Java may default to raw types (`List` without generics), `Object` casts, or bypassing CDI — requiring the same kind of human enforcement. If so, is the asymmetry real or assumed?
+- Does this argument simply reduce to "you need good prompts to get good output" — which applies equally to both languages? If a human architect specifies "use Pydantic v2" in their design spec, the LLM will use it. That's the spec-led model the series endorses.
+- Is this a training data problem that is already being corrected — i.e., as Pydantic/FastAPI dominate modern Python, do newer LLMs already generate typed Python by default in API contexts?
+
+---
+
 Be rigorous. Be specific. Do not validate claims you cannot verify. Do not be polite about weaknesses — the goal is to find every problem before publication, not to reassure the authors. If an argument is solid, you may say so briefly and move on. If it is weak, develop the challenge fully.
 
 When you are done, the output file `python-advocate-review.md` will be brought back to the original session for the authors to address each finding.
