@@ -129,7 +129,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 14: The pytest / Testing Ecosystem Comparison Is Absent
 **Verdict:** Partially Accepted — the type-verification claim is Java-specific; the broader testing claim is not.
 
-**Action:** Pending — will narrow the testing reinforcement argument in Part 2 Section 4 to specifically the type-verification property (compiler-verified usage examples) rather than claiming a general testing advantage. Will acknowledge pytest's strengths where relevant.
+**Action:** Resolved — Part 2 Section 4 testing paragraph revised to: (1) open by acknowledging pytest is more expressive than JUnit 5 in many ways (fixtures, parametrize, hypothesis); (2) explicitly narrow the claim to the one specific property that is statically-typed-specific: compiler-verified API usage at the point of test writing, not runtime; (3) close with explicit statement that the broader claim that Java tests are generally superior is not one the series makes.
 
 **Reasoning:** The advocate is right that pytest is arguably more expressive than JUnit 5 for many patterns, and that Python's hypothesis library provides richer property-based testing. The series presents the "tests as compiler-verified usage examples" argument as a general Java testing advantage when it is specifically about the *type-verification* aspect — which is genuinely Java-specific. The fix: argue the type-verification advantage specifically, not the testing ecosystem in general. "In a statically typed language, tests are type-verified as well as behaviourally specified" — that is the precise claim, and it is defensible without claiming Java tests are generally superior to Python tests.
 
