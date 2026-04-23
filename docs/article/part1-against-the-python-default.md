@@ -77,7 +77,7 @@ What does arise is a different set of requirements. The framework must produce o
 
 This last point is underappreciated. A human developer carries context between sessions in their memory. An LLM does not. Every session begins with a cold read of the codebase. The quality of that cold read — how accurately the LLM can reconstruct the system's intent and current state from the code alone — determines how effectively the next session can proceed. The structural argument for statically typed codebases is that compiler-verified data contracts, well-named records, and enforced interfaces give a cold-reading LLM more to work from than structure that must be inferred from usage. Whether this advantage is large or modest in practice remains to be measured directly; the argument is that the direction is clear and the mechanism is real. The type system is, in this sense, not only a quality mechanism. It is a continuity mechanism — the means by which context persists across the session boundary that LLMs cannot bridge themselves.
 
-*The Sparge system was built in this model. The companion study in Part 5 examines the same model applied in parallel across a suite of integrated systems. Together they constitute the empirical basis for the claims in this article; that basis is introduced here and developed in full there.*
+*The Sparge system was built in this model. The companion study in Part 5 examines the same model applied in parallel across a suite of integrated systems. Together they test the argument from two directions — with appropriately different levels of evidential weight.*
 
 ---
 

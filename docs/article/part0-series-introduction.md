@@ -15,7 +15,7 @@ The series makes three arguments, each grounded in evidence:
 
 **First:** the Python default is anthropocentric — it assumes human constraints that do not transfer to LLMs. Examining those assumptions changes the answer for a large and growing class of development work.
 
-**Second:** static typing is not merely a quality preference in LLM-first development — it is a structural advantage at generation time, review time, across sessions, and at scale across integrated systems. The argument applies to any statically typed language; Java is then argued as the strongest choice for enterprise backend development on specific, empirically grounded grounds.
+**Second:** static typing is not merely a quality preference in LLM-first development — it is a structural advantage at generation time, review time, across sessions, and at scale across integrated systems. The argument applies to any statically typed language; Java is then argued as the strongest choice for enterprise backend development on specific, evidence-informed grounds.
 
 **Third:** Python's remaining advantages — primarily in data science and scientific computing — are real, and the series says so honestly. Java's ecosystem is closing those gaps on a visible timeline. And the self-reinforcing dynamic by which LLMs perpetuate the Python prior in their training data is worth naming and addressing deliberately.
 

@@ -9,7 +9,7 @@
 
 Five articles is a long way to travel for a claim that can be stated in two sentences. Here it is:
 
-*When a large language model is the primary implementer, the conventional case for Python as the default programming language rests on assumptions that belong to human developers and do not transfer to the machine. For enterprise backend application development, a statically typed language — Java and Quarkus specifically — is the better choice on grounds that are real, measurable, and largely unexamined.*
+*When a large language model is the primary implementer, the conventional case for Python as the default programming language rests on assumptions that belong to human developers and do not transfer to the machine. For enterprise backend application development, a statically typed language — Java and Quarkus specifically — is the better choice on grounds that are real, structural, and largely unexamined.*
 
 Everything else in this series is the evidence behind those two sentences.
 
