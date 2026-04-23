@@ -29,7 +29,7 @@ The argument has three layers, each distinct.
 
 ## 2. What the Evidence Shows
 
-Two empirical cases run through this series, deliberately chosen to test the argument from different directions.
+Two case-based examinations run through this series, chosen to test the argument from different directions. They carry different evidential weight — Part 3 is a case study (one project, one context, a data point); Part 5 is a systematic empirical study (five systems, quantified GitHub history, measured outcomes). Both are valuable; neither should be read as more than it is.
 
 **The migration case (Part 3).** The Sparge blog migration tool was built in Python, then ported to Java/Quarkus across six phases — not because Python was wrong, but because a deployment constraint (Electron desktop embedding) required a bundleable server artifact that Python could not provide at an acceptable size. The migration was tractable because the design spec-led development model made it so: language-agnostic specifications, LLM re-implementation, type-system verification as a second compliance layer. What the port revealed was not what drove it: the compiler caught three errors that would have been silent in Python; the type system forced data contracts that surfaced ambiguities in the specification; the annotation model made endpoint implementation consistent enough to review rapidly. One honest Python win — the fuzzy fence-matching implementation where Python's standard library required four lines versus a manual implementation in Java — is documented in full.
 

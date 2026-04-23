@@ -84,7 +84,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 9: The Migration Case Study Is Insufficient as Empirical Evidence
 **Verdict:** Accepted — one project is a data point, not empirical evidence.
 
-**Action:** Pending — will reframe Part 3 throughout to describe itself as a case study rather than an empirical case. The 7-step playbook will be framed as "guidance derived from one experience" rather than a "reusable validated methodology."
+**Action:** Resolved — Part 3 opening, playbook header, bridge strategy claim, Part 0 description, and Part 6 summary all updated. Part 3 now consistently described as a case study / data point. Part 5 distinguished as the systematic empirical study. Playbook reframed as structured guidance from one experience whose generalisability is a hypothesis, not a conclusion.
 
 **Reasoning:** The advocate is correct that one project, one developer-LLM pair, in a specific deployment context (Electron embedding) does not constitute empirical evidence for a general claim about static typing advantages. Framing Part 3 honestly as a case study does not reduce its value — case studies are useful and instructive. But presenting it as "the empirical record" when it is one data point overstates it. Part 5 (the parallel development study across five systems) is where the empirical weight sits.
 

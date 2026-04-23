@@ -3,7 +3,7 @@
 **Part 3 of 5 — When the Machine Codes series**  
 **Status:** Draft complete. Not yet published.
 
-*This article documents the first of two empirical cases examined in this series. Part 3 concerns a completed migration — from Python to Java — undertaken on an existing system. Part 5 concerns ongoing parallel development — LLM-first, Java from inception — across a suite of integrated systems. Together they test the argument from two directions: that migration is viable, and that the model scales.*
+*This article is the first of two case-based examinations in this series. Part 3 is a case study: one project, one development context, one developer-LLM pair. It is a data point, not a controlled study. Part 5 is a systematic empirical examination: GitHub history across five integrated systems, quantified API evolution, and measured integration outcomes. Together they test the argument from two directions — that migration is viable, and that the model scales — with appropriately different levels of evidential weight.*
 
 *Parts 1 and 2 of this series made the theoretical case. This article is concerned with what actually happened.*
 
@@ -59,7 +59,7 @@ The bridge served a specific purpose: at any point during the migration, exactly
 
 The migration proceeded in six phases. Phase 4 ported the enrichment pipeline. Phase 5 ported the remaining endpoints. Phase 6 eliminated the final JEP calls entirely — at which point the Python runtime, the JEP dependency, the environment variables, and all the scaffolding were removed from the project. The exit criterion was zero bridge calls. That criterion was met.
 
-The bridge strategy is generalisable to any language pair for which a comparable bridge exists. For teams not ready to embed Python in the JVM, a process-level bridge — the Java server calling Python scripts as subprocesses — achieves the same incremental migration property at lower technical complexity, at the cost of higher communication overhead. The pattern is identical: bridge, port endpoint by endpoint, retire bridge. The mechanism differs; the approach does not.
+The bridge strategy may be applicable to other language pairs for which a comparable bridge exists. For teams not ready to embed Python in the JVM, a process-level bridge — the Java server calling Python scripts as subprocesses — achieves the same incremental migration property at lower technical complexity, at the cost of higher communication overhead. The pattern is identical: bridge, port endpoint by endpoint, retire bridge. The mechanism differs; the approach does not.
 
 ---
 
@@ -81,9 +81,9 @@ None of these errors were caught by the test suite that existed at the time. All
 
 ---
 
-## 5. A Reusable Playbook
+## 5. A Playbook for Teams Considering the Same Path
 
-The migration described here followed a pattern that is not specific to Sparge, to Python, or to Java. The following sequence is the generalisable form.
+The migration described here followed a sequence that the authors believe is applicable beyond the Sparge context — but this belief derives from one project, not from a validated methodology. The following steps are offered as structured guidance informed by this experience; their generalisability is a hypothesis, not a conclusion.
 
 **1. Establish the specification before writing any target-language code.**
 Document what the existing system does — its endpoints, its data contracts, its behaviour at boundaries, its error handling. This is the specification the new implementation will be built against. If the specification reveals that the existing system's behaviour is ambiguous or underdocumented, resolve that ambiguity before starting the port. Ambiguity in the specification becomes ambiguity in the implementation, and ambiguity in the implementation is a defect waiting to surface.

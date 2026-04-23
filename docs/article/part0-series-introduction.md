@@ -30,7 +30,7 @@ Where the Python default comes from, why the reasoning is anthropocentric, where
 Five distinct arguments for static typing in LLM-first development: token cost, review reliability, parallel development coherence, session continuity, and test reinforcement. Closes with an empirical 15-dimension comparison across TypeScript, Go, Kotlin, C#, Java, and Rust — grounded in published developer surveys and market data.
 
 **Part 3 — From Python to Quarkus: A Migration Playbook**  
-The first empirical case. A completed migration from Python to Java/Quarkus on a real production system — why it happened, how it was done, what it revealed, and a 7-step reusable playbook for teams considering the same path.
+A case study: a completed migration from Python to Java/Quarkus on a real production system. One project, one context — a data point rather than a controlled study. Documents why it happened, how it was done, what it revealed, and structured guidance for teams considering the same path.
 
 **Part 4 — Java's Ecosystem Trajectory and a Call to the Industry**  
 What Java has already closed (Project Panama), what is closing (Project Valhalla, GraalPy), what genuinely remains open, and a call to LLM vendors to rebalance training data as Java's ecosystem matures. Includes the visual timeline diagram across Java 21–28.
