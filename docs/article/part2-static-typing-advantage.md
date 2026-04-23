@@ -167,7 +167,7 @@ Part 1 of this series argued that the case for Python as default had not been ex
 ## References
 
 - *The Debugging Decay Index: Rethinking Debugging Strategies for Code LLMs* — arxiv.org/html/2506.18403v2
-- *94% of LLM-generated compilation errors are type-check failures* — cited across multiple sources; original attributed to ETH Zurich/UC Berkeley (primary source not directly accessible at time of writing)
+- Mündler, He, Wang, Sen, Song, Vechev — *Type-Constrained Code Generation with Language Models* — PLDI 2025 (94% of compilation errors are type-related) — arxiv.org/abs/2504.09246
 - *LLMs Love Python: A Study of LLMs' Bias for Programming Languages and Libraries* (2025) — arxiv.org/html/2503.17181v1
 - *LLM Token Optimization: Cut Costs & Latency in 2026* — redis.io/blog/llm-token-optimization-speed-up-apps/
 - Stack Overflow Developer Survey 2024 — survey.stackoverflow.co/2024/technology

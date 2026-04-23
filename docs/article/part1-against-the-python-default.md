@@ -239,7 +239,7 @@ The call to LLM vendors in Part 4 of this series rests in part on this mechanism
 - *The Debugging Decay Index: Rethinking Debugging Strategies for Code LLMs* — arxiv.org/html/2506.18403v2
 - *Helping LLMs Improve Code Generation Using Feedback from Testing and Static Analysis* — arxiv.org/html/2412.14841v1
 - *Why AI is pushing developers toward typed languages* — github.blog/ai-and-ml/llms/why-ai-is-pushing-developers-toward-typed-languages/
-- *94% of LLM-generated compilation errors are type-check failures* — cited across multiple sources; original attributed to ETH Zurich/UC Berkeley (primary source not directly accessible at time of writing)
+- Mündler, He, Wang, Sen, Song, Vechev — *Type-Constrained Code Generation with Language Models* — PLDI 2025 (94% of compilation errors are type-related) — arxiv.org/abs/2504.09246
 - *LLM Token Optimization: Cut Costs & Latency in 2026* — redis.io/blog/llm-token-optimization-speed-up-apps/
 - *LLM Cost Optimization: 5 Levers to Cut API Spend 70-85%* — morphllm.com/llm-cost-optimization
 - Project Panama (JEP 454) — stable Java 22 — openjdk.org/jeps/454
