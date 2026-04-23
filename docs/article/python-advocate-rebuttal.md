@@ -75,7 +75,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 8: The Cold-Read Advantage Is Asserted Without Empirical Support
 **Verdict:** Partially Accepted — should be framed as a structural argument, not an established property.
 
-**Action:** Pending — will reframe "substantially more legible" to "we expect/the structural argument suggests" rather than stating as established.
+**Action:** Resolved — revised two "substantially more legible" assertions in Part 1 Sections 3 and 4. Both now frame the cold-read advantage as what the structural argument predicts rather than an established property. The Sparge Stage 4 review example retained as illustration of the mechanism, explicitly noted as not constituting evidence for the general case. Magnitude acknowledged as awaiting direct measurement.
 
 **Reasoning:** The advocate is right that no study demonstrates LLMs perform materially better cold reads on statically typed vs well-typed Python code. The argument is coherent — verified structural information vs inferred structural information — but "substantially" overstates what has been demonstrated. The fix is consistent with how the token cost argument will be relabelled: frame it as the direction the structural argument points, not as a measured property. The Sparge Stage 4 example (one cold read that worked) is useful illustration, not evidence.
 
