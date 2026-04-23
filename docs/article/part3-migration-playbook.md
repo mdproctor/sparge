@@ -81,9 +81,9 @@ None of these errors were caught by the test suite that existed at the time. All
 
 ---
 
-## 5. A Playbook for Teams Considering the Same Path
+## 5. A Candidate Playbook
 
-The migration described here followed a sequence that the authors believe is applicable beyond the Sparge context — but this belief derives from one project, not from a validated methodology. The following steps are offered as structured guidance informed by this experience; their generalisability is a hypothesis, not a conclusion.
+The migration described here followed a sequence derived from one project in a specific context. The steps are offered as structured guidance, not a validated methodology. The approach is readily repeatable — others can try the same sequence in their own migrations and observe whether it holds. That replication is what would turn this from a single data point into an established pattern.
 
 **1. Establish the specification before writing any target-language code.**
 Document what the existing system does — its endpoints, its data contracts, its behaviour at boundaries, its error handling. This is the specification the new implementation will be built against. If the specification reveals that the existing system's behaviour is ambiguous or underdocumented, resolve that ambiguity before starting the port. Ambiguity in the specification becomes ambiguity in the implementation, and ambiguity in the implementation is a defect waiting to surface.
