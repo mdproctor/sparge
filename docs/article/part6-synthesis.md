@@ -51,7 +51,7 @@ If the implementer is a large language model, five questions replace or substant
 
 **1. Does the framework enforce structural contracts at compile time?** If not, type errors become debug cycles, and debug cycles cost compounding tokens on degrading reasoning.
 
-**2. Can the LLM reconstruct the system's intent from a cold read of the code?** Every session begins without memory. The code is the sole continuity mechanism. Static typing is session continuity infrastructure.
+**2. Can the LLM reconstruct the system's intent from a cold read of the code?** Every session begins without memory. The code is the sole continuity mechanism. Static typing is the best available structural approximation of session continuity infrastructure — verified data contracts and enforced interfaces give a cold-reading LLM more to work from than inferred structure. Whether the practical advantage is large or modest awaits direct measurement.
 
 **3. Does deployment impose constraints the language must meet?** Evaluate this first. In the Sparge case, Electron embedding decided the language before any ergonomic argument was made.
 
