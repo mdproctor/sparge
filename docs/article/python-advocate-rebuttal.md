@@ -39,7 +39,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 4: The GIL Concurrency Argument Cites Python 3.11-Era Behaviour
 **Verdict:** Accepted — factual error, requires update.
 
-**Action:** Pending — will update Appendix A2 and any concurrency table entries.
+**Action:** Resolved — Appendix A2 updated to acknowledge Python 3.13 free-threaded builds (PEP 703), current caveats (opt-in, C extension compatibility, stabilising), and the trajectory toward Python 3.14. Concurrency table row updated with §footnote directing readers to Appendix A2.
 
 **Reasoning:** Python 3.13 introduced free-threaded mode (PEP 703) as an official CPython release with `--disable-gil`. Python 3.14 is expected to make this the default path. Presenting "Python's GIL prevents true parallelism" as a current property of Python is factually wrong for Python 3.13+. The concurrency comparison in Part 2's table marks Python without a checkmark while giving Java's virtual threads a checkmark — this needs updating. The revised text should say "as of Python 3.12 and earlier" and acknowledge free-threaded Python 3.13 exists with current C extension compatibility caveats.
 
