@@ -147,7 +147,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 16: The OpenAPI / Integration Contract Argument Ignores Python Equivalents
 **Verdict:** Accepted — FastAPI provides functionally equivalent OpenAPI generation.
 
-**Action:** Pending — will revise Part 2 Section 3 and Appendix A3 to acknowledge FastAPI generates OpenAPI from Pydantic models equivalently, and reframe the argument as "typed API frameworks in general produce non-divergent specs" rather than a Java-exclusive capability. The Java-specific argument then becomes about the *enforcement layer* (compiler vs runtime) rather than the spec-generation capability.
+**Action:** Resolved — Part 2 Section 3, Part 1 Appendix A3, and Part 2 Section 5 all updated. FastAPI/Pydantic acknowledged as providing equivalent OpenAPI generation. Argument reframed as "typed API frameworks generally" produce non-divergent specs. Java-specific advantage narrowed to consuming-client side: when client is also compiled Java, API changes propagate as compile failures rather than runtime mismatches.
 
 **Reasoning:** The advocate is factually correct. FastAPI generates an OpenAPI specification directly from Python function signatures and Pydantic models — the implementation and specification are co-located by construction, for the same reason as Quarkus. This is not a Java-exclusive capability. The remaining distinction: Quarkus/Java's spec generation is backed by compile-time enforcement of the types; FastAPI's is backed by runtime enforcement of Pydantic models. That distinction is worth making, but presenting spec generation as Java-exclusive is a factual error that undermines the series' credibility.
 

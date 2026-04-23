@@ -195,11 +195,11 @@ For LLMs generating server code, the virtual thread model is both simpler to pro
 
 ### A3 — OpenAPI as Machine-Verifiable Specification
 
-Quarkus generates an OpenAPI specification directly from JAX-RS annotations. The implementation and the specification cannot diverge: the annotations are both the code and the spec, and both are machine-readable.
+Typed API frameworks generate OpenAPI specifications from typed endpoint signatures, producing non-divergent docs where the specification and the implementation are the same artifact. Quarkus/JAX-RS does this for Java; FastAPI/Pydantic does this equivalently for Python. This is not a Java-exclusive capability.
 
-In the design spec-led model, the OpenAPI document can serve as the integration contract between systems. When System A's API is annotated correctly, System B's type-safe REST client — also generated from the same spec — is guaranteed to speak the same contract. A change to System A's endpoint signature propagates as a compilation failure in System B's client, not as a runtime negotiation failure.
+The Java-specific advantage within this general pattern is what happens at the *consuming* end. When System B is also a statically typed Java system, its REST client can be generated from System A's OpenAPI spec and compiled against System A's type declarations. A change to System A's endpoint signature — adding a required field, changing a return type — causes System B's client to fail to compile before either system is run. In a Python/FastAPI ecosystem, the equivalent client generation is possible but the enforcement is runtime rather than compile-time: mismatches surface when the systems are exercised, not when they are built.
 
-This closes the loop between the human's specification intent and the LLM's implementation in a way that is enforced by construction rather than by convention. It also means that the API documentation is always current — not a document that must be maintained separately from the code, but a property of the code itself.
+This closes the loop at the *compiler* level rather than the *documentation* level. The API documentation is always current in both cases; in the Java case, correctness of consumption is verified structurally rather than by testing.
 
 ---
 
