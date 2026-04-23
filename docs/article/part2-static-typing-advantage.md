@@ -150,7 +150,13 @@ The Panama / Valhalla / GraalVM roadmap provides a concrete, tracked path to clo
 
 *Part 4 of this series includes a visual timeline diagram showing which Java ecosystem gaps are already closed, which are closing on a defined schedule, and which remain open — across six gap categories from Java 21 through Java 28.*
 
-**The honest note on Kotlin.** Kotlin shares the JVM, runs on Quarkus, and has technical advantages over Java in null safety and conciseness. The argument for Java over Kotlin rests primarily on training data volume and enterprise familiarity — not technical superiority. Teams with Kotlin expertise should not read this series as an argument against it. The arguments for static typing apply equally; the Java-specific properties above apply equally via the shared JVM.
+**The honest note on Kotlin.** Kotlin shares the JVM, runs on Quarkus, and has technical advantages over Java in several dimensions relevant to LLM-first development: its null safety is enforced by the type system rather than by discipline; its data classes are more concise than Java records; its coroutines provide a clean concurrency model. On the static typing dimensions that matter for LLM-first development, Kotlin is not merely equivalent to Java — it is in several respects better.
+
+The recommendation for Java over Kotlin in this series is therefore not a technical argument. It rests on human team context: accumulated tooling investment, the depth of the enterprise hiring pool, and institutional familiarity in large organisations. These are exactly the kind of human-centric factors that Part 1 criticised as insufficient drivers of the Python default — so the distinction deserves to be explicit.
+
+The difference is this: Part 1 argued that human familiarity with Python is an *insufficient* reason to choose Python when the technical merits substantially favour Java for LLM-first application development. For Java versus Kotlin, the technical merits are roughly equivalent. When technical factors are approximately balanced, human team context — expertise, tooling investment, ecosystem depth — becomes a legitimate deciding factor. That is not the same as accepting a bias that overrides a technical advantage.
+
+Teams with Kotlin expertise should not read this series as an argument against it. The static typing arguments apply in full. The Java-specific properties via the shared JVM apply equally. The series recommends Java as the modal enterprise choice, not as a universal one.
 
 ---
 
