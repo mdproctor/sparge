@@ -138,7 +138,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 15: The Debugging Decay Index Is Applied More Broadly Than Its Scope Supports
 **Verdict:** Partially Accepted — minor qualification needed.
 
-**Action:** Pending — will add a qualifier noting that Java compile-fix cycles can also iterate (complex generic type mismatches may require multiple compile passes), and that the DDI finding supports the general principle of earlier error detection without necessarily applying asymmetrically to every Java compile cycle.
+**Action:** Resolved — Appendix A4 updated to acknowledge Java compile sequences can also iterate (fixing A can expose B, especially with complex generics). Qualifier added: the DDI likely applies to any iterative sequence; the claim is specifically that Java's precise error signal limits diagnostic consumption per cycle (diagnosis is the capacity-depleting work), not that compile errors are always resolved in one step. The distinction is narrower but still real.
 
 **Reasoning:** The advocate makes a fair point: fixing one Java compilation error can expose another, and complex type errors may require multiple compile-fix iterations. The series implies Java compile cycles are categorically not subject to debugging decay, which is an overstatement. The compile-time vs runtime distinction still holds (runtime errors in Python trigger a full generate-fail-diagnose-regenerate cycle; Java compile errors are usually more local and precise), but the DDI should not be applied as if all Java errors are resolved in one step.
 
