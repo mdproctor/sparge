@@ -165,7 +165,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 18: The "Verbosity Is the Specification" Argument Is Stated But Not Demonstrated
 **Verdict:** Partially Accepted — the argument only holds against untyped Python; needs qualification against Pydantic.
 
-**Action:** Pending — will add a qualifier to the "verbosity is the specification" passage noting it applies to untyped Python and is weaker against Pydantic-modelled Python, where equivalent structural information is present at runtime rather than compile time.
+**Action:** Resolved — all three "Python dict" passages updated to "untyped Python dict" with qualifiers noting that against Pydantic models the argument is narrower: comparable structural information is present with runtime enforcement; remaining distinction is compile-time vs runtime verification. Cross-references to Section 2 (full Pydantic treatment) added at each instance.
 
 **Reasoning:** The advocate is right that a Python Pydantic model carries comparable structural information in comparable line count. "The Python dict that saves five lines of declaration also withholds five lines of verified structural information" is true of *untyped* Python dicts, not of Pydantic models. The passage should acknowledge this: the verbosity argument is strongest against the Python baseline; against fully-typed Pydantic Python, the remaining distinction is compile-time vs runtime verification, which is a narrower but still real claim.
 
