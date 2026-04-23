@@ -48,7 +48,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 5: The Fortune 500 90% Claim Is Unsourced at the Point of Use
 **Verdict:** Accepted — unsourced figure should be removed or sourced.
 
-**Action:** Pending — will remove the 90% figure; the Stack Overflow and RedMonk data already cited support the enterprise claim without requiring an unverified percentage.
+**Action:** Resolved — removed "90% of Fortune 500 companies" from Part 2 Section 5. The 57% application server market share (Grand View Research 2024), Stack Overflow 2024 percentages, and RedMonk January 2025 rankings are all properly cited and sufficient to support the enterprise installed base claim.
 
 **Reasoning:** The 90% Fortune 500 figure circulates widely in Java marketing material (Oracle, Red Hat promotional content) but its primary source is unclear and its definition of "core backend systems" is vague. An unattributed marketing figure in a series that criticises the Python ecosystem for reasoning from inherited assumptions is inconsistent. The 57% application server market share from Grand View Research is properly cited and sufficient. The Fortune 500 figure adds nothing that the cited data doesn't already support.
 
