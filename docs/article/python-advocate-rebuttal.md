@@ -120,7 +120,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 13: Python's Package Ecosystem Breadth Beyond ML Is Not Addressed
 **Verdict:** Accepted — Section 5 of Part 1 undersells Python's ecosystem.
 
-**Action:** Pending — will expand Part 1 Section 5 to acknowledge web scraping, CLI tooling, task queues, document processing, and API client breadth as legitimate Python advantages in application development categories, not just ML/data science.
+**Action:** Resolved — added paragraph to Part 1 Section 5 covering web scraping (BeautifulSoup, Scrapy, playwright-python), CLI tooling (Click, Typer), task queues (Celery, RQ), and document processing (pdfminer, reportlab, Pillow) as application-adjacent Python library categories. Acknowledges these appear in production systems alongside backend services, and qualifies the Java recommendation scope: strongest for systems built primarily on HTTP services, database integration, and business logic where these Python-native library advantages don't apply.
 
 **Reasoning:** The advocate is right that the series characterises Python's non-ML advantages as only "small scripts and automation." Web scraping (BeautifulSoup, Scrapy), CLI tooling (Click, Typer), task queues (Celery, RQ), document processing (pdfminer, reportlab) — these are application development libraries with no equally mature Java equivalents for many use cases. The honest scope of Python's advantage is broader than the series currently acknowledges. Expanding Section 5 makes the series more credible, not less — it demonstrates genuine engagement with Python's strengths.
 
