@@ -66,7 +66,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 7: The Series Does Not Address Java-Specific LLM Error Patterns
 **Verdict:** Partially Accepted — a real gap that weakens the argument if unaddressed.
 
-**Action:** Pending — will add acknowledgment that Java generics, checked exceptions, and annotation requirements create Java-specific LLM error surfaces; then argue that compile-time catch still produces fewer net cycles even if initial error rates differ.
+**Action:** Resolved — added "A fair counter: Java-specific error surfaces" paragraph to Part 2 Section 1. Acknowledges Java generics, checked exceptions, access modifiers, CDI injection rules, and JAX-RS annotations as real Java-specific LLM error surfaces. Then argues the net case: earlier catch + precise location + lower correction cost per error outweighs higher initial error rate. Frames the net effect as the controlled study the series calls for.
 
 **Reasoning:** The advocate raises a fair challenge: does Java's strictness cause LLMs to make *more* errors that Python avoids by being permissive? Java generics with bounded wildcards, CDI injection rules, JAX-RS annotation requirements — these are real error surfaces. The series claims Java catches errors *earlier*, but hasn't established that LLMs make *fewer* errors in Java. The counter-argument (which needs to be stated): even if LLMs generate more Java-specific structural errors, those errors are caught at compile time before they reach the runtime debugging cycle where decay occurs. The net cycle count may still favour Java even with higher initial error rates. But this needs to be argued, not assumed.
 
