@@ -122,7 +122,7 @@ Migration should be driven by requirements, not by a principle of language purit
 
 ---
 
-*Technical readers: the appendix in Part 1 of this series contains additional arguments relevant to the migration, including refactoring completeness (Appendix A1) and error message precision (Appendix A4).*
+*Technical readers: the appendix in Part 1 of this series contains the refactoring completeness argument (Appendix A1) relevant to the migration.*
 
 ---
 
