@@ -126,8 +126,8 @@ The table below compares six candidates across dimensions relevant to LLM-first 
 | Dimension | TypeScript | Go | Kotlin | C# | **Java** | Rust |
 |---|---|---|---|---|---|---|
 | LLM generation quality | Very high | Good | Good | Good | High | Moderate |
-| Type system for application code | Good† | Good | Excellent | Excellent | Excellent | Excellent‡ |
-| Type system escapable? | Yes (`any`) | Limited | Hard | Moderate | Hard | Near-impossible |
+| Type system for application code | Good† (Excellent w/ strict mode) | Good | Excellent | Excellent | Excellent | Excellent‡ |
+| Type system escapable? | Yes without strict; Hard with strict | Limited | Hard | Moderate | Hard | Near-impossible |
 | Enterprise installed base | Web/frontend | Cloud/infra | Android/growing | Microsoft shops | **57% app server market** | Systems/emerging |
 | Deployment as embedded server | Node bundle | Single binary | JVM / native | .NET / AOT | Uber-jar / native | Single binary |
 | Startup time | Fast | Very fast | Fast (w/ Quarkus) | Fast (AOT) | Fast (w/ Quarkus) | Very fast |
@@ -141,14 +141,14 @@ The table below compares six candidates across dimensions relevant to LLM-first 
 | Multi-vendor governance | Microsoft | Google | JetBrains | Microsoft | **Multi-vendor (OpenJDK)** | Rust Foundation |
 | Value types / zero-overhead data | No | Yes (structs) | Partial (inline classes) | Yes (structs) | Arriving Java 27–28 | Always |
 
-*† TypeScript's `any` type is widely used in practice, weakening the type guarantee across codebases that have not enforced strict mode throughout*  
+*† TypeScript in strict mode (`noImplicitAny: true`, `strictNullChecks: true`, typescript-eslint banning `any`) provides type guarantees that substantially close the gap with Java for application code. Modern TypeScript projects at scale (Next.js, tRPC, Prisma) enforce strict mode as a baseline. The "Good" rating reflects the modal case; strict-mode TypeScript deserves "Excellent" on this dimension. The same LLM default-generation asymmetry applies as noted for Python: LLMs do not currently default to generating TypeScript with strict mode enforced, and `any` appears in LLM-generated TypeScript without explicit instruction. The type safety advantage of strict TypeScript is real; reaching it requires active enforcement.*  
 *‡ Rust's type system catches an additional class of errors — memory safety and data races — via its ownership and borrowing model. These are valuable for systems programming. For application development, a garbage collector already handles memory safety, making Rust's additional constraints a complexity cost without commensurate benefit. Rust's borrow checker is also the primary reason LLM generation quality is lower: the compiler rejects ownership violations that LLMs produce more frequently than humans, requiring additional correction cycles.*
 
 *§ Python's GIL historically prevented true multi-threaded parallelism. Python 3.13 introduced free-threaded builds (PEP 703) that remove this constraint as an official CPython release. Current caveats: opt-in, C extension compatibility incomplete, still stabilising. Python 3.14 is expected to mature this further. The `asyncio` model remains dominant for I/O-bound concurrency; free-threading specifically addresses CPU-bound parallelism. See Appendix A2.*
 
 **Developer distribution (Stack Overflow 2024, 65,000+ respondents):** TypeScript 38.5% · Java 30.3% · C# 27.1% · Go 13.5% · Rust 12.6% · Kotlin 9.4%. **RedMonk January 2025 rankings:** Java #3 · C# #5 · TypeScript #6 · Go #12 · Kotlin #14 · Rust #19. TypeScript leads Java in overall developer count; Java leads in enterprise backend specifically, where it holds approximately 57% of the application server market (Grand View Research 2024).
 
-**Reading the table.** No single language dominates across all dimensions. TypeScript leads on LLM generation quality and training data volume — consistent with its trajectory as GitHub's fastest-growing language, driven by exactly the type-safety-for-LLM-code dynamic this series describes. Go leads on simplicity and binary deployment, making it the strongest choice for cloud infrastructure. Kotlin is arguably the most technically capable JVM option — more concise than Java, with built-in nullable safety — and is a legitimate alternative for teams already comfortable with it.
+**Reading the table.** No single language dominates across all dimensions. TypeScript leads on LLM generation quality and training data volume. In strict mode, its type system is substantially stronger than the modal-case "Good" rating suggests — approaching Java's level for application code. The table's TypeScript rating reflects the default generation state; strict-mode TypeScript deserves higher marks on type safety dimensions. Go leads on simplicity and binary deployment, making it the strongest choice for cloud infrastructure. Kotlin is arguably the most technically capable JVM option — more concise than Java, with built-in nullable safety — and is a legitimate alternative for teams already comfortable with it.
 
 **The Java-specific argument.** Java's case is not that it is technically superior on most individual dimensions. It is that the combination it offers for enterprise backend application development is unmatched:
 

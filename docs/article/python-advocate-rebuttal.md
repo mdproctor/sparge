@@ -93,7 +93,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 10: TypeScript With Strict Mode Substantially Closes the Type Safety Gap
 **Verdict:** Accepted — the comparison methodology is inconsistent.
 
-**Action:** Pending — will revise the table footnote and accompanying text to make explicit that the comparison is between modal (typical) use rather than disciplined best-case use, and that TypeScript in strict mode substantially closes the gap with Java.
+**Action:** Resolved — table cell updated to "Good† (Excellent w/ strict mode)", escapability row updated to "Yes without strict; Hard with strict", footnote expanded to acknowledge strict-mode TypeScript substantially closes the gap with Java while noting the same LLM default-generation asymmetry applies (LLMs don't default to strict mode). "Reading the table" paragraph updated to flag the modal vs strict distinction explicitly.
 
 **Reasoning:** The advocate is right: the table compares Java (best-case, disciplined) against TypeScript (modal, with `any` widely used). The honest comparison should either compare best-cases consistently or compare modal-cases consistently. The remaining Java advantage in best-case comparison: enforced by the language itself (cannot escape Java's type system as easily as TypeScript's `any`), and verified at compile time rather than by static analysis tool invocation. But "TypeScript's type system is `Good†`" with the footnote treating `any` as the representative case is unfair to disciplined TypeScript.
 
