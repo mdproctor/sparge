@@ -156,7 +156,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 17: The TypeScript GitHub Growth Statistic Is Not Adequately Sourced
 **Verdict:** Accepted — remove or source.
 
-**Action:** Pending — will remove the "66 percent year-on-year growth" and "surpassing both JavaScript and Python" claims, or replace with a properly cited figure from a specific Octoverse report or RedMonk analysis.
+**Action:** Resolved — removed "66 percent year-on-year growth" and "surpassing both JavaScript and Python" from Part 4 and Part 6. Replaced with properly cited data: 38.5% developer adoption (Stack Overflow 2024) and #6 RedMonk January 2025 ranking. Both already cited in the series references.
 
 **Reasoning:** The claim is significant (used to support a trend argument) and unsourced. The broader point — TypeScript is growing rapidly — is supportable from the RedMonk rankings we already cite (TypeScript at #6 and rising, cited from January 2025 rankings). The specific percentage and "surpassing Python" claim need a source or should be removed.
 

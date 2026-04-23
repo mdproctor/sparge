@@ -123,7 +123,7 @@ The alternative is allowing a training distribution that reflects the ecosystem 
 
 **A note on what is already happening.**
 
-The industry is not unaware of this dynamic. TypeScript's trajectory — surpassing both JavaScript and Python as GitHub's most-used language by contributor count in 2025, with 66 percent year-on-year growth — is partly explained by the same type-safety-for-LLM-code argument that this series makes for Java. Developers and LLM-assisted projects are gravitating toward languages where the type system catches errors that dynamic languages leave to runtime discovery. Java requires a similar deliberate correction specifically in the application development domain, where its advantages are already present and where the case for Python's default status has not been examined.
+The industry is not unaware of this dynamic. TypeScript's rapid ascent — 38.5% developer adoption (Stack Overflow 2024) and ranking #6 in the RedMonk January 2025 rankings, up from much lower positions in prior years — is partly explained by the same type-safety-for-LLM-code argument that this series makes for Java. Developers and LLM-assisted projects are gravitating toward languages where the type system catches errors that dynamic languages leave to runtime discovery. Java requires a similar deliberate correction specifically in the application development domain, where its advantages are already present and where the case for Python's default status has not been examined.
 
 *The efficiency claims underlying this call — the token cost differential, the integration coherence advantage — are introduced in Part 2 of this series and will be tested empirically in Part 5, currently in preparation.*
 
