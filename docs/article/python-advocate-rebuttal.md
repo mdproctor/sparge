@@ -30,7 +30,7 @@ The resolution: distinguish two different scenarios. (1) Training data bias over
 ## Finding 3: The Token Cost Advantage Is Presented as Established in Parts 1–2 but Retracted in Part 6
 **Verdict:** Accepted — the caveat should appear where the claim is made, not only in the summary.
 
-**Action:** Pending — will add "structural inference" label to the token cost argument in Parts 1 and 2 where it is first stated.
+**Action:** Resolved — added structural inference label at the point of the claim in both Part 1 Section 2 and Part 2 Section 1. Both passages now distinguish direction (supported by cited evidence) from magnitude (structural inference, awaiting controlled study). The argument stands; the honest framing is now present where it is needed.
 
 **Reasoning:** The advocate is correct. Part 6 says "The cost argument in Part 2 is structural inference, not measured result" — which is accurate — but Parts 1 and 2 present the argument as arithmetic ("paid once" vs "paid repeatedly, with degrading returns"). A reader who reads the first two parts receives confident framing; the qualification appears 40,000 words later. This is not transparent disclosure. The fix: add a sentence at the point of the claim in Part 1 and Part 2 acknowledging that the directional argument is sound but the magnitude is unconfirmed. The argument remains worth making — it just needs honest labelling where made.
 
