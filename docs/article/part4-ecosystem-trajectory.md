@@ -83,7 +83,7 @@ GraalPy is not yet production-ready for complex scientific workloads. It runs ma
 
 *The timeline diagram below summarises the six gap categories, features already shipped, features in preview, and the speculative trajectory to Java 28.*
 
-![Java ecosystem gap timeline — When the Machine Codes series](article-java-timeline@2x.png)
+![Java ecosystem gap timeline — When the Machine Codes series](../article-java-timeline@2x.png)
 
 ---
 

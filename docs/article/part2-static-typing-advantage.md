@@ -148,6 +148,8 @@ The multi-vendor governance of OpenJDK — with Oracle, Red Hat, Amazon, Microso
 
 The Panama / Valhalla / GraalVM roadmap provides a concrete, tracked path to closing the remaining gaps with Python's scientific computing ecosystem, on a timeline visible from today's Java releases. *(See Part 4 of this series.)*
 
+*Part 4 of this series includes a visual timeline diagram showing which Java ecosystem gaps are already closed, which are closing on a defined schedule, and which remain open — across six gap categories from Java 21 through Java 28.*
+
 **The honest note on Kotlin.** Kotlin shares the JVM, runs on Quarkus, and has technical advantages over Java in null safety and conciseness. The argument for Java over Kotlin rests primarily on training data volume and enterprise familiarity — not technical superiority. Teams with Kotlin expertise should not read this series as an argument against it. The arguments for static typing apply equally; the Java-specific properties above apply equally via the shared JVM.
 
 ---
