@@ -25,7 +25,7 @@ Python's dominance in software development did not arise from a collective decis
 
 The first and most significant was data science. When the scientific computing community began migrating from MATLAB and R in the early 2010s, Python — already established as a clean scripting language — absorbed that migration almost entirely. NumPy, SciPy, Pandas, and eventually TensorFlow and PyTorch were written for or in Python. The data science community is large, produces enormous volumes of written material, and that material became training data. By the time large language models were trained on the corpus of public code, Python was not merely common — it was overwhelmingly dominant in precisely the domains most represented in that corpus.
 
-The consequence is measurable. A 2025 study examining eight leading language models — including GPT-4o, Claude, Llama, and DeepSeek — found that LLMs use Python for 90 to 97 percent of all benchmark problems, and that base models achieve their highest pass rates in Python, outperforming Java by 11.3 percentage points. The paper's conclusion attributes this to training data distribution. A competing explanation deserves honest engagement: Python's simpler syntax may genuinely make LLM generation more accurate, independently of training data volume. A correct Python function requires fewer structural decisions than the equivalent Java — no package declaration, no access modifiers, no explicit return type declaration, no checked exceptions to declare or handle. If LLMs have a baseline probability of error per structural decision, fewer decisions produces fewer errors regardless of how much Python training data exists. The two explanations are not mutually exclusive — both may be true. The counter-argument is not that LLMs make no more errors in Java, but that the errors they make are caught earlier and corrected more precisely. Whether this net effect favours Java is a question the series examines but cannot definitively answer without controlled measurement. *(See Appendix A4 for a domain-specific correction to this statistic.)*
+The consequence is measurable. A 2025 study examining eight leading language models — including GPT-4o, Claude, Llama, and DeepSeek — found that LLMs use Python for 90 to 97 percent of all benchmark problems, and that base models achieve their highest pass rates in Python, outperforming Java by 11.3 percentage points. The paper's conclusion attributes this to training data distribution. A competing explanation deserves honest engagement: Python's simpler syntax may genuinely make LLM generation more accurate, independently of training data volume. A correct Python function requires fewer structural decisions than the equivalent Java — no package declaration, no access modifiers, no explicit return type declaration, no checked exceptions to declare or handle. If LLMs have a baseline probability of error per structural decision, fewer decisions produces fewer errors regardless of how much Python training data exists. The two explanations are not mutually exclusive — both may be true. The counter-argument is not that LLMs make no more errors in Java, but that the errors they make are caught earlier and corrected more precisely. Whether this net effect favours Java is a question the series examines but cannot definitively answer without controlled measurement. *(See Technical Companion, A4 for a domain-specific correction to this statistic.)*
 
 This matters because when an LLM recommends Python for a new project, that recommendation is not the output of an analysis weighing Python's properties against the project's requirements. It is the output of a strong prior, shaped by what the model has seen most. The recommendation sounds like a considered judgment. It has the form of a considered judgment. It is not one.
 
@@ -89,13 +89,13 @@ This last point is underappreciated. A human developer carries context between s
 
 The preceding sections have argued against Python on grounds that the standard justifications for it do not transfer to LLM-first development. This section makes the positive case: the specific properties of Java and Quarkus that make them well-suited to this development model, on grounds that are real rather than inherited.
 
-**Type system as specification enforcement.** In the design spec-led model, the specification describes what is to be built. The type system, once the implementation exists, verifies that what was built conforms to the structural contracts the specification implied. A record defined as `RefinementRule(String check, int fenceIndex, String fingerprint, String contentSample, Map<String, String> fix)` is not merely a data structure — it is a machine-readable encoding of a design decision. It cannot be partially populated, cannot be passed where a different type is expected, and cannot be silently misread. When the LLM generates code that uses this record incorrectly, the compiler says so immediately and precisely. When a future session reads this code cold, it knows without ambiguity what the contract is. *(See also Appendices A1, A3, and A4.)*
+**Type system as specification enforcement.** In the design spec-led model, the specification describes what is to be built. The type system, once the implementation exists, verifies that what was built conforms to the structural contracts the specification implied. A record defined as `RefinementRule(String check, int fenceIndex, String fingerprint, String contentSample, Map<String, String> fix)` is not merely a data structure — it is a machine-readable encoding of a design decision. It cannot be partially populated, cannot be passed where a different type is expected, and cannot be silently misread. When the LLM generates code that uses this record incorrectly, the compiler says so immediately and precisely. When a future session reads this code cold, it knows without ambiguity what the contract is. *(See Technical Companion, A1, A3, A4.)*
 
 The Sparge migration documented in Part 3 provides three concrete examples of errors Java's compiler caught that would have been silent in Python — the evidence is in Part 3 Section 4.
 
 **Quarkus-specific properties.** Quarkus is not incidental to this argument. Its design choices compound the advantages of Java's type system in ways relevant to LLM-first development. JAX-RS annotations make REST endpoint declarations explicit and structural — the LLM generating a new endpoint follows a pattern that is both machine-verifiable and immediately legible in review. CDI dependency injection is declared rather than implicit. Records and sealed types make data contracts self-documenting. The LLM does not need to infer what a component does from its behaviour; it can read what the component declares itself to be.
 
-Quarkus's fast startup — demonstrated at under one second in the Sparge deployment — makes it viable for desktop embedding in a way that traditional application servers are not. The uber-jar packaging model produces a single deployable artifact of approximately 19 megabytes, compared to the 150 megabytes required to bundle a Python runtime into the same Electron application. These are not language advantages in the abstract; they are concrete properties that determined the outcome of a real deployment decision. *(See Appendix A2 for the concurrency model advantage.)*
+Quarkus's fast startup — demonstrated at under one second in the Sparge deployment — makes it viable for desktop embedding in a way that traditional application servers are not. The uber-jar packaging model produces a single deployable artifact of approximately 19 megabytes, compared to the 150 megabytes required to bundle a Python runtime into the same Electron application. These are not language advantages in the abstract; they are concrete properties that determined the outcome of a real deployment decision. *(See Technical Companion, A2 for the concurrency model advantage.)*
 
 **At scale: parallel development and integration coherence.** The advantages described above compound when development is not a single project but a suite of related systems developing concurrently. When multiple systems share integration contracts — REST APIs, event schemas, shared data types — the static type system makes those contracts explicit and machine-verifiable from each system's side independently. An LLM working on System B can inspect System A's declared types and verify its side of the integration without running both systems together. A change to System A's API surface is visible immediately as a compilation failure in System B, not as a runtime failure discovered during integration testing.
 
@@ -157,57 +157,11 @@ That is the case for examining the default. Not that Python is wrong. That the d
 
 ---
 
-## Appendix: Further Arguments for the Technical Reader
+## Technical Companion
 
-*The following arguments support the main thesis but are more technical in nature. They are presented here for readers who want to examine the evidence more closely. Non-technical readers who have followed the main argument above need not continue.*
+Five supporting technical arguments — refactoring completeness, virtual threads and concurrency, OpenAPI as machine-verifiable specification, training data distribution, and the positive feedback loop — are developed in full in the companion document published alongside this series.
 
----
-
-### A1 — Refactoring Completeness
-
-When an LLM refactors Java code — renames a method, changes a record field, restructures a package — the compiler validates that the refactoring is complete. Every call site that was not updated fails to compile. The LLM receives an exhaustive, precise list of what remains to be fixed.
-
-In Python, a renamed function may leave call sites that still resolve through duck typing or dynamic dispatch, appearing correct until runtime reveals the breakage. The refactoring looks complete. It is not. The failure manifests later, in a context further removed from the cause.
-
-For LLM-first development where refactoring is frequent — the LLM improving its previous work, the specification evolving, new requirements emerging — this structural completeness guarantee reduces the rate of silent regressions. It is not an advantage that appears in static comparisons between the languages; it appears when the code changes, which in LLM-first development is continuously.
-
----
-
-### A2 — Virtual Threads and Concurrency Simplicity
-
-Java 21's Project Loom virtual threads allow concurrent server code to be written with simple blocking idioms. The LLM generates straightforward sequential code — read a file, call an API, return a result — and the runtime scales it correctly without the LLM needing to reason about thread pools, async callbacks, or event loops.
-
-Through Python 3.12, the GIL (Global Interpreter Lock) prevented true parallelism within a single process, requiring either the `asyncio` model — which demands that the LLM reason about coroutine semantics throughout the codebase — or multiprocessing, which introduces its own complexity around shared state and serialisation. Python 3.13 introduced free-threaded builds (PEP 703) that remove the GIL and allow true multi-threaded parallelism as an official CPython release. This is a genuine and significant development. Current caveats: free-threaded mode is opt-in (requiring a specifically compiled CPython variant), C extension compatibility is incomplete across third-party packages, and the feature is still stabilising toward the default. Python 3.14 is expected to mature this further. The `asyncio` model remains the dominant pattern for I/O-bound concurrency in Python today; free-threading specifically targets CPU-bound parallelism. The gap between Python and Java's virtual thread model is therefore narrowing, on a concrete timeline, from a direction that one year ago would not have been predicted.
-
-For LLMs generating server code, the virtual thread model is both simpler to produce correctly and easier to verify in review. The correctness property that matters — this code handles concurrent requests without shared state corruption — is enforced by the runtime rather than requiring the LLM to reason about concurrency explicitly in every implementation decision.
-
----
-
-### A3 — OpenAPI as Machine-Verifiable Specification
-
-Typed API frameworks generate OpenAPI specifications from typed endpoint signatures, producing non-divergent docs where the specification and the implementation are the same artifact. Quarkus/JAX-RS does this for Java; FastAPI/Pydantic does this equivalently for Python. This is not a Java-exclusive capability.
-
-The Java-specific advantage within this general pattern is what happens at the *consuming* end. When System B is also a statically typed Java system, its REST client can be generated from System A's OpenAPI spec and compiled against System A's type declarations. A change to System A's endpoint signature — adding a required field, changing a return type — causes System B's client to fail to compile before either system is run. In a Python/FastAPI ecosystem, the equivalent client generation is possible but the enforcement is runtime rather than compile-time: mismatches surface when the systems are exercised, not when they are built.
-
-This closes the loop at the *compiler* level rather than the *documentation* level. The API documentation is always current in both cases; in the Java case, correctness of consumption is verified structurally rather than by testing.
-
----
-
-### A4 — Training Data Distribution and Structural Simplicity: Two Explanations for the Accuracy Gap
-
-The claim in Section 1 — that LLMs achieve 11.3 percentage points higher accuracy in Python than Java on benchmarks — has two plausible explanations that are not mutually exclusive.
-
-**The training data explanation.** The gap is concentrated in scientific and algorithmic problem domains that dominate benchmark datasets such as HumanEval and MBPP. These domains reflect the data science corpus where Python's training data dominance is strongest. For web service code, REST API implementation, and business logic, Java has substantial and high-quality training data — the entire Spring Boot, Java EE, and Jakarta EE corpus — and the gap is smaller than aggregate statistics suggest.
-
-**The structural simplicity explanation.** Python functions require fewer structural decisions than equivalent Java: no package declaration, no class wrapper for a function, no access modifiers, no explicit return type, no checked exceptions. If LLMs have a baseline error probability per structural decision, fewer decisions produces fewer errors independently of training data volume. This is a genuine alternative hypothesis that the cited paper does not refute — it attributes the gap to training data distribution, but structural simplicity is a confounding variable that the study design cannot easily isolate.
-
-Both explanations are likely partially true. The series' counter-argument does not require disproving the structural simplicity hypothesis. Even if Python's simpler syntax genuinely produces lower initial error rates, the compile-time correction mechanism in Java — catching errors before execution, with precise location information — may produce lower *net* error costs across a full implementation. Whether the Java correction advantage outweighs any structural simplicity advantage Python holds is the controlled study the series calls for. The domain qualification remains relevant: in the application development domain, the structural simplicity gap is narrower (Java's application idioms are more consistent than its algorithmic ones), and the compiler correction mechanism applies in full.
-
----
-
-### A5 — The Positive Feedback Loop
-
-The positive feedback loop — where LLM-generated Python code accumulates as training data, strengthening the Python prior regardless of technical merit — is examined in full in Part 4 Section 5.
+*Each is cross-referenced from the relevant section above. References in this article to "Technical Companion, A1" through "A5" point to the corresponding section of that document.*
 
 ---
 

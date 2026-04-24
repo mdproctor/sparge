@@ -122,7 +122,7 @@ Migration should be driven by requirements, not by a principle of language purit
 
 ---
 
-*Technical readers: the appendix in Part 1 of this series contains the refactoring completeness argument (Appendix A1) relevant to the migration.*
+*Technical readers: the refactoring completeness argument (Technical Companion, A1) is relevant to the migration — it explains why Java's compiler catches regressions that Python would leave silent.*
 
 ---
 
