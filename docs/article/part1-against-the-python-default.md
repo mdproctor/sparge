@@ -61,6 +61,10 @@ Python's type system in 2025 is stronger than this characterisation in isolation
 
 The implication extends beyond code review. Every point at which an LLM reasons about a codebase — assessing the impact of a change, locating a bug, evaluating a refactoring — benefits from lower uncertainty about what the code is doing. Static typing does not make LLMs infallible reviewers. It removes a systematic source of ambiguity that dynamic typing leaves open. In a development model where the LLM is the primary implementer and the human is the architect and reviewer, that reduction in ambiguity accumulates across every interaction with the code.
 
+*The Sparge project provides a direct illustration. When asked to explain the original Python recommendation, the response cited faster prototyping, lighter syntax, and easier iteration — the standard account. When pressed specifically on whether those advantages transferred to a large language model doing the implementation, the argument dissolved. Prototyping speed is a function of reduced typing effort, REPL-driven iteration, and developer familiarity. None of those properties apply to a system that generates text. The recommendation was fluent, internally consistent, and inapplicable.*
+
+*The corrective is specific: ask the LLM to justify its framework recommendation in terms of the actual implementer. If the justification relies on developer ergonomics — typing speed, REPL iteration, syntax familiarity — ask whether those properties apply when the developer is the LLM itself. That question, in the conversation that produced this series, was sufficient to expose the assumption and correct the reasoning. The form of a considered judgment and the substance of one are not the same thing.*
+
 ---
 
 ## 3. Design Spec-Led Development
@@ -123,23 +127,7 @@ An argument that does not acknowledge the limits of its own applicability is not
 
 ---
 
-## 6. The Bias in the Conversation
-
-The preceding sections have argued that the Python default is anthropocentric — that it rests on assumptions about human developer ergonomics that do not transfer to large language models. What has not yet been examined is how that bias manifests in practice: not in the abstract, but in an actual conversation between a human architect and the LLM that helped build the system this article describes.
-
-When asked to explain the original Python recommendation, the response cited faster prototyping, lighter syntax, and easier iteration — the standard account. When pressed specifically on whether those advantages transferred to a large language model doing the implementation, the argument dissolved. Prototyping speed in Python is a function of reduced typing effort, REPL-driven iteration, and developer familiarity. None of those properties apply to a system that generates text. The LLM had produced a justification that was fluent, internally consistent, and inapplicable. The properties it cited belonged to human developers. It had not noticed the substitution.
-
-The error has a specific structure: an inherited assumption presented as a reasoned conclusion. The training data that shaped the response was produced by human developers, for human developers, reflecting human constraints. When asked to reason about framework selection, the LLM retrieved that prior and applied it without examining whether the conditions that generated it were present in this case. They were not.
-
-**What this means in practice.** An LLM recommending a framework is not performing an objective analysis of your project's requirements against available options. It is producing output shaped by the distribution of its training data and the assumptions embedded in the discourse that training data reflects. The recommendation will sound considered. It will be expressed with appropriate hedges and caveats. The fluency of the output and the validity of the reasoning are independent variables.
-
-The corrective is not scepticism toward LLM recommendations in general. It is a specific challenge: *ask the LLM to justify the recommendation in terms of the actual implementer.* If the justification relies on developer ergonomics — typing speed, REPL iteration, syntax familiarity — ask whether those properties apply when the developer is the LLM itself. That single question, in the conversation that produced this article, was sufficient to expose the assumption and correct the reasoning.
-
-This is not a failure specific to this system or this exchange. It is a property of how large language models carry and reproduce inherited assumptions — and evidence that those assumptions are worth examining explicitly rather than accepting as the output of a considered judgment. The form of a considered judgment and the substance of one are not the same thing.
-
----
-
-## 7. A Decision Framework
+## 6. A Decision Framework
 
 The argument in this article can be reduced to a single question that should precede any framework selection for a new project: *who is writing the implementation?*
 
