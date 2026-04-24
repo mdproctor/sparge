@@ -1,7 +1,8 @@
 # When the Machine Codes: A Series Introduction
 
-**Part 0 of 6 — When the Machine Codes series**  
-**Status:** Draft complete. Not yet published.
+**Series companion document — not a numbered article**  
+**Status:** Draft complete. Not yet published.  
+*This is the series landing page and navigation guide. The series itself begins with Part 1.*
 
 ---
 
@@ -39,7 +40,7 @@ What Java has already closed (Project Panama), what is closing (Project Valhalla
 The second empirical case. GitHub history analysis across a suite of five integrated systems developed concurrently in the LLM-first model — growing and changing APIs, LLM sessions navigating those changes in isolation, and the type system as the coherence mechanism. The empirical foundation for the parallel development claims in Part 2.
 
 **Part 6 — Synthesis and Recommendations**  
-The full argument in summary, both empirical cases side by side, the decision framework restated in light of all the evidence, and the vendor call backed by Part 5 findings.
+The argument stated whole: thesis, three layers, what the evidence shows, the vendor call, and what remains open. Reads in ten minutes.
 
 ---
 
@@ -47,9 +48,9 @@ The full argument in summary, both empirical cases side by side, the decision fr
 
 *Non-technical readers:* Parts 1, 3, and 6 carry the argument with minimal technical depth. Parts 2 and 4 are written to be readable throughout, with sections marked *[Technical detail — safe to skip]* where implementation specifics appear.
 
-*Technical readers:* Each part has an appendix or technical detail sections where specific language features, JEPs, benchmark citations, and implementation evidence are developed. The Part 1 appendix contains six supporting technical arguments cross-referenced throughout the series.
+*Technical readers:* Each part has an appendix or technical detail sections where specific language features, JEPs, benchmark citations, and implementation evidence are developed. The Part 1 appendix contains five supporting technical arguments cross-referenced throughout the series.
 
-*Readers in a hurry:* Read Part 1 Section 7 (the decision framework) and Part 2 Section 5 (the language comparison table). If either changes how you think about framework selection, the rest is the evidence behind it.
+*Readers in a hurry:* Read Part 1 Section 6 (the decision framework) and Part 2 Section 5 (the language comparison table). If either changes how you think about framework selection, Part 6 gives you the full argument in one reading.
 
 ---
 
