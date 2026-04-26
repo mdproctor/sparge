@@ -8,11 +8,11 @@ The problem with AI-assisted writing is not that it exists. It is that most of i
 
 Simon Willison [coined the term](https://simonwillison.net/2024/May/8/slop/) for the careless kind: slop. Text that is generated without the scrutiny that would catch errors — well-structured, fluent, and wrong. The question worth asking is not whether AI-assisted writing can be slop, but what specifically distinguishes the kind that isn't.
 
-The answer, we think, is process. Not the AI model used, not the length of the prompt, not the subject matter. Process: what happens between the first token generated and the moment something is published.
+The answer, I think, is process. Not the AI model used, not the length of the prompt, not the subject matter. Process: what happens between the first token generated and the moment something is published.
 
-We searched for an existing named framework and did not find one combining all of: specification before AI generation, gated human approval during drafting, clean-context adversarial review, and a public audit trail — applied specifically to analytical writing. Adjacent frameworks exist: Structured Analytic Techniques (Devil's Advocate, Red Hat analysis) apply adversarial challenge to intelligence analysis; the PAIRR framework (UC Davis, 2025) combines peer and AI review for student writing; the GAR framework (2024) uses LLM agents to simulate peer reviewers of manuscripts. Individual components — HITL approval, red-teaming, audit trails — are well established in their own domains. What appears not to exist is the specific combination for the specific problem: how to structure AI-assisted drafting of analytical content so the human remains genuinely responsible for the argument.
+I searched Google Scholar, arXiv, and practitioner literature for an existing named framework and did not find one combining all of: specification before AI generation, gated human approval during drafting, clean-context adversarial review, and a public audit trail — applied specifically to analytical writing. Adjacent frameworks exist: Structured Analytic Techniques (Devil's Advocate, Red Hat analysis) apply adversarial challenge to intelligence analysis; the PAIRR framework (*Peer and AI Review + Reflection*, UC Davis / *Computers and Composition*, 2025) combines peer and AI review for student writing; the GAR framework (*Generative Adversarial Reviews*, arXiv 2412.10415, 2024) uses LLM agents to simulate peer reviewers of manuscripts. Individual components — HITL approval, red-teaming, audit trails — are well established in their own domains. What appears not to exist is the specific combination for the specific problem: how to structure AI-assisted drafting of analytical content so the human remains genuinely responsible for the argument.
 
-This article proposes one. We call it **The Editorial Pipeline**.
+This article proposes one. I call it **The Editorial Pipeline**.
 
 ---
 
@@ -22,7 +22,7 @@ The case for formalising this is straightforward: without a named process, "I us
 
 A named framework with defined stages and gates makes the claim specific enough to verify — or falsify. Either the specification was agreed before drafting or it wasn't. Either every section was approved before committing or it wasn't. Either adversarial review was run from a clean context or it wasn't. Either the record is public or it isn't.
 
-The framework we propose is described in the companion piece *["Against AI Slop: How We Made 'When the Machine Codes'"](/articles/against-ai-slop/)*, which documents the process in practice. This article extracts and formalises it.
+The framework I propose is described in the companion piece *["Against AI Slop: How We Made 'When the Machine Codes'"](/articles/against-ai-slop/)*, which documents the process in practice. This article extracts and formalises it.
 
 ---
 
@@ -62,7 +62,7 @@ The framework is named after the software development pipeline deliberately. Its
 
 **What happens:** After the full draft exists, one or more adversarial review sessions are run from a *clean context* — no access to the drafting conversation, with an explicit instruction to challenge the work.
 
-Two modes are available. **General challenge** tasks the reviewer with finding any weakness in logic, evidence, or claim strength — effective for structural problems regardless of subject matter. **Domain-specific advocacy** tasks the reviewer with arguing from a particular perspective (for example, a Python advocate for a series arguing for Java) — effective for finding weaknesses in domain assumptions that general challenge may miss. Domain-specific advocacy is the stronger approach for analytical work with a clear subject-matter position, because it targets the argument's most vulnerable assumptions. Both modes require a clean context with no access to the drafting conversation.
+Two modes are available. **General challenge** tasks the reviewer with finding any weakness in logic, evidence, or claim strength — effective for structural problems regardless of subject matter. **Domain-specific advocacy** tasks the reviewer with arguing from a particular perspective (for example, a Python advocate for a series arguing for Java) — effective for finding weaknesses in domain assumptions that general challenge may miss. Domain-specific advocacy is likely the stronger approach for analytical work with a clear subject-matter position, because it forces the reviewer into the position of the argument's most capable opponent — though it may miss weaknesses outside that frame. Both modes require a clean context with no access to the drafting conversation.
 
 This is the stage most distinct from conventional writing review. The adversarial reviewer is not a collaborator; they are an opponent. They have not seen the drafting conversation and are not trying to help. They are trying to break the argument.
 
@@ -70,7 +70,7 @@ This is the stage most distinct from conventional writing review. The adversaria
 
 **The gate:** Every finding from the adversarial review is addressed — either fixed, or explicitly rejected with a written reason. Unaddressed findings are publication blockers. The review findings and responses are part of the record.
 
-**In practice:** The session is run in a new conversation with instructions to read the article, identify every weakness, and report findings with severity, location, the specific claim, the challenge, and a suggested fix. Multiple rounds may be run; round N verifies whether round N-1's findings were adequately addressed.
+**In practice:** The session is run in a new conversation with instructions to read the article, identify every weakness, and report findings with severity, location, the specific claim, the challenge, and a suggested fix. Multiple rounds may be run; round N verifies whether round N-1's findings were adequately addressed. Gate failures happen — a finding may be noted but not applied, or a fix may be partial. This is why verification rounds are not optional: each round confirms that corrections were actually made, not just that findings were acknowledged.
 
 **The limitation:** If all adversarial reviewers are the same AI system, they share the same systematic blind spots. Three rounds of Claude review will not find what Claude does not know it is wrong about. Domain expert review remains necessary for claims that require specialist knowledge. The framework is a floor, not a ceiling.
 
@@ -93,10 +93,11 @@ This is the stage most distinct from conventional writing review. The adversaria
 | Approach | Spec before draft | Gated approval | Adversarial review | Public record |
 |---|---|---|---|---|
 | **The Editorial Pipeline** | ✓ | ✓ | ✓ | ✓ |
-| Standard AI-assisted writing | ✗ | ✗ | ✗ | ✗ |
-| HITL (human-in-the-loop) | Varies | ✓ (annotation) | ✗ | ✗ |
+| Unreviewed AI generation | ✗ | ✗ | ✗ | ✗ |
+| Careful informal AI use | Varies | Varies | ✗ | ✗ |
+| HITL (annotation tasks) | ✗ | ✓ (annotation only) | ✗ | ✗ |
 | AI safety red-teaming | N/A | N/A | ✓ | Varies |
-| Academic peer review | Varies | Varies | ✓ (reviewers) | ✗ (blind) |
+| Academic peer review | Varies | ✓ (post-submission) | ✓ (reviewers) | ✗ (blind) |
 
 The Editorial Pipeline combines practices that exist separately — HITL approval, adversarial challenge, public audit — and applies them specifically to analytical writing. The specification gate and the public record are the elements least common in existing practice.
 
@@ -133,6 +134,9 @@ The short version of what the practices found: adversarial reviews identified a 
 ## References
 
 - Simon Willison, *"Slop is the new name for unwanted AI-generated content"* (May 2024) — simonwillison.net/2024/May/8/slop/
+- Sperber et al., *"Peer and AI Review + Reflection (PAIRR): A human-centered approach to formative assessment"*, Computers and Composition (2025) — sciencedirect.com/science/article/pii/S8755461525000088
+- Bougie and Watanabe, *"Generative Adversarial Reviews: When LLMs Become the Critic"* (December 2024) — arxiv.org/abs/2412.10415
+- Heuer and Pherson, *"Structured Analytic Techniques for Intelligence Analysis"* (multiple editions)
 - *"Narrative AI and the Human-AI Oversight Paradox"*, Harvard Business School Working Paper 25-001 (2025) — hbs.edu
 - *"Your Brain on ChatGPT"*, MIT Media Lab (June 2025) — media.mit.edu/publications/your-brain-on-chatgpt/
 - *Enterprise Times, "Agentic AI testing gets adversarial with AI red teaming"* (November 2025) — enterprisetimes.co.uk
