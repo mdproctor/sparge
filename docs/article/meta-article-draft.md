@@ -46,7 +46,7 @@ The places where this process produced something different from what the AI woul
 
 ## Three Rounds of Adversarial Review
 
-After the series was drafted, I ran three independent Claude sessions — separately from the session that wrote the series — with a single instruction: argue against it from Python's perspective. Find every weakness. Be as hostile as the argument deserves.
+After the series was drafted, I ran three independent Claude sessions — separately from the session that wrote the series — with a single instruction: argue against it from Python's perspective. Find every weakness. Be as hostile as the argument deserves. The Python-specific framing was deliberate: domain-specific adversarial review targets the argument's most vulnerable assumptions more precisely than general challenge would. The trade-off is that it may miss weaknesses unrelated to that framing.
 
 Each session received no context from the others and no access to the conversation that produced the series. They read the articles cold and reported what they found.
 

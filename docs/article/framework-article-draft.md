@@ -60,7 +60,9 @@ The framework is named after the software development pipeline deliberately. Its
 
 ### Stage 3 — Challenge
 
-**What happens:** After the full draft exists, one or more adversarial review sessions are run from a *clean context* — no access to the drafting conversation, with an explicit instruction to argue against the work and find every weakness.
+**What happens:** After the full draft exists, one or more adversarial review sessions are run from a *clean context* — no access to the drafting conversation, with an explicit instruction to challenge the work.
+
+Two modes are available. **General challenge** tasks the reviewer with finding any weakness in logic, evidence, or claim strength — effective for structural problems regardless of subject matter. **Domain-specific advocacy** tasks the reviewer with arguing from a particular perspective (for example, a Python advocate for a series arguing for Java) — effective for finding weaknesses in domain assumptions that general challenge may miss. Domain-specific advocacy is the stronger approach for analytical work with a clear subject-matter position, because it targets the argument's most vulnerable assumptions. Both modes require a clean context with no access to the drafting conversation.
 
 This is the stage most distinct from conventional writing review. The adversarial reviewer is not a collaborator; they are an opponent. They have not seen the drafting conversation and are not trying to help. They are trying to break the argument.
 
