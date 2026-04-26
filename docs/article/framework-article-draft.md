@@ -10,7 +10,7 @@ Simon Willison [coined the term](https://simonwillison.net/2024/May/8/slop/) for
 
 The answer, we think, is process. Not the AI model used, not the length of the prompt, not the subject matter. Process: what happens between the first token generated and the moment something is published.
 
-We are not aware of a named, replicable framework for this. Red-teaming is formalised for AI safety evaluation. Human-in-the-loop (HITL) processes are formalised for ML annotation and data labelling. Academic guidelines address disclosure. None of these is a methodology for producing trustworthy analytical writing with an AI collaborator.
+We searched for an existing named framework and did not find one combining all of: specification before AI generation, gated human approval during drafting, clean-context adversarial review, and a public audit trail — applied specifically to analytical writing. Adjacent frameworks exist: Structured Analytic Techniques (Devil's Advocate, Red Hat analysis) apply adversarial challenge to intelligence analysis; the PAIRR framework (UC Davis, 2025) combines peer and AI review for student writing; the GAR framework (2024) uses LLM agents to simulate peer reviewers of manuscripts. Individual components — HITL approval, red-teaming, audit trails — are well established in their own domains. What appears not to exist is the specific combination for the specific problem: how to structure AI-assisted drafting of analytical content so the human remains genuinely responsible for the argument.
 
 This article proposes one. We call it **The Editorial Pipeline**.
 
