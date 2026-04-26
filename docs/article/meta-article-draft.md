@@ -86,7 +86,7 @@ Harvard Business School researchers identified what they call the [Human-AI Over
 
 More directly: three rounds of adversarial review by an AI system find what an AI system finds. The review process found logical contradictions, unsourced statistics, stale technical claims, and overclaiming language. It did not find that the core argument was wrong. That is the honest characterisation of what three rounds of challenge produced — neither more nor less.
 
-*The review documents, export files, and git history are in the [sparge repository](https://github.com/mdproctor/sparge) under docs/article/. The record is there for anyone who wants to check the work. The process described here is formalised as a reusable framework in the companion piece: [The Editorial Pipeline](/articles/the-editorial-pipeline/).*
+*The review documents, export files, and git history are in the [sparge repository](https://github.com/mdproctor/sparge) under docs/article/. The record is there for anyone who wants to check the work. The process described here is formalised as a reusable framework in the companion piece: [The Editorial Pipeline](/articles/the-editorial-pipeline/). To be clear about the relationship: the framework was derived from this project, not applied to it. The case study is the source, not the proof.*
 
 *It is also possible that a domain expert would find things three rounds of Claude did not. We welcome that. The series calls for a controlled study that might prove some of its own claims wrong — which is either intellectual honesty or a peculiar form of optimism, depending on whether the study eventually gets done.*
 

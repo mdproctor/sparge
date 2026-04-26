@@ -122,9 +122,9 @@ The gates are not optional. A process with Stage 1 and 2 but no Stage 3 is not t
 
 ## A Case Study
 
-The *When the Machine Codes* series — six articles arguing that statically typed languages produce better outcomes in LLM-first software development — was produced using this process. The companion piece [*"Against AI Slop: How We Made 'When the Machine Codes'"*](/articles/against-ai-slop/) documents what each stage found, what was corrected, and what the process revealed about the argument.
+The Editorial Pipeline was abstracted from the practices used in one project — the *When the Machine Codes* series, six articles arguing that statically typed languages produce better outcomes in LLM-first software development. The framework was not applied to that project; it was derived from it. The companion piece [*"Against AI Slop"*](/articles/against-ai-slop/) documents what those practices were and what they found. That article is the source material for this framework, not independent evidence that the framework works. Independent validation — applying the framework to a project where it was specified before the work began — does not yet exist.
 
-The short version: the adversarial reviews found a logical contradiction in the Kotlin recommendation, a stale technical claim about Python 3.13, and an unsourced statistic with no traceable primary source. All three were corrected. The argument that was published is not the same as the argument that entered the adversarial review. The record of what changed is in the repository.
+The short version of what the practices found: adversarial reviews identified a logical contradiction in the Kotlin recommendation, a stale technical claim about Python 3.13, and an unsourced statistic with no traceable primary source. All three were corrected. The argument that was published is not the same as the argument that entered review. The record of what changed is in the repository.
 
 ---
 
