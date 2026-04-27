@@ -9,7 +9,7 @@ npm run docs:screenshots
 The Electron app opens, navigates through each screen, captures screenshots, then closes. Takes approximately 30–60 seconds. All images saved to `docs/user-guide/images/`.
 
 **Prerequisites:**
-- `resources/python/` must exist: `node scripts/fetch-python.js`
+- Quarkus JAR must be built: `cd server && mvn package -DskipTests`
 - Electron binary must be installed: `node node_modules/electron/install.js`
 
 ## Fixture project
@@ -55,7 +55,6 @@ The script creates a temporary project in your system's temp directory (e.g. `/t
 | 10-staged-state.png | 10 | MD pane showing staged state | element: #md-panel | |
 | 10-accept-reject.png | 10 | Accept / Reject staged buttons | element: #btn-staged area | |
 | features-drag-divider.png | features | Drag divider between panes | element: #divider | |
-| features-copy-title.png | features | Copy title button + tooltip | element: .pi area | |
 | features-theme-toggle.png | features | Dark/light theme toggle | element: toolbar | |
 | features-search-scope.png | features | Search scope selector | element: search bar | |
 

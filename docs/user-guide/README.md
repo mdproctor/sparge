@@ -23,6 +23,7 @@ Every post flows through a pipeline: `Ingest → Enrich → Scan → Generate MD
 
 | Page | What it covers |
 |------|---------------|
+| [UI Overview](00-ui-overview.md) | Visual guide to every part of the interface — start here |
 | [Features & Capabilities](features.md) | Complete list of everything Sparge can do |
 | [Installation](01-installation.md) | Download, install, and first launch |
 | [Creating Your First Project](02-first-project.md) | Set up a project and understand path configuration |

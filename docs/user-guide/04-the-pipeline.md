@@ -19,7 +19,7 @@ Ingest → Enrich → Scan → Generate MD → Validate → Stage → Publish
 |-------|-------------|
 | **Ingest** | HTML fetched, cleaned, images localised, registered in state |
 | **Enrich** | YouTube embeds replaced with thumbnails, Gist scripts inlined, code classes normalised |
-| **Scan** | Enriched HTML checked for 12 issue types — broken images, external images, tracking pixels, etc. |
+| **Scan** | Enriched HTML checked for 17 issue types — missing images, external images, tracking pixels, layout artefacts, and more. |
 | **Generate MD** | Enriched HTML converted to Markdown |
 | **Validate** | Generated Markdown cross-validated against HTML — checks for missing images, garbling, fence breaks |
 | **Stage** | Draft of edited Markdown saved alongside the published version for review |

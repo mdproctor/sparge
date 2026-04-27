@@ -47,18 +47,23 @@ These are *flagged* as issues, not auto-fixed. Review each one in the Issues Pan
 
 | Issue type | What it detects | Severity |
 |-----------|----------------|---------|
-| `data_uri` | Inline base64-encoded images (large, won't render in Jekyll) | Error |
-| `tracking_pixel` | 1×1 pixel images from known tracking domains | Warning |
-| `broken_local_ref` | `<img src="../../assets/...">` paths that don't resolve | Error |
-| `external_image` | Images still pointing to remote URLs (not localised) | Error |
-| `empty_embed` | YouTube or other embed containers with no content | Warning |
-| `unreplaced_gist` | `<script src="gist.github.com/...">` that wasn't inlined | Error |
-| `wordpress_chrome` | WordPress metadata, admin bars, share buttons, post navigation | Warning |
+| `no_article` | Post HTML has no `<article>` or `<body>` element — content cannot be located | Error |
+| `data_placeholder` | Lazy-load placeholder image that was never replaced with the real image | Error |
+| `missing_local_image` | Local image file referenced by `<img src>` is missing from the assets directory | Error |
+| `unreplaced_gist` | `<script src="gist.github.com/...">` that wasn't inlined during enrichment | Error |
+| `empty_embed` | YouTube iframe with no `src` recovered — content is lost | Error |
+| `external_image` | Image still pointing to a remote URL (not localised to assets) | Warning |
+| `tracking_pixel` | 1×1 pixel image from a known tracking domain | Warning |
+| `noscript_remnant` | Orphaned `<noscript>` tag containing an image URL | Warning |
+| `wordpress_chrome` | WordPress metadata, admin bars, share buttons, or post navigation | Warning |
 | `missing_image_signal` | Text like "as shown below" with no following image | Warning |
-| `code_no_newlines` | Code blocks using `<br/>` instead of newlines | Warning |
-| `potential_code_block` | `<p>` blocks that look like unformatted code | Warning |
-| `linenumber_table_code` | Two-column line-number + code tables not converted at ingest | Warning |
-| `imgur_image` | Images hosted on geo-blocked imgur CDN domains | Warning |
+| `imgur_image` | Image hosted on geo-blocked imgur CDN — replace with Wayback URL | Warning |
+| `layout_spacer_image` | Layout spacer images (e.g. spacer.gif) with no content value — safe to remove | Warning |
+| `md_notation_in_text` | Inline element immediately followed by markdown punctuation — html2text will produce garbled bold/italic | Warning |
+| `suspicious_code_content` | `<pre><code>` block contains HTML-encoded markup — may be a conversion artefact rather than real code | Warning |
+| `code_no_newlines` | Code block using `<br/>` instead of real newlines | Warning |
+| `potential_code_block` | `<p>` block that looks like unformatted code | Warning |
+| `linenumber_table_code` | Two-column line-number + code table not converted during enrichment | Warning |
 
 ---
 

@@ -28,23 +28,51 @@ Drag the **divider** between panes to give more space to whichever side you're w
 ## Pipeline action buttons
 
 ![Scan, Generate MD and other action buttons](images/05-action-buttons.png)
-*Pipeline action buttons run the next stage for the current post.*
+*The action bar: pipeline stages on the left, editor controls on the right.*
+
+**Pipeline stage buttons** — run the next stage for the current post:
 
 | Button | What it does |
 |--------|-------------|
-| **Scan** | Enriches the HTML (if not yet enriched) and checks for issues |
-| **Generate MD** | Converts the enriched HTML to Markdown |
-| **Stage** | Saves your edited Markdown as a draft for review |
-| **Accept** | Promotes the staged draft to the published Markdown |
-| **Reject** | Discards the staged draft and restores the previous Markdown |
+| **🔍 Scan** | Enriches the HTML (if not yet enriched) and checks for issues |
+| **↺ Generate MD** | Converts the enriched HTML to Markdown |
+| **📋 Review Staged** | Opens a diff view of your staged edits against the current version — only visible when a staged version exists |
+| **✓ Validate MD** | Runs Markdown validation checks (missing images, fence breaks, garbling) |
+| **✓ Reviewed** | Marks the post as reviewed — toggled on/off |
+| **🚩 Flag** | Flags the post for follow-up attention — toggled on/off |
+
+**Editor control buttons** — on the right side of the action bar:
+
+| Button | What it does |
+|--------|-------------|
+| **⟺ Sync** | Toggles scroll synchronisation between the HTML and Markdown panes — active by default |
+| **☰ Single** | Toggles between split-pane (HTML + MD side by side) and single-pane view |
+| **≡ HTML→MD** | Switches between the standard HTML→MD view and the MD→Refined view — only visible when refinement mode is active |
+| **✨ Accept Refined** | Applies pending refinements and writes them to disk — only visible in refinement mode |
 
 ## Post metadata
 
-![Post metadata area with flag, note, review checkbox and copy title button](images/05-post-metadata.png)
-*Per-post controls: flag, note, review, and copy the title to clipboard.*
+![Post metadata area with statistics and pipeline state](images/05-post-metadata.png)
+*The sidebar shows per-project statistics and post counts at a glance.*
 
-Each post has metadata controls:
-- **Flag (⚑)** — marks a post for follow-up. Flagged posts are visually distinguished in the list.
-- **Note** — a private text note attached to the post, visible in the list.
-- **Reviewed (✓)** — tick this when you're happy with the Markdown and have finished the post.
-- **Copy title (⎘)** — copies the post title to your clipboard with one click.
+The sidebar statistics panel shows:
+- **Total** — number of posts in the current project
+- **HTML issues** — posts with outstanding HTML scan issues (click to expand by type)
+- **MD generated** — posts that have had Markdown generated
+- **MD stale** — posts whose Markdown is older than the source HTML
+- **MD issues** — posts with Markdown validation problems (click to expand by type)
+- **Reviewed** — posts marked as reviewed
+- **Progress bar** — proportion of posts that are reviewed
+
+## Bulk operations
+
+The filter zone below the statistics panel contains scope-level bulk actions that operate on all posts matching the current filter.
+
+| Button | What it does |
+|--------|-------------|
+| **🔍 Scan** | Scans HTML for all posts in the current scope |
+| **⚙ Generate** | Generates Markdown for all posts in scope — prompts when Markdown already exists |
+| **✓ Validate** | Validates Markdown for all posts in scope that have Markdown |
+| **⟳ Consolidate** | De-duplicates shared assets across all posts in the project |
+
+> **Note:** Bulk operations respect the active filter — use the filter buttons to narrow the scope before running a bulk action.

@@ -20,7 +20,7 @@ A complete reference of everything Sparge can do. If you're wondering whether Sp
 | Platform detection | Automatically detects the blog platform from the URL |
 | URL discovery | Lists all post URLs on a blog for you to select from |
 | Enrichment | Replaces YouTube embeds with thumbnails, inlines Gist code, normalises code classes |
-| HTML scanning | Detects 12 issue types in your HTML — see [Checks & Validation](11-checks-and-validation.md) |
+| HTML scanning | Detects 17 issue types in your HTML — see [Checks & Validation](11-checks-and-validation.md) |
 | MD generation | Converts enriched HTML to clean Markdown |
 | MD validation | Cross-validates generated Markdown against the HTML source |
 | Staging | Save a draft of edited Markdown alongside the published version |
@@ -69,17 +69,19 @@ A complete reference of everything Sparge can do. If you're wondering whether Sp
 
 ## Post Management
 
-![Post metadata area with flag, note, review and copy title controls](images/05-post-metadata.png)
-*Per-post controls: flag, note, review, and copy the title to clipboard.*
+![Post metadata area with statistics and pipeline state](images/05-post-metadata.png)
+*The sidebar shows per-project statistics and post counts at a glance.*
 
 | Feature | Description |
 |---------|-------------|
-| Flag | Mark a post for follow-up attention |
-| User note | Attach a private note to a post (visible in the post list) |
-| Review checkbox | Mark a post as reviewed once you're happy with the Markdown |
-| Copy title (⎘) | Copy the post title to clipboard with one click |
-| Floating tooltip | The copy title button shows a tooltip positioned above any overflow container |
-| Pipeline actions | Scan, Generate MD, Stage, Accept, Reject — all accessible from the post view |
+| Flag | Mark a post for follow-up attention — toggled from the action bar |
+| Review checkbox | Mark a post as reviewed — toggled from the action bar |
+| Pipeline actions | 🔍 Scan, ↺ Generate MD, 📋 Review Staged, ✓ Validate MD, ✓ Reviewed, 🚩 Flag |
+| Sync scroll toggle | ⟺ Sync — toggles scroll synchronisation between HTML and MD panes |
+| Layout toggle | ☰ Single — switches between split-pane and single-pane view |
+| Refinement mode | ≡ HTML→MD and ✨ Accept Refined — visible when refinement is active |
+| Bulk operations | 🔍 Scan All, ⚙ Generate All, ✓ Validate All, ⟳ Consolidate — operate on all posts in scope |
+| Statistics sidebar | Per-project counts for HTML issues, MD generated, stale, MD issues, reviewed |
 
 ---
 

@@ -4,7 +4,7 @@
 // Run with: npm run docs:screenshots
 //
 // Prerequisites:
-//   - resources/python/ must exist (run: node scripts/fetch-python.js)
+//   - Quarkus JAR must be built: cd server && mvn package -DskipTests
 //   - Electron binary must be installed
 
 const { _electron: electron } = require('playwright');
@@ -72,6 +72,66 @@ async function setupFixtureProject() {
   });
 
   console.log('  project created:', JSON.stringify(project));
+
+  // Write state.json directly — Java's HttpClient doesn't support file:// URLs
+  // so we bypass the ingest API and pre-build the fixture state.
+  const now = new Date().toISOString().slice(0, 19);
+  const fixtureState = {
+    'cloud-architecture': {
+      slug: 'cloud-architecture', title: 'Cloud Architecture Patterns',
+      date: '2024-01-15', author: 'Docs Fixture', original_url: `file://${postsDir}/cloud-architecture.html`,
+      ingested_at: now, flagged: false, user_note: '', reviewed: false,
+      html: { hash: 'aaa111', issues: [], checked_at: '' },
+      assets: { total: 0, localised: 0, broken: 0, checked_at: '' },
+      md: { generated_at: '', html_hash: '', issues: [], staged: false, staged_at: '', validated_at: '' },
+      enriched: { generated_at: '', youtube_replaced: 0, gists_replaced: 0, gists_failed: 0, classes_normalised: 0, languages_detected: 0, embeds_wrapped: 0 },
+      md_suggestions: [], dismissed_html_checks: {}
+    },
+    'devops-best-practices': {
+      slug: 'devops-best-practices', title: 'DevOps Workflow Best Practices',
+      date: '2024-02-20', author: 'Docs Fixture', original_url: `file://${postsDir}/devops-best-practices.html`,
+      ingested_at: now, flagged: false, user_note: '', reviewed: false,
+      html: { hash: 'bbb222', issues: [], checked_at: '' },
+      assets: { total: 0, localised: 0, broken: 0, checked_at: '' },
+      md: { generated_at: '', html_hash: '', issues: [], staged: false, staged_at: '', validated_at: '' },
+      enriched: { generated_at: '', youtube_replaced: 0, gists_replaced: 0, gists_failed: 0, classes_normalised: 0, languages_detected: 0, embeds_wrapped: 0 },
+      md_suggestions: [], dismissed_html_checks: {}
+    },
+    'intro-to-sparge': {
+      slug: 'intro-to-sparge', title: 'Introduction to Sparge',
+      date: '2024-03-01', author: 'Docs Fixture', original_url: `file://${postsDir}/intro-to-sparge.html`,
+      ingested_at: now, flagged: true, user_note: 'Review this one carefully', reviewed: false,
+      html: { hash: 'ccc333', issues: [], checked_at: '' },
+      assets: { total: 2, localised: 2, broken: 0, checked_at: '' },
+      md: { generated_at: now, html_hash: 'ccc333', issues: [], staged: false, staged_at: '', validated_at: now },
+      enriched: { generated_at: now, youtube_replaced: 1, gists_replaced: 0, gists_failed: 0, classes_normalised: 2, languages_detected: 2, embeds_wrapped: 0 },
+      md_suggestions: [], dismissed_html_checks: {}
+    },
+    'java-virtual-threads': {
+      slug: 'java-virtual-threads', title: 'Java 21 Virtual Threads',
+      date: '2024-03-15', author: 'Docs Fixture', original_url: `file://${postsDir}/java-virtual-threads.html`,
+      ingested_at: now, flagged: false, user_note: '', reviewed: true,
+      html: { hash: 'ddd444', issues: [], checked_at: now },
+      assets: { total: 1, localised: 1, broken: 0, checked_at: now },
+      md: { generated_at: now, html_hash: 'ddd444', issues: [], staged: false, staged_at: '', validated_at: now },
+      enriched: { generated_at: now, youtube_replaced: 0, gists_replaced: 1, gists_failed: 0, classes_normalised: 3, languages_detected: 3, embeds_wrapped: 0 },
+      md_suggestions: [], dismissed_html_checks: {}
+    },
+    'microservices-quarkus': {
+      slug: 'microservices-quarkus', title: 'Building Microservices with Quarkus',
+      date: '2024-04-10', author: 'Docs Fixture', original_url: `file://${postsDir}/microservices-quarkus.html`,
+      ingested_at: now, flagged: false, user_note: '', reviewed: false,
+      html: { hash: 'eee555', issues: [], checked_at: '' },
+      assets: { total: 0, localised: 0, broken: 0, checked_at: '' },
+      md: { generated_at: '', html_hash: '', issues: [], staged: false, staged_at: '', validated_at: '' },
+      enriched: { generated_at: '', youtube_replaced: 0, gists_replaced: 0, gists_failed: 0, classes_normalised: 0, languages_detected: 0, embeds_wrapped: 0 },
+      md_suggestions: [], dismissed_html_checks: {}
+    },
+  };
+
+  const projectDir = path.join(os.homedir(), 'sparge-projects', project.id);
+  fs.writeFileSync(path.join(projectDir, 'state.json'), JSON.stringify(fixtureState, null, 2));
+  console.log(`  wrote state.json with ${Object.keys(fixtureState).length} posts`);
 
   await api('POST', `/api/projects/${project.id}/activate`);
   await waitMs(500);
@@ -636,7 +696,7 @@ async function captureMissingScreenshots() {
 // ── main ───────────────────────────────────────────────────────────────────
 
 (async () => {
-  console.log('\n📸  Sparge docs — missing screenshots\n');
+  console.log('\n📸  Sparge docs — generating all screenshots\n');
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
   app    = await electron.launch({ args: [path.join(ROOT, 'main.js')] });
@@ -648,8 +708,14 @@ async function captureMissingScreenshots() {
     await captureProjectsScreen();
     await setupFixtureProject();
     await navigateToMainApp();
+    await captureMainAppScreens();
+    await captureEditorScreens();
+    await captureIssuesScreens();
+    await captureSearchFilterScreens();
+    await captureStagingScreens();
+    await captureFeaturesScreens();
     await captureMissingScreenshots();
-    console.log('\n✅  Missing screenshots captured to docs/user-guide/images/\n');
+    console.log('\n✅  All screenshots captured to docs/user-guide/images/\n');
   } finally {
     await app.close();
   }
