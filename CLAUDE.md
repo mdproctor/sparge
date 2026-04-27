@@ -14,11 +14,11 @@ Sparge is a blog migration tool — ingests HTML posts from live blog URLs, enri
 
 ```bash
 cd ~/claude/sparge
-python3 server.py   # Python server, browser mode (port 9000)
-npm start           # Electron app — Java server
+npm start           # Electron app — Java server (primary)
+python3 server.py   # Python server, browser mode (port 9000) — dev only
 ```
 
-Browser mode (Python) serves on port 9000. Electron mode allocates a dynamic port. Project data lives in `~/sparge-projects/` (configured via `~/.sparge/config.json`).
+Electron mode uses the Quarkus Java server and allocates a dynamic port. Browser mode (Python) serves on port 9000 and is for development only — the distributed app is Java-only. Project data lives in `~/sparge-projects/` (configured via `~/.sparge/config.json`).
 
 **Quarkus server (fully native Java — no Python/JEP required):**
 ```bash
@@ -46,7 +46,7 @@ cd ~/claude/sparge/server && mvn test
 
 **JS tests (Electron):**
 ```bash
-npm run test:unit        # 73 passing — Jest unit tests (mocked)
+npm run test:unit        # 63 passing — Jest unit tests (mocked)
 npm run test:integration # 4 passing — real JavaServer process tests
 npm run test:e2e         # 19 passing (5 app + 4 delete + 10 refine)
 ```
