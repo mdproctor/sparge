@@ -60,12 +60,13 @@ Both `ui/index.html` and `ui/projects.html` use the Archive Room aesthetic: parc
 
 ## Electron Desktop App
 
-Sparge runs as an Electron desktop application. The Python server runs as an embedded subprocess.
+Sparge runs as an Electron desktop application wrapping a Quarkus Java server as an embedded subprocess. The Java server is fully native — no Python runtime bundled in the distribution.
 
 | Decision | Chosen | Why | Alternatives Rejected |
 |---|---|---|---|
-| Python bundling | python-build-standalone (embedded CPython) | Relocatable, debuggable, clean separation | PyInstaller (magic import issues), Nuitka (slow compilation) |
-| Process management | Dedicated `python-server.js` state machine (idle → starting → healthy → crashed → restarting/fatal) | Testable independently; crash recovery explicit | Thin shell wrapper (brittle), Node IPC bridge (rewrites server.py) |
+| Server | Quarkus uber-jar (`sparge-server-runner.jar`, ~19 MB) | Fully native; no Python/JEP dependency; fast startup (<1s) | Python server (retired — Phase 6 complete); JEP bridge (retired) |
+| Java bundling | `extraResources` in electron-builder: JAR copied to `sparge-server-runner.jar` | Standard Electron pattern; clean separation | Bundling Python runtime (150 MB, retired) |
+| Process management | `java-server.js` state machine (idle → starting → healthy → crashed → restarting/fatal) | Testable independently; crash recovery explicit | Thin shell wrapper (brittle) |
 | Window strategy | Single BrowserWindow loads `localhost:PORT/ui/` | No changes to existing UI; clean separation | Two BrowserWindows, multi-tab (post-V1) |
 | Distribution | GitHub Actions matrix (Mac/Win/Linux) → GitHub Releases + electron-updater | Standard Electron pattern; auto-update included | Manual builds, package managers |
 | Folder picker | Project creation form only (paths immutable after creation) | Paths locked at creation is the right UX | Config panel picker (implies editability, contradicts lock-at-creation intent) |
@@ -90,12 +91,7 @@ Canonical paths (configured in `~/sparge-projects/kie-mark-proctor/config.json`)
 
 ## Next Steps
 
-**Immediate — Quarkus migration (declared next in v1.0.0 blog entry):**
-- Phase 0: Scaffold Quarkus project alongside Python; JEP (Java Embedded Python) delegates all operations to existing Python modules. Zero porting, establishes the bridge.
-- Phase 1–N: Port modules one by one in dependency order (state/config → scan/enrich → convert → ingest). Each port removes one JEP call.
-- Final: Remove JEP + CPython bundle; compile to Quarkus Native.
-- Design spec: `docs/superpowers/specs/2026-04-10-quarkus-native-migration-design.md`
-- `libpython3.12.dylib` confirmed present in `resources/python/mac-arm64/lib/` — JEP can use it.
+**Quarkus migration: complete.** All phases done — Quarkus is fully native Java (346 tests passing), JEP bridge retired, Python runtime removed from Electron distribution. Electron defaults to Java server.
 
 **Archive quality (all issues closed as of 2026-04-14):**
 - Archive Quality Sweep (epic #15) fully closed. 0 open issues.
