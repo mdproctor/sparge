@@ -2,13 +2,16 @@
 
 **Status:** Draft. Not yet published.
 
+**Publication blockers:**
+- Must be published simultaneously with the companion article [*The Editorial Pipeline: A Framework for Rigorous AI-Assisted Writing*](/articles/the-editorial-pipeline/). Publishing either article alone will leave a broken cross-link in the other. Remove this block only when both articles are ready to go live together.
+
 *A note on method before anyone reads the series.*
 
 ---
 
 Simon Willison [coined the term](https://simonwillison.net/2024/May/8/slop/) in 2024: slop is unwanted AI-generated content, the new spam. "Don't publish slop," he wrote — meaning the problem is not AI assistance itself but the absence of editorial accountability. Merriam-Webster made it [word of the year in 2025](https://www.pbs.org/newshour/nation/merriam-websters-word-of-the-year-for-2025-is-ais-slop). The broader debate is more nuanced — Deni Ellis Béchard [argued in Scientific American](https://www.scientificamerican.com/article/ai-slop-how-every-media-revolution-breeds-rubbish-and-art/) that every media revolution produces rubbish alongside valuable work — but for analytical writing, the concern is specific: text that sounds rigorous but was generated without the kind of scrutiny that would catch errors. That kind of text exists. There is a lot of it.
 
-The six-part series published here — *When the Machine Codes*, arguing that statically typed languages are better suited to LLM-first software development than Python — was written with Claude as the primary drafter and me as the architect, reviewer, and approver of every sentence. That makes it AI-assisted in a specific sense: the AI generated text; I directed, challenged, and accepted or rejected it. Nothing went to file without explicit approval.
+The six-part series published here — *When the Machine Codes*, arguing that statically typed languages are better suited to LLM-first software development than Python — was written with Claude as the primary drafter and me as the architect, reviewer, and approver of every sentence. That makes it AI-assisted in a specific sense: the AI generated text; I directed, challenged, and accepted or rejected it. Nothing significant went to file without explicit approval — though as the git history section notes, the record proves iteration, not that approval preceded every individual commit.
 
 This is an account of the process — because the process is what makes the difference between a serious argument and text that looks like one.
 
@@ -82,13 +85,13 @@ That is also what happened here. Whether it is surprising that an author applies
 
 ## A Note on What This Doesn't Prove
 
-Harvard Business School researchers identified what they call the [Human-AI Oversight Paradox](https://www.hbs.edu/ris/Publication%20Files/25-001_8ebbe0cb-2a19-453c-9014-1e301e8dd2fb.pdf): human oversight can improve task performance while simultaneously reducing the overseer's understanding of what they are overseeing. Better-assisted work, less-informed author. It is a real risk. The [MIT Media Lab found](https://www.media.mit.edu/publications/your-brain-on-chatgpt/) that ChatGPT users showed lower cognitive engagement and worse recall of their own writing compared to unassisted writers. Whether active collaborative drafting — where the human is directing and challenging rather than accepting — produces the same effect is an open question.
+[Harvard Business School researchers](https://www.hbs.edu/ris/Publication%20Files/25-001_8ebbe0cb-2a19-453c-9014-1e301e8dd2fb.pdf) found a related risk — though the domain is innovation screening, not analytical writing: evaluators given LLM narrative explanations showed higher compliance with AI recommendations but worse decision quality than those given bare recommendations — the narratives substituted persuasive text for independent verification, suppressing productive overrides. The [MIT Media Lab found](https://www.media.mit.edu/publications/your-brain-on-chatgpt/) a related effect in writing — though whether it applies here is an open question, since that study measured passive acceptance, not directive collaboration: ChatGPT users showed lower cognitive engagement and struggled to accurately quote their own work compared to unassisted writers. The mode of engagement matters; the risk is real enough to name.
 
 More directly: three rounds of adversarial review by an AI system find what an AI system finds. The review process found logical contradictions, unsourced statistics, stale technical claims, and overclaiming language. It did not find that the core argument was wrong. That is the honest characterisation of what three rounds of challenge produced — neither more nor less.
 
 *The review documents, export files, and git history are in the [sparge repository](https://github.com/mdproctor/sparge) under docs/article/. The record is there for anyone who wants to check the work. The process described here is formalised as a reusable framework in the companion piece: [The Editorial Pipeline](/articles/the-editorial-pipeline/). To be clear about the relationship: the framework was derived from this project, not applied to it. The case study is the source, not the proof.*
 
-*It is also possible that a domain expert would find things three rounds of Claude did not. We welcome that. The series calls for a controlled study that might prove some of its own claims wrong — which is either intellectual honesty or a peculiar form of optimism, depending on whether the study eventually gets done.*
+*It is also possible that a domain expert would find things three rounds of Claude did not. I welcome that. The series calls for a controlled study that might prove some of its own claims wrong — which is either intellectual honesty or a peculiar form of optimism, depending on whether the study eventually gets done.*
 
 ---
 
@@ -97,6 +100,6 @@ More directly: three rounds of adversarial review by an AI system find what an A
 - Simon Willison, *"Slop is the new name for unwanted AI-generated content"* (May 2024) — simonwillison.net/2024/May/8/slop/
 - Deni Ellis Béchard, *"AI Slop — How Every Media Revolution Breeds Rubbish and Art"*, Scientific American (November 2025) — scientificamerican.com
 - *"Merriam-Webster's word of the year for 2025 is AI 'slop'"*, PBS News — pbs.org/newshour
-- *"Narrative AI and the Human-AI Oversight Paradox"*, Harvard Business School Working Paper 25-001 (2025) — hbs.edu
+- Lane et al., *"The Narrative AI Advantage? A Field Experiment on AI-Augmented Evaluations of Early-Stage Innovations"*, Harvard Business School Working Paper 25-001 (2024) — hbs.edu/ris/Publication%20Files/25-001_8ebbe0cb-2a19-453c-9014-1e301e8dd2fb.pdf
 - *"Your Brain on ChatGPT"*, MIT Media Lab (June 2025) — media.mit.edu/publications/your-brain-on-chatgpt/
 - Mündler, He, Wang, Sen, Song, Vechev — *"Type-Constrained Code Generation with Language Models"*, PLDI 2025 — arxiv.org/abs/2504.09246
