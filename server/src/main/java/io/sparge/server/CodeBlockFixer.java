@@ -112,6 +112,18 @@ public final class CodeBlockFixer {
 
             if (!isDrl(text)) continue;
 
+            // Guard: reject elements that are too large to be a code block.
+            // A real inline DRL snippet is at most a few hundred characters;
+            // anything larger is prose that happens to contain a "rule" keyword.
+            if (text.length() > 2000) continue;
+
+            // Guard: reject elements whose average line length suggests prose.
+            // Same heuristic as fixBrDrlBlocks \u2014 long average lines = prose, not code.
+            String[] lines = text.split("\n");
+            double avgLen = java.util.Arrays.stream(lines)
+                    .mapToInt(l -> l.strip().length()).average().orElse(0);
+            if (avgLen > 80) continue;
+
             String formatted = DrlReformatter.reformatDrl(text);
             Element newBlock = new Element("pre");
             newBlock.appendChild(new Element("code").addClass("language-drl").text(formatted));
