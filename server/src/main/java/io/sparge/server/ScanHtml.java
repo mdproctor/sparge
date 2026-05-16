@@ -399,6 +399,9 @@ public final class ScanHtml {
         if (article == null)
             return List.of(issue("no_article", "ERROR",
                     "No <article> or <body> element found", null));
+        if (article.children().isEmpty() && article.wholeOwnText().isBlank())
+            return List.of(issue("no_article", "ERROR",
+                    "Article element exists but is empty", null));
         for (Element tag : new ArrayList<>(article.select("p, div, span"))) {
             String text = tag.wholeText().replaceAll("\\s+", " ").strip();
             if (text.length() < 200 && BYLINE_RE.matcher(text).find()) tag.remove();

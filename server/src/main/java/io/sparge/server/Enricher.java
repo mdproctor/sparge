@@ -362,6 +362,10 @@ public class Enricher {
                                        Path assetsDir, String githubToken) throws Exception {
         org.jsoup.nodes.Document soup = Jsoup.parse(htmlPath.toFile(), "UTF-8");
         Element article = soup.selectFirst("article");
+        // If the article element exists but is blank, fall back to body — same
+        // logic as IngestService.findArticle(). An empty <article> is not usable
+        // as enrichment input and causes corrupt output on re-serialisation.
+        if (article != null && article.text().isBlank()) article = null;
         if (article == null) article = soup.body();
         if (article == null) article = soup.root();
 
