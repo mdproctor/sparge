@@ -34,7 +34,8 @@ public final class ConvertPost {
         ".addtoany_share_save_container", ".addtoany_share_save",
         ".sharedaddy", "#comments", ".comments-area",
         ".jp-relatedposts", ".post-navigation",
-        ".wpdiscuz-form-container", "script", "style"
+        ".wpdiscuz-form-container", "script", "style",
+        "noscript"  // KIE blog uses <noscript> as empty spacer cells in tables
     };
 
     private static final Set<String> CHROME_HEADINGS =
@@ -140,7 +141,9 @@ public final class ConvertPost {
         removeMetaElements(article);
         fixImagePaths(article);
         fixLinkPaths(article);
+        flattenNestedTables(article);
         removeEmptyTags(article);
+        normaliseTableHeaders(article);
 
         // Phase 3: Extract code blocks → placeholders
         Map<String, String[]> codeBlocks = new LinkedHashMap<>();
@@ -286,12 +289,67 @@ public final class ConvertPost {
         }
     }
 
+    // Tables with no <thead> produce malformed GFM — flexmark emits separator
+    // rows without a header. Promote the first <tr> to a <thead> so the table
+    // renders correctly. Only applies to tables with 2+ rows.
+    private static void normaliseTableHeaders(Element article) {
+        for (Element table : article.select("table")) {
+            if (table.selectFirst("thead") != null) continue;
+            Element tbody = table.selectFirst("tbody");
+            if (tbody == null) continue;
+            List<Element> rows = new ArrayList<>(tbody.select("> tr"));
+            if (rows.size() < 2) continue;
+            // Move first row into a new <thead>
+            Element firstRow = rows.get(0);
+            // Convert its <td> cells to <th>
+            for (Element td : firstRow.select("td")) td.tagName("th");
+            Element thead = table.ownerDocument().createElement("thead");
+            thead.appendChild(firstRow);
+            table.prependChild(thead);
+        }
+    }
+
+    // If a table is nested inside a td and the outer table carries no other
+    // meaningful content, promote the inner table to replace the outer one.
+    // KIE blog uses this pattern for agenda/schedule tables.
+    private static void flattenNestedTables(Element article) {
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (Element inner : new ArrayList<>(article.select("td > table"))) {
+                Element outerTable = inner.parents().select("table").first();
+                if (outerTable == null) continue;
+                // Only promote when outer table carries no additional text
+                String outerText = outerTable.text().strip();
+                String innerText = inner.text().strip();
+                if (!outerText.equals(innerText)) continue;
+                outerTable.replaceWith(inner);
+                changed = true;
+                break;
+            }
+        }
+    }
+
     private static void removeEmptyTags(Element article) {
         boolean changed = true;
         while (changed) {
             changed = false;
+            // p/div/span/li: remove if no text and no image
             for (Element tag : new ArrayList<>(article.select("p, div, span, li"))) {
                 if (tag.text().isBlank() && tag.selectFirst("img") == null) {
+                    tag.remove(); changed = true;
+                }
+            }
+            // td/th: remove if completely empty (no text, no img, no nested table)
+            for (Element tag : new ArrayList<>(article.select("td, th"))) {
+                if (tag.text().isBlank()
+                        && tag.selectFirst("img, table") == null) {
+                    tag.remove(); changed = true;
+                }
+            }
+            // tr: remove if it has no remaining cells
+            for (Element tag : new ArrayList<>(article.select("tr"))) {
+                if (tag.select("td, th").isEmpty()) {
                     tag.remove(); changed = true;
                 }
             }
