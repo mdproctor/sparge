@@ -24,8 +24,7 @@ Electron mode uses the Quarkus Java server and allocates a dynamic port. Browser
 ```bash
 cd ~/claude/sparge/server
 mvn package -DskipTests    # build uber-jar → target/sparge-server-runner.jar
-java -Dquarkus.http.port=9000 \
-     -jar target/sparge-server-runner.jar
+java -Dquarkus.http.port=9000 -jar target/sparge-server-runner.jar
 ```
 
 ## Testing
